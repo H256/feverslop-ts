@@ -13,6 +13,22 @@ bun run timing <project-id> --apply-refinement=<proposal-id>
 
 Use `--refine=en` or `--refine=fr` for those languages, and add `--json` for the full proposal. The language is selected explicitly: this does not detect code-switching within a song. German and one English recording have now been compared against hand-edited timing; French singing accuracy remains untested. See [the full-library results](alignment-library-results.md) and [the accepted direction and next experiments](alignment-next-steps.md).
 
+## Retry a confirmed sung passage
+
+Select a canonical lyric line and choose **Retry sung passage**. Confirm that the text really is sung and choose its language. This prepares one bounded excerpt with the selected line, up to three preceding and two following known/confirmed sung lines as context. It proposes timing changes only for the selected line and its immediate eligible following line. The rest of the song is not repartitioned or retimed.
+
+Use **Listen before** and **Listen to proposal**, then **Apply passage** to save both proposed lines together. Only applying a usable passage confirms the selected line's presence and re-enables it if it was left out. Dismissing or failing preparation changes nothing. The words remain unchecked; confirming presence does not mark timing as manually reviewed. If either editable line fails validation, neither is applied. Protected following lines serve as context only.
+
+```powershell
+# One-based line numbers as printed by the timing command:
+bun run timing <project-id> --refine=de --refine-line=15 --confirm-sung
+bun run timing <project-id> --apply-refinement=<proposal-id>
+```
+
+The passage must fit within 30 seconds. Hand-timed, anchored, grouped/joined targets and ad-libs cannot use this retry; keep or explicitly reset manual work first. This does not infer whether unknown lyrics were sung. Confirming absent text can force invented word timings and displace real words. Missing words must first be added in the editor.
+
+Isolated service test on “Flimmernder Hof”: “Sagst ganz leise” moved from 28.780–29.780 to 29.562–31.078 seconds; the following “Es” onset moved from 29.660 to 31.078. The full prepare/apply path changed only these two lyric lines, saved the original timing backup and left the source project unchanged. Preparation took 12.86 seconds on the test machine with cached dependencies/model; this is a single-excerpt measurement, not a general latency guarantee.
+
 Requires `uv`, Python 3.12 managed by uv, and `ffmpeg` on PATH. The first pass downloads dependencies and the model; subsequent passes reuse their caches. Inference runs locally on CPU. It processes windows of at most 30 seconds and loads the model once per run. Neighbouring lyrics provide context; unsupported pronunciations or collapsed word spans retain the original timing and appear for review. eSpeak sometimes merges English function words: in that case pronunciation falls back to separate source words to preserve their identities.
 
 The pinned vocabulary accepts the explicitly evaluated eSpeak composite `ʊɐ` as
@@ -25,8 +41,8 @@ lose necessary context and misplace repeated lyrics.
 
 Protection rules:
 
-- Hand edits, word anchors, structural groups/joins, disabled lines and ad-libs are retained.
-- A line with zero transcript-match confidence is marked for manual review; its timing and sung/left-out state remain unchanged. Missing text evidence is not proof that it was not sung. Refinement never changes lyric presence. Leave out lines explicitly after listening, using the normal editor/CLI action. Older saved proposals containing presence changes must be prepared again. Explicitly re-enabling a line records your presence decision and allows it to be considered for alignment.
+- Hand edits, word anchors, structural groups/joins and ad-libs are retained. Disabled lines remain disabled except for the explicitly confirmed target when applying a passage.
+- Whole-song refinement marks a line with zero transcript-match confidence for manual review; its timing and sung/left-out state remain unchanged. Missing text evidence is not proof that it was not sung. Leave out lines explicitly after listening, using the normal editor/CLI action. Older saved proposals containing automatic presence changes must be prepared again. Explicitly re-enabling a line or applying a confirmed passage records your presence decision and allows it to be considered for alignment.
 - Long notes have no generic maximum word duration. A line may be shortened at an independently confirmed next onset only when both lines have the same single singer and no internal singer change. A second estimate from the same model is not a confirmed onset.
 - Onset movements over three seconds, invalid words, excerpt-edge results and new same-singer collisions are withheld. Collisions between independently analysed windows may need a manual anchor before another pass.
 - Unmatched, unconfirmed placeholder spans remain visible for correction, but are not reliable collision anchors. Manual timing, word anchors and explicit presence decisions still participate in collision protection. This does not make uncertain neighbouring timing acoustically correct.

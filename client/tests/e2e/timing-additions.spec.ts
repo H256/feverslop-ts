@@ -10,6 +10,56 @@ test.afterAll(async () => {
   await editor?.stop()
 })
 
+test('confirmed passage prepares without saving and applies only its reviewed proposal', async ({page}) => {
+  const posted = await stubProject(page)
+  const prepared: unknown[] = [],
+    applied: unknown[] = []
+  await page.route('**/api/timing-refine', async route => {
+    prepared.push(route.request().postDataJSON())
+    await route.fulfill({
+      json: {
+        id: 'passage-preview',
+        language: 'de',
+        fingerprint: 'fixture',
+        model: 'fixture',
+        passage: {line: 0, start: 0, end: 6, targets: [0]},
+        change: {
+          lines: [
+            {
+              line: 0,
+              words: [
+                {text: 'Hello', start: 1.4, end: 2},
+                {text: 'night', start: 2, end: 3},
+              ],
+            },
+          ],
+        },
+        entries: [{line: 0, text: 'Hello night', before: [1, 3], after: [1.4, 3], status: 'refined', reason: 'Listen to check.'}],
+      },
+    })
+  })
+  await page.route('**/api/timing-refine-apply', async route => {
+    applied.push(route.request().postDataJSON())
+    await route.fulfill({json: {changed: [0], slots: [], replanned: [], staleClips: [], crossing: []}})
+  })
+  await page.goto(`${editor.base}/p/music/demo/timing`)
+  const retry = page.getByRole('button', {name: 'Retry sung passage', exact: true})
+  await retry.click()
+  await page.getByRole('dialog').getByRole('button', {name: 'Cancel', exact: true}).click()
+  expect(prepared).toEqual([])
+  await retry.click()
+  await page.getByRole('dialog').getByRole('button', {name: 'This line is sung — prepare', exact: true}).click()
+  await expect(page.getByRole('button', {name: 'Listen before', exact: true})).toBeVisible()
+  await expect(page.getByRole('button', {name: 'Listen to proposal', exact: true})).toBeVisible()
+  expect(prepared).toEqual([{language: 'de', passage: {line: 0, confirmSung: true}}])
+  expect(posted.filter(p => p.path === 'timing')).toEqual([])
+  expect(applied).toEqual([])
+  await page.getByRole('button', {name: 'Apply passage', exact: true}).click()
+  await expect.poll(() => applied).toEqual([{id: 'passage-preview'}])
+  await page.getByRole('button', {name: 'Mark reviewed', exact: true}).click()
+  await expect(retry).toBeDisabled()
+})
+
 test('omitted overlapping words do not intercept dragging; deliberate list selection still edits them', async ({page}) => {
   const posted = await stubProject(page)
   const lines = [

@@ -71,7 +71,7 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         json: true,
     },
     timing: {
-        args: '<project-id> [--json | --set=timing.json | --refine=de|en|fr | --apply-refinement=<proposal-id>]',
+        args: '<project-id> [--json | --set=timing.json | --refine=de|en|fr [--refine-line=N --confirm-sung] | --apply-refinement=<proposal-id>]',
         description: 'Print or edit sung words, or prepare and explicitly apply a local phoneme refinement. Changed clip beats need planning again.',
         json: true,
     },

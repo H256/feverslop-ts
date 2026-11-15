@@ -24,7 +24,7 @@ import type {RefinementLanguage} from '../shared/timing-refinement.ts'
 cli('timing')
 
 const usage =
-    'usage: bun run timing <project-id> [--json | --set=timing.json | --tighten | --off=12,40 | --on=12 | --reset=12,40|all | --refine=de|en|fr | --apply-refinement=<proposal-id>]'
+    'usage: bun run timing <project-id> [--json | --set=timing.json | --tighten | --off=12,40 | --on=12 | --reset=12,40|all | --refine=de|en|fr [--refine-line=N --confirm-sung] | --apply-refinement=<proposal-id>]'
 const {values: args, positionals} = (() => {
     try {
         return parseArgs({
@@ -38,6 +38,8 @@ const {values: args, positionals} = (() => {
                 on: {type: 'string'},
                 reset: {type: 'string'},
                 refine: {type: 'string'},
+                'refine-line': {type: 'string'},
+                'confirm-sung': {type: 'boolean'},
                 'apply-refinement': {type: 'string'},
             },
         })
@@ -48,6 +50,18 @@ const {values: args, positionals} = (() => {
 // a word more than it takes is said before any work (#938)
 const extra = extraArgument(positionals, ['a project id'])
 if (extra) log.usageError(extra, usage)
+const refineLine = args['refine-line']
+if (refineLine !== undefined || args['confirm-sung']) {
+    if (
+        !args.refine ||
+        !args['confirm-sung'] ||
+        !refineLine ||
+        !/^\d+$/.test(refineLine) ||
+        !Number.isSafeInteger(Number(refineLine)) ||
+        Number(refineLine) < 1
+    )
+        log.usageError('Use --refine=de|en|fr --refine-line=<one-based line> --confirm-sung together', usage)
+}
 const target = commandTarget(positionals[0], false)
 if (typeof target === 'string') log.usageError(target, usage)
 const t = target as Exclude<typeof target, string>
@@ -68,9 +82,17 @@ if (
     log.usageError('Choose one timing action at a time', usage)
 if (args.refine !== undefined) {
     if (!['de', 'en', 'fr'].includes(args.refine)) log.usageError('--refine requires de, en or fr', usage)
-    const report = await prepareTimingRefinement(t, args.refine as RefinementLanguage)
+    const report = await prepareTimingRefinement(
+        t,
+        args.refine as RefinementLanguage,
+        refineLine === undefined ? undefined : {line: Number(refineLine) - 1, confirmSung: true},
+    )
     if (args.json) console.log(JSON.stringify(report, null, 2))
     else {
+        if (report.passage)
+            log.info(
+                `Passage only: lines ${report.passage.targets.map(n => n + 1).join(', ')}. Applying also confirms line ${report.passage.line + 1} is sung.`,
+            )
         for (const entry of report.entries)
             log.info(
                 `${entry.line + 1} [${entry.status}] ${entry.text}: ${entry.before.map(n => n.toFixed(2)).join('–')}${entry.after ? ` → ${entry.after.map(n => n.toFixed(2)).join('–')}` : ''}. ${entry.reason}`,
