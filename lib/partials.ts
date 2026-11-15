@@ -67,3 +67,13 @@ export function dropPartials(data: {partials?: Partials}, step: string) {
     delete data.partials[step]
     if (!Object.keys(data.partials).length) delete data.partials
 }
+
+/**
+ * Plans that stay while the rest is made again (a re-plan of some beats): the step's own result is dropped for the time of the run,
+ * so these go into the partials, marked as kept - a run that stops half way still has them, and the next one asks only for the others.
+ */
+export function keepAsPartials(data: {partials?: Partials}, step: string, kept: Record<string, unknown>) {
+    const partials = (data.partials ??= {})
+    const own = (partials[step] ??= {})
+    for (const [key, value] of Object.entries(kept)) own[key] = {fingerprint: KEPT_BY_HAND, value}
+}
