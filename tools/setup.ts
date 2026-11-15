@@ -2,10 +2,10 @@ import {cli} from '../lib/cli.ts'
 import {log} from '../lib/log.ts'
 // Sets up the LLM server, the ComfyUI servers and the transcription - writes the global settings file (see the README, section "Setup").
 // usage: bun run setup [llm | llm-model | vision | comfy | whisper | show]
-//        bun run setup llm --url= [--key=] [--model=] [--parallel=] · vision --url= [--key=] [--model=] | --off · comfy --add=URL [--name=] [--token=] | --remove=NAME · show --json
+//        bun run setup llm --url= [--key= | --key-file=PATH | --key-env=NAME] [--model=] [--parallel=] · vision --url= [--key=] [--model=] | --off · comfy --add=URL [--name=] [--token=] | --remove=NAME · show --json
 //        (by options nothing is asked, #827)
 import * as p from '@clack/prompts'
-import {existsSync} from 'node:fs'
+import {existsSync, readFileSync} from 'node:fs'
 import {listModels, takesPictures} from '../lib/llm.ts'
 import {styles} from '../lib/log.ts'
 import {answer as wizardAnswer} from '../lib/wizard.ts'
@@ -63,8 +63,29 @@ if (command === 'show') {
 // by options, nothing asked (#827): a script, the workspace
 {
     const option = (name: string) => Bun.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3)
+    // a key or token on the command line is in the shell history and the process list: --key-file=PATH or --key-env=NAME give it
+    // from a file or the environment instead (#1003)
+    const secret = (name: string): string | undefined => {
+        const file = option(`${name}-file`)
+        if (file !== undefined) {
+            if (!existsSync(file)) log.usageError(`--${name}-file: no file ${file}`, 'usage: bun run setup llm --url= [--key-file=PATH]')
+            return readFileSync(file, 'utf8').trim()
+        }
+        const variable = option(`${name}-env`)
+        if (variable !== undefined) {
+            const value = process.env[variable]
+            if (value === undefined) log.usageError(`--${name}-env: the environment variable ${variable} is not set`, 'usage: bun run setup llm --url= [--key-env=NAME]')
+            return value
+        }
+        return option(name)
+    }
     const options: SetupOptions = {
-        ...(Object.fromEntries(SETUP_OPTIONS.flatMap(name => (option(name) === undefined ? [] : [[name, option(name)!]]))) as Record<string, string>),
+        ...(Object.fromEntries(
+            SETUP_OPTIONS.flatMap(name => {
+                const value = name === 'key' || name === 'token' ? secret(name) : option(name)
+                return value === undefined ? [] : [[name, value]]
+            }),
+        ) as Record<string, string>),
         ...(Bun.argv.includes('--off') ? {off: true} : {}),
     }
     if (givesSetup(options)) {

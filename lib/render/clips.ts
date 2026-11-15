@@ -162,7 +162,7 @@ export async function renderClip(r: Renderer, clip: ClipRequest, stemFiles: Reco
                 renderedFrames: rendered.frames,
                 size: `${rendered.width}x${rendered.height}`,
                 rejected: 'size',
-            }),
+            }, null, 2),
         )
         const keep = archiveFiles(r.projectDir, `size-${versionStamp()}-${file.replace(/[\/]/g, '-')}`, [
             file,
@@ -294,7 +294,13 @@ export async function previewStart(r: Renderer, id: string): Promise<string | un
     const source = [`previews/${id}.mp4`, `videos/${id}.mp4`].find(file => existsSync(join(r.projectDir, file)))
     if (!source) return undefined
     const video = join(r.projectDir, source)
-    const record = existsSync(`${video}.json`) ? (JSON.parse(readFileSync(`${video}.json`, 'utf8')) as {frames?: number}) : {}
+    // a sidecar that is half written (a run stopped in the middle of it) is no sidecar: the video's own frames count
+    let record: {frames?: number} = {}
+    try {
+      if (existsSync(`${video}.json`)) record = JSON.parse(readFileSync(`${video}.json`, 'utf8')) as {frames?: number}
+    } catch {
+      // read as nothing
+    }
     const frames = Math.min(record.frames ?? Infinity, framesOnGrid(await probeVideo(video)))
     const frame = `previews/${id}_lf.png`
     mkdirSync(join(r.projectDir, 'previews'), {recursive: true})
@@ -443,7 +449,14 @@ export async function contextOf(r: Renderer, id: string, wanted: number, shown?:
     const video = join(r.projectDir, 'videos', `${id}.mp4`)
     const sidecar = `${video}.json`
     if (!existsSync(video) || !existsSync(sidecar)) return undefined
-    const used = shown ?? (JSON.parse(readFileSync(sidecar, 'utf8')) as {frames: number}).frames
+    let used = shown
+    if (used === undefined) {
+        try {
+            used = (JSON.parse(readFileSync(sidecar, 'utf8')) as {frames: number}).frames
+        } catch {
+            return undefined // a half-written sidecar: no context rather than a throw
+        }
+    }
     const frames = contextLength(wanted, used)
     if (!frames) return undefined
     const asset = `assets/clips/${id}_tail${frames}.mp4`

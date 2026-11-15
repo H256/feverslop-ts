@@ -15,7 +15,7 @@ export function parseRetake(text: string): RetakeAsk {
     return {clip: match[1]!, seconds: [Number(match[2]), Number(match[3])]}
 }
 
-// where each shot of the file starts, the first one at 0 - `cuts` as lib/interpolate.ts finds them (shotCuts) has 0 among them
+// where each shot of the file starts, the first one at 0 - `cuts` as lib/interpolate.ts finds them (shotCutFrames) has 0 among them
 const shotStarts = (cuts: number[]) => [0, ...cuts.filter(cut => cut > 0)]
 
 /**
