@@ -2,7 +2,7 @@ import type {LyricSection, LyricsTiming, MusicMap, MusicSection, Slot, SlotVocal
 
 export type ActivityRange = {start: number; end: number}
 import {EARLY_FROM, leadOf} from '../shared/timing-fit.ts'
-import {frameAt, round, secondsAt} from './frames.ts'
+import {barSeconds, frameAt, round, secondsAt} from './frames.ts'
 
 // Aligns the known lyrics to Whisper's transcript of the vocals stem - plain code, deterministic.
 
@@ -31,11 +31,7 @@ const segmenter = new Intl.Segmenter(undefined, {granularity: 'word'})
 
 /** The words of a line: by its spaces, and where a part is written without them, by the language's own word boundaries. */
 export function splitWords(text: string): string[] {
-    return text.split(' ').flatMap(part =>
-        UNSPACED.test(part)
-            ? [...segmenter.segment(part)].filter(s => s.isWordLike).map(s => s.segment)
-            : [part],
-    )
+    return text.split(' ').flatMap(part => (UNSPACED.test(part) ? [...segmenter.segment(part)].filter(s => s.isWordLike).map(s => s.segment) : [part]))
 }
 
 export type SungLine = {line: number; sectionIndex: number; section: string; text: string; words: string[]}
@@ -504,7 +500,7 @@ function spreadOverActivity(lo: number, hi: number, count: number, activity: Act
 export function refineSections(music: MusicMap, lyricSections: LyricSection[], timing: LyricsTiming): MusicSection[] {
     const estimated = music.sections
     if (estimated.length !== lyricSections.length) return estimated
-    const barSec = 240 / music.bpm
+    const barSec = barSeconds(music)
     const downbeats = music.downbeats
     const tolerance = 0.15
     const snapDown = (t: number) => {
