@@ -17,10 +17,80 @@ const filmableRules = `The film is generated clip by clip with an AI video model
 - Write every picture and every sound as what is there, never as what is absent: the video model cannot leave out what a sentence names, so "no movement", "is not in the room" or "nobody speaks" puts the movement, the person and the voices into the clip. Say what is there instead: "locked off, static", "alone in the room", "everyone silent, lips together".
 - A hand does one simple thing in a shot: hold something out, take it, put it down, push a door. Several fiddly steps on a mechanism (opening an umbrella, unlocking a door, tying a knot, loading a gun) are not shown being done - the shot starts with it done (the umbrella is already open in his hand) or shows only the last, simple step; the video model fumbles them.
 - Weather that falls or blows (rain, snow, wind, smoke) is in the picture of every outdoor shot of a scene that has it - falling streaks of rain, drifting snow in the air - and on the people and things in it (wet hair and clothes, dripping), not only in the sound or on the ground.`
+const str = {type: 'string'} as const
+const strings = {type: 'array', items: str} as const
+const object = (properties: Record<string, unknown>) => ({type: 'object', additionalProperties: false, required: Object.keys(properties), properties})
+
+// The whole shape of a film answer (#995). Every field of the instructions is listed: a server that keeps the answer to a schema
+// leaves out what the schema does not name (see the comment on coveragePrompt).
+const briefSchema = object({title: str, language: str, logline: str, genre: str, tone: str, setting: str})
+const outlineSchema = object({
+    characters: {type: 'array', items: object({name: str, role: str, appearance: str, voice: str})},
+    scenes: {
+        type: 'array',
+        items: object({heading: str, characters: strings, summary: str, purpose: str, begins: str, changes: str, seconds: {type: 'number'}}),
+    },
+    setups: {type: 'array', items: object({event: str, setup: str})},
+})
+const castSchema = object({
+    characters: {
+        type: 'array',
+        items: object({
+            name: str,
+            aliases: strings,
+            role: str,
+            appearance: str,
+            voice: str,
+            voiceOnly: {type: 'boolean'},
+            states: {type: 'array', items: object({name: str, change: str, from: {type: 'integer'}})},
+        }),
+    },
+    locations: {type: 'array', items: object({name: str, aliases: strings, description: str})},
+})
+const optional = (properties: Record<string, unknown>, required: string[]) => ({type: 'object', additionalProperties: false, required, properties})
+// one element of a scene: an action line, or a line of dialogue that must say who speaks, how and in which language (#995)
+const elementSchema = {
+    anyOf: [
+        optional({type: {type: 'string', enum: ['action']}, text: str}, ['type', 'text']),
+        // a dialogue line must name who speaks, how and in which language - left optional, the model leaves them out
+        optional(
+            {
+                type: {type: 'string', enum: ['dialogue']},
+                speaker: str,
+                text: str,
+                kind: {type: 'string', enum: ['spoken', 'offscreen', 'voiceover']},
+                delivery: str,
+                language: str,
+                translation: str,
+            },
+            ['type', 'speaker', 'text', 'kind', 'language'],
+        ),
+    ],
+}
+const screenplayScenes = {
+    type: 'array',
+    items: optional(
+        {setting: {type: 'string', enum: ['INT', 'EXT', 'INT/EXT']}, location: str, time: str, shot: str, elements: {type: 'array', items: elementSchema}},
+        ['setting', 'location', 'time', 'elements'],
+    ),
+}
+const screenplaySchema = object({scenes: screenplayScenes})
+const adaptSchema = object({characters: {type: 'array', items: object({name: str, role: str, appearance: str, voice: str})}, scenes: screenplayScenes})
+const annotateSchema = object({
+    scenes: {
+        type: 'array',
+        items: object({location: str, time: str, shot: str, actions: strings, lines: {type: 'array', items: object({language: str, delivery: str})}}),
+    },
+})
+const notesSchema = object({notes: {type: 'array', maxItems: 8, items: str}})
+const propsSchema = object({props: {type: 'array', maxItems: 6, items: object({name: str, used: str, shape: str, colour: str, material: str})}})
+const viewsSchema = object({views: {type: 'array', minItems: 5, maxItems: 5, items: object({name: str, shows: str})}})
+const editsSchema = object({edits: {type: 'array', items: optional({scene: str, element: {type: 'integer'}, text: str, time: str}, ['scene'])}})
 
 export function briefPrompt(source: string, mode: Brief['mode'], dialogueLanguage: string | undefined): AskOptions {
     return {
         maxTokens: 4096,
+        schema: briefSchema,
         input: `${mode === 'screenplay' ? 'Screenplay' : 'Story idea'}:
 ${source}`,
         instructions: `You are a script editor. You are given ${mode === 'screenplay' ? 'a screenplay' : 'a story idea for a short film'} in any language. Answer only with JSON:
@@ -29,6 +99,19 @@ ${source}`,
 - "language": the ISO 639-1 code of the language the characters ${dialogueLanguage ? `speak: always "${dialogueLanguage}"` : mode === 'screenplay' ? 'speak in the screenplay (the dominant one if several)' : 'will speak - the language the idea is written in'}.
 - "logline": one sentence in English: who wants what, and what stands in the way.
 - "genre", "tone", "setting": a few words each, in English. The setting is era and place.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['title', 'language', 'logline', 'genre', 'tone', 'setting'],
+            properties: {
+                title: {type: 'string'},
+                language: {type: 'string'},
+                logline: {type: 'string'},
+                genre: {type: 'string'},
+                tone: {type: 'string'},
+                setting: {type: 'string'},
+            },
+        },
     }
 }
 
@@ -40,6 +123,7 @@ export function outlinePrompt(idea: string, brief: Brief, targetSeconds: number)
     return {
         maxTokens: 8192,
         reasoning: 'medium',
+        schema: outlineSchema,
         input: `Story idea:
 ${idea}
 
@@ -68,6 +152,43 @@ Answer only with JSON:
 - "setups": for every event that has to be believable (an escape, a surprise, an object that is used), what has to be shown before it and in which scene - an escape from a rope needs the rope shown, and what makes it give way. [] if nothing needs it.
 - If the idea lists the steps of the story (an arc, beats, an ending), every step happens, in that order, in a scene of its own or inside one: none dropped, none reordered, no other ending.
 Names, headings and the story are written in English; the dialogue language only matters later, in the script.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['characters', 'scenes', 'setups'],
+            properties: {
+                characters: {
+                    type: 'array',
+                    minItems: 1,
+                    items: {
+                        type: 'object',
+                        required: ['name', 'role', 'appearance', 'voice'],
+                        properties: {name: {type: 'string'}, role: {type: 'string'}, appearance: {type: 'string'}, voice: {type: 'string'}},
+                    },
+                },
+                scenes: {
+                    type: 'array',
+                    minItems: 1,
+                    items: {
+                        type: 'object',
+                        required: ['heading', 'characters', 'summary', 'purpose', 'begins', 'changes', 'seconds'],
+                        properties: {
+                            heading: {type: 'string'},
+                            characters: {type: 'array', items: {type: 'string'}},
+                            summary: {type: 'string'},
+                            purpose: {type: 'string'},
+                            begins: {type: 'string'},
+                            changes: {type: 'string'},
+                            seconds: {type: 'number', minimum: 1},
+                        },
+                    },
+                },
+                setups: {
+                    type: 'array',
+                    items: {type: 'object', required: ['event', 'setup'], properties: {event: {type: 'string'}, setup: {type: 'string'}}},
+                },
+            },
+        },
     }
 }
 
@@ -87,9 +208,53 @@ const screenplayJson = `{
 - "speaker": the character cue, as the script writes it. "kind": "spoken" (the character is in the picture and speaks), "offscreen" (heard, but not in the picture) or "voiceover" (narration or thoughts, lips closed).
 - "shot" is optional - only when the heading of the scene names a shot or a view instead of a place: the heading as written, in English ("CLOSE UP - ANUBIS", "WIDE SHOT"). "delivery" is optional - the parenthetical, in English ("whispering", "out of breath"). "translation" is optional - only when the screenplay itself has a translation of the line under it (in brackets): the translation as written. "language" is the ISO 639-1 code of the language the line is spoken in, on every dialogue line: read the words of the line, not who says it - one character may speak two languages in the same film.`
 
+/** The shape of the screenplay's JSON (screenplayJson as a schema, #995): an element is an action or a dialogue line, not a mix. */
+const screenplaySchema = {
+    type: 'object',
+    required: ['scenes'],
+    properties: {
+        scenes: {
+            type: 'array',
+            minItems: 1,
+            items: {
+                type: 'object',
+                required: ['setting', 'location', 'time', 'elements'],
+                properties: {
+                    setting: {enum: ['INT', 'EXT', 'INT/EXT']},
+                    location: {type: 'string'},
+                    time: {type: 'string'},
+                    shot: {type: 'string'},
+                    elements: {
+                        type: 'array',
+                        items: {
+                            anyOf: [
+                                {type: 'object', required: ['type', 'text'], properties: {type: {const: 'action'}, text: {type: 'string'}}},
+                                {
+                                    type: 'object',
+                                    required: ['type', 'speaker', 'text', 'kind'],
+                                    properties: {
+                                        type: {const: 'dialogue'},
+                                        speaker: {type: 'string'},
+                                        text: {type: 'string'},
+                                        kind: {enum: ['spoken', 'offscreen', 'voiceover']},
+                                        delivery: {type: 'string'},
+                                        language: {type: 'string'},
+                                        translation: {type: 'string'},
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            },
+        },
+    },
+}
+
 export function screenplayWritePrompt(brief: Brief, outline: Outline): AskOptions {
     return {
         maxTokens: 16384,
+        schema: screenplaySchema,
         reasoning: 'medium',
         input: `Title: ${brief.title}
 Logline: ${brief.logline}
@@ -110,6 +275,8 @@ ${filmableRules}
 
 Answer only with JSON in this format:
 ${screenplayJson}`,
+        // the shape of the answer (#995)
+        schema: screenplaySchema,
     }
 }
 
@@ -123,18 +290,48 @@ export function fountainAnnotatePrompt(
 ): AskOptions {
     return {
         maxTokens: 12288,
+        schema: annotateSchema,
         reasoning: 'low',
         input: JSON.stringify({scenes}),
         instructions: `You are a script supervisor. A screenplay has been read into scenes; you add what the structure cannot say. Do not rewrite dialogue - it is not part of your answer. Answer only with JSON: {"scenes": [{"location": "", "time": "", "shot": "", "actions": [], "lines": [{"language": "", "delivery": ""}]}]} - one entry per scene, in the same order.
 - "location" and "time": the place and the time of day of the heading, in English, the same place always named the same way (DAY, NIGHT, DUSK, DAWN, ...). A heading that names a shot or a view instead of a place ("CLOSE UP - HIS FACE", "WIDE SHOT", "THE COLLISION") is not a new place: "location" and "time" are those of the scene before, never "unknown", and "shot" is the heading as written, in English. Otherwise "shot" is "".
 - "actions": the action lines of the scene, in the same order and the same number, tidied into plain present-tense English sentences - what the camera sees or the microphone hears, nothing added, nothing dropped.
 - "lines": one entry for every dialogue line of the scene, in the same order and the same number. "language" is the ISO 639-1 code of the language the line is spoken in - read its words, not who says it (the main language of the film is ${language}). "delivery" is the line's parenthetical in English ("whispering", "out of breath"), or "" when it has none.`,
+        // the shape of the answer (#995)
+        schema: {
+            type: 'object',
+            required: ['scenes'],
+            properties: {
+                scenes: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['location', 'time', 'actions', 'lines'],
+                        properties: {
+                            location: {type: 'string'},
+                            time: {type: 'string'},
+                            shot: {type: 'string'},
+                            actions: {type: 'array', items: {type: 'string'}},
+                            lines: {
+                                type: 'array',
+                                items: {
+                                    type: 'object',
+                                    required: ['language', 'delivery'],
+                                    properties: {language: {type: 'string'}, delivery: {type: 'string'}},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     }
 }
 
 export function screenplayParsePrompt(source: string, language: string, missing: string[] = []): AskOptions {
     return {
         maxTokens: 24576,
+        schema: screenplaySchema,
         reasoning: 'low',
         input: `${missing.length ? `Your last attempt changed or lost these dialogue lines - they must appear exactly as in the screenplay, character for character:\n${missing.map(m => `- ${m}`).join('\n')}\n\n` : ''}Screenplay:
 ${source}`,
@@ -149,6 +346,8 @@ ${source}`,
 
 Answer only with JSON in this format:
 ${screenplayJson}`,
+        // the shape of the answer (#995)
+        schema: screenplaySchema,
     }
 }
 
@@ -158,6 +357,7 @@ export function castPrompt(screenplay: Screenplay, outline?: Outline, problems: 
     return {
         maxTokens: 12288,
         reasoning: 'medium',
+        schema: castSchema,
         input: `${setting ? `Setting (era and place): ${setting}\n\n` : ''}${problems.length ? `Your last answer left these out - every speaker cue and every slugline place of the screenplay must be covered by an alias:\n${problems.map(p => `- ${p}`).join('\n')}\n\n` : ''}${
             outline
                 ? `Planning notes (use them for appearance and voice where they cover a character):
@@ -190,6 +390,44 @@ Characters:
 - "voiceOnly": true for a character who is never seen (a narrator, a voice on the phone), else false.
 - "states": almost always []. Only if the script changes how the character LOOKS - for a stretch of the film or for the rest of it - in a way a picture has to show: wounded and bloody, in disguise, covered in mud or soot, soaked, in other clothes, much older. Each: "name" (a word or two, e.g. "wounded"), "from" (the number of the scene, as in the [Scene n] headings of the screenplay, in which the script FIRST shows this look - not earlier: a look the script gives in scene 19 is not used in scene 10) and "change" - what is different from the normal appearance, concrete and visible, one or two sentences, and only what the script itself says changes: other clothes only if the script says so, never invented to fit the mood. At most two per character. A state is how the body and clothes look - never a pose, a place or an action ("lying in a crater", "dying" are the scene, not the look), and never only a detail of one body part: it has to show in a picture of the whole person. A mood, a bruise that is barely visible or a change of a few seconds is not a state.
 Locations: the "description" is the place as the film first shows it - what stands there in every scene. Leave out what the script reveals, uncovers, builds, breaks or changes later, and every object that someone picks up, carries, uses or moves (a radio on a shelf, a weapon, a cup) - even when the script's own scene description lists it there: those belong to the shots that need them, not to the place. Each place that can be filmed as one set, in order of appearance. Sluglines name views and moments as much as places: the same place under several names, seen closer or from another side, at another time of day, is one location with all those names as aliases - a new location only where the look is clearly another (a clearing and the dense forest around it, the inside of a hut and its yard). Fewer, clearly different places are better than many that overlap. "aliases" are the names the sluglines use for it. "description": what it looks like, in one or two sentences - what is where, materials, light. No people and no action.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['characters', 'locations'],
+            properties: {
+                characters: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['name', 'aliases', 'role', 'appearance', 'voice', 'voiceOnly', 'states'],
+                        properties: {
+                            name: {type: 'string'},
+                            aliases: {type: 'array', items: {type: 'string'}},
+                            role: {type: 'string'},
+                            appearance: {type: 'string'},
+                            voice: {type: 'string'},
+                            voiceOnly: {type: 'boolean'},
+                            states: {
+                                type: 'array',
+                                items: {
+                                    type: 'object',
+                                    required: ['name', 'change'],
+                                    properties: {name: {type: 'string'}, change: {type: 'string'}, from: {type: 'integer', minimum: 1}},
+                                },
+                            },
+                        },
+                    },
+                },
+                locations: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['name', 'aliases', 'description'],
+                        properties: {name: {type: 'string'}, aliases: {type: 'array', items: {type: 'string'}}, description: {type: 'string'}},
+                    },
+                },
+            },
+        },
     }
 }
 
@@ -207,12 +445,19 @@ export function scriptNotesPrompt(screenplay: Screenplay, idea?: string, roleCha
                   .join('\n')}`
             : ''
     return {
+        schema: notesSchema,
         // thinking and answer share the limit: a long script made the model think through all of it and never answer
         maxTokens: 12288,
         reasoning: 'low',
         input: `${idea ? `Story idea the script was written from:\n${idea}${changed}\n\nScreenplay:\n` : ''}${screenplay.scenes.map(scene => [`## ${scene.id} · ${scene.setting}. ${scene.location} - ${scene.time}`, ...scene.elements.map(e => (e.type === 'action' ? e.text : `${e.speaker}: ${e.text}`))].join('\n')).join('\n\n')}`,
         instructions: `You are a script supervisor reading a screenplay in the order of its scenes. List what contradicts itself or does not follow, as it would show on screen: a person who is bound, free, bound again without anything happening in between; who is where (in the hut in one scene, outdoors in the next, with no way there); an object that is somewhere, then somewhere else, or is used before it is picked up; clothing or injuries that appear and vanish; time of day that jumps back; a character who knows or has what they could not. Only real contradictions - not style, and not what the story leaves open on purpose.${idea ? ' Also: a step the story idea names that the script does not show, or shows in another order or with another ending.' : ''}
 Answer only with JSON: {"notes": ["s5-s7: <what contradicts what, in one sentence>"]}. Name the scenes. At most 8 notes, the ones that matter most for the picture; [] if the script is consistent.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['notes'],
+            properties: {notes: {type: 'array', maxItems: 8, items: {type: 'string'}}},
+        },
     }
 }
 
@@ -235,6 +480,7 @@ ${screenplayToText(screenplay)}`,
  */
 export function propsPrompt(screenplay: Screenplay, cast: FilmCast): AskOptions {
     return {
+        schema: propsSchema,
         maxTokens: 4096,
         reasoning: 'low',
         input: `Cast: ${cast.characters.map(c => `${c.name} - ${c.appearance}`).join('\n')}
@@ -249,12 +495,34 @@ ${screenplayToText(screenplay)}`,
 - "shape", "colour", "material": what the thing itself looks like, so a picture of it can be drawn - from the script and the era of the film, a few words each, the thing alone. "shape" starts with the thing and gives its size and form ("a long umbrella with a curved crook handle, about a metre long"), "colour" its colours and finish ("black canopy, dark brown handle, worn"), "material" what it is made of ("nylon canopy, wooden handle, steel tip"). Open or closed, lit or not: as it is seen in most of its shots - an umbrella that is opened and held over someone has an open shape. What the script leaves open you decide, once and concretely, so every clip draws the same thing: one colour, one material ("wooden", never "plastic or wooden"), no light or weather on it, no pose ("leaning") - the picture shows it standing alone in even light.
 - Not what someone wears all film long (a costume, a necklace, a ring of keys on a lanyard): that is in their picture. Not a fixed part of a place (a door, a lamp on a stand, a counter): that is in the place's picture. Not food, liquids or things that are only heard.
 - At most 6, the ones that come back most. {"props": []} if the script has none.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['props'],
+            properties: {
+                props: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['name', 'used', 'shape', 'colour', 'material'],
+                        properties: {
+                            name: {type: 'string'},
+                            used: {type: 'string'},
+                            shape: {type: 'string'},
+                            colour: {type: 'string'},
+                            material: {type: 'string'},
+                        },
+                    },
+                },
+            },
+        },
     }
 }
 
 // The one style that fits the film: genre, tone, setting and audience decide. No draw and no forced variety - the look has to carry the tone of the film.
 export function styleChoicePrompt(brief: Brief, summary: string, styleList: {id: string; name: string}[]): AskOptions {
     return {
+        schema: object({style: {type: 'string', enum: styleList.map(s => s.id)}, reason: str}),
         maxTokens: 2048,
         input: `Choose the film style from the list that suits this short film best, for a film generated with AI image and video models.
 The look has to carry the tone of the film: genre, tone, setting and audience decide, and the style that fits is the one to choose - even if it is the obvious one, not the most unusual.
@@ -267,6 +535,12 @@ film: ${brief.title} - ${brief.logline}
 Genre: ${brief.genre} · Tone: ${brief.tone} · Setting: ${brief.setting}
 summary: ${summary}`,
         instructions: 'You are a film director choosing the visual style of a short film. Answer only with the JSON.',
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['style', 'reason'],
+            properties: {style: styleList.length ? {enum: styleList.map(x => x.id)} : {type: 'string'}, reason: {type: 'string'}},
+        },
     }
 }
 
@@ -279,6 +553,7 @@ summary: ${summary}`,
  */
 export function locationViewsPrompt(location: FilmLocation, hero: string, scenes: string): AskOptions {
     return {
+        schema: viewsSchema,
         maxTokens: 4096,
         reasoning: 'low',
         input: `Place: ${location.name}
@@ -296,6 +571,19 @@ First think of the place as a floor plan: what lies on which side of the spot th
 Answer only with JSON: {"views": [{"name": "", "shows": ""}, ...five entries]}
 - "name": short - where the camera stands and what it looks toward ("from the water side, looking back toward the dunes").
 - "shows": one or two sentences - the camera position and what is seen: the features, their materials, where the light comes from, what is on the left and on the right of the frame. Same place, same time of day and weather as the hero picture, nothing that contradicts the description; features that appear in more than one view are in the same place relative to each other. No people.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['views'],
+            properties: {
+                views: {
+                    type: 'array',
+                    minItems: 5,
+                    maxItems: 5,
+                    items: {type: 'object', required: ['name', 'shows'], properties: {name: {type: 'string'}, shows: {type: 'string'}}},
+                },
+            },
+        },
     }
 }
 
@@ -488,6 +776,7 @@ The same character in another look - "${state.name}": ${state.change}`,
 /** The repair of a script that contradicts itself: the smallest changes to action lines and times of day that make it follow. */
 export function scriptFixPrompt(screenplay: Screenplay, notes: string[]): AskOptions {
     return {
+        schema: editsSchema,
         maxTokens: 8192,
         reasoning: 'medium',
         input: `Contradictions found:
@@ -678,6 +967,7 @@ export function adaptScreenplayPrompt(
         `- ${c.name}${c.aliases?.length ? ` (cues: ${c.aliases.join(', ')})` : ''}: ${c.role}`
     return {
         maxTokens: 16384,
+        schema: adaptSchema,
         reasoning: 'medium',
         input: `Title: ${brief.title}
 Logline: ${brief.logline}
@@ -701,5 +991,21 @@ ${filmableRules}
 
 Answer only with JSON in this format:
 {"characters": [{"name": "", "role": "", "appearance": "", "voice": ""}], ${screenplayJson.slice(1).trimStart()}`,
+        // the shape of the answer (#995)
+        schema: {
+            ...screenplaySchema,
+            required: ['characters', 'scenes'],
+            properties: {
+                characters: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['name', 'role', 'appearance', 'voice'],
+                        properties: {name: {type: 'string'}, role: {type: 'string'}, appearance: {type: 'string'}, voice: {type: 'string'}},
+                    },
+                },
+                ...screenplaySchema.properties,
+            },
+        },
     }
 }
