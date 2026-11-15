@@ -44,12 +44,13 @@ try {
 }
 
 const code = await Bun.file(file).text()
-await Bun.write(
-    file,
-    code.replace(
-        /^import \{ WorkflowBuilder as BaseWorkflowBuilder, ([^}]+) \} from "@saintno\/comfyui-sdk";/m,
-        'import { WorkflowBuilder as BaseWorkflowBuilder } from "@saintno/comfyui-sdk";\nimport type { $1 } from "@saintno/comfyui-sdk";',
-    ),
-)
+const IMPORT = /^import \{ WorkflowBuilder as BaseWorkflowBuilder, ([^}]+) \} from "@saintno\/comfyui-sdk";/m
+const FIXED = 'import { WorkflowBuilder as BaseWorkflowBuilder } from "@saintno/comfyui-sdk";'
+// the generator's import line is patched by its text: when it reads differently the type check would fail with an unrelated message
+if (!IMPORT.test(code) && !code.includes(FIXED)) {
+    log.error(`${file}: the import of the SDK is not as expected - the generator changed; adapt the pattern in comfy/gen-types.ts`)
+    process.exit(1)
+}
+await Bun.write(file, code.replace(IMPORT, `${FIXED}\nimport type { $1 } from "@saintno/comfyui-sdk";`))
 log.info(`Fixed ${fixed} duplicate output/input names`)
 process.exit(0) // the proxy's fetches to the ComfyUI server leave keep-alive sockets open that would hang the process otherwise

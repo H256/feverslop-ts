@@ -1511,11 +1511,17 @@ function styleOpening(lookBrief: string) {
     return splitSentences(lookBrief).slice(0, 1).join(' ')
 }
 
-function splitSentences(text: string) {
-    return text
-        .split(/(?<=[.!?])\s+/)
-        .map(s => s.trim())
-        .filter(Boolean)
+// a full stop that ends an abbreviation, not a sentence
+const ABBREVIATION_END = /\b(?:e\.g|i\.e|vs|approx|cf|Mr|Mrs|Ms|Dr|St)\.$/
+export function splitSentences(text: string) {
+    const sentences: string[] = []
+    for (const piece of text.split(/(?<=[.!?])\s+/).map(s => s.trim())) {
+        if (!piece) continue
+        const last = sentences.length - 1
+        if (last >= 0 && ABBREVIATION_END.test(sentences[last]!)) sentences[last] += ' ' + piece
+        else sentences.push(piece)
+    }
+    return sentences
 }
 
 // items k of n: spreads a list evenly, repeating the nearest item if there are fewer items than parts
