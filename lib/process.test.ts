@@ -1,5 +1,24 @@
 import {expect, test} from 'bun:test'
 import {captureProcess, runProcess} from './process.ts'
+import {mkdtempSync, readFileSync, rmSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+
+test('child progress goes to its log file without leaking into the parent terminal', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'process-log-'))
+    try {
+        const file = join(dir, 'refinement.log')
+        const script = `import {runProcess} from ${JSON.stringify(join(import.meta.dir, 'process.ts'))};
+            await runProcess(['bun', '-e', 'console.error("Phoneme alignment 1/2"); console.error("model failed"); process.exit(1)'],
+                {stderrFile: ${JSON.stringify(file)}, errorMessage: e => e}).catch(e => console.log(e.message));`
+        const result = await captureProcess(['bun', '-e', script])
+        expect(result.stderr).toBe('')
+        expect(readFileSync(file, 'utf8')).toContain('Phoneme alignment 1/2')
+        expect(result.stdout).toContain('model failed')
+    } finally {
+        rmSync(dir, {recursive: true, force: true})
+    }
+})
 
 test('a missing executable names the tool and how to install it', async () => {
     const message = await captureProcess(['feverslop-audit-command-that-does-not-exist']).then(

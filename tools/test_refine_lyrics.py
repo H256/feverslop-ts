@@ -3,6 +3,13 @@ from refine_lyrics import windows, word_phones, phone_tokens, alignment_windows
 
 
 class RefinementTests(unittest.TestCase):
+    def test_block_window_keeps_exact_bounds_and_contains_only_selected_text(self):
+        request = {'duration': 60, 'lines': [{'line': 4}], 'window': {'start': 12.5, 'end': 14.8, 'targets': [4], 'bounded': True}}
+        self.assertEqual(alignment_windows(request), [{**request['window'], 'lines': request['lines']}])
+        request['lines'].append({'line': 5})
+        with self.assertRaises(ValueError):
+            alignment_windows(request)
+
     def test_confirmed_passage_is_one_exact_window(self):
         lines = [{'line': n, 'start': n * 3, 'end': n * 3 + 2} for n in range(6)]
         request = {'lines': lines, 'duration': 60, 'window': {'start': 0, 'end': 20, 'targets': [3, 4]}}
