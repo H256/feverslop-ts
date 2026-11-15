@@ -215,7 +215,19 @@ export const PROJECT_ROUTES: readonly Route[] = [
     },
     {method: 'GET', path: 'references', handle: async c => json({references: await readReferences(c.target)})},
     {method: 'GET', path: 'singing', handle: async c => json({singing: c.target.kind === 'music' ? ((await readSinging(c.target)) ?? null) : null})},
-    {method: 'GET', path: 'lipsync', handle: async c => json({lipsync: c.target.kind === 'music' ? ((await readLipsync(c.target)) ?? null) : null})},
+    {
+        method: 'GET',
+        path: 'lipsync',
+        handle: async c =>
+            json({
+                lipsync:
+                    c.target.kind === 'music'
+                        ? ((await readLipsync(c.target, file =>
+                              c.waveform(`fine:${file}:${statSync(file).mtimeMs}`, () => readFineWaveform(file, 100).catch(() => undefined)),
+                          )) ?? null)
+                        : null,
+            }),
+    },
     {method: 'GET', path: 'timing', handle: async c => json({timing: c.target.kind === 'music' ? ((await readTiming(c.target)) ?? null) : null})},
     {
         method: 'GET',

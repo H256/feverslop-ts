@@ -13,6 +13,8 @@ import {versionStamp} from '../lib/archive.ts'
 import {onlyClips} from '../lib/batch.ts'
 import {lipsyncDummiesProblem, lipsyncDummyProblem, lipsyncScaleProblem, loadProjectConfig} from '../lib/config.ts'
 import {songFileOf} from '../lib/inputs.ts'
+import {readFineWaveform} from '../lib/waveform.ts'
+import {RATE} from '../shared/timing-fit.ts'
 import {audioPrints, lipsyncFile, lipsyncFingerprint, lipsyncRequests, recordedLipsync} from '../lib/lipsync.ts'
 import {lockProject} from '../lib/lock.ts'
 import {keepLogIn, log, styles} from '../lib/log.ts'
@@ -56,15 +58,22 @@ if (wrong) log.usageError(wrong, usage)
 const used = {...config, ...asked}
 
 const data = JSON.parse(readFileSync(join(dir, 'project.json'), 'utf8')) as Project
-const clips = lipsyncRequests(data, used)
+// the loudness of the vocals stem: singing heard before a line's first word counts as heard, as in the real clip requests
+const vocalsFile = data.stems?.vocals ? join(dir, data.stems.vocals) : undefined
+const peaks = vocalsFile && existsSync(vocalsFile) ? await readFineWaveform(vocalsFile, RATE).catch(() => undefined) : undefined
+const clips = lipsyncRequests(data, used, peaks)
 if (!clips.length)
     log.usageError(
         `${id} has no timed lyrics or no cut of the song - they come with the plan run: bun index.ts ${id} --until=story (with "alignLyrics" or singers)`,
         usage,
     )
 const songFile = songFileOf(dir)
-const stemFiles: Record<string, string> = {...(data.stems?.vocals ? {vocals: join(dir, data.stems.vocals)} : {}), song: songFile}
-if (!existsSync(stemFiles.vocals ?? '')) log.usageError(`${id} has no vocals stem - it comes with the plan run: bun index.ts ${id} --until=story`, usage)
+const stemFiles: Record<string, string> = {
+    ...(vocalsFile ? {vocals: vocalsFile} : {}),
+    ...(data.stems?.drums ? {drums: join(dir, data.stems.drums)} : {}),
+    song: songFile,
+}
+if (!vocalsFile || !existsSync(vocalsFile)) log.usageError(`${id} has no vocals stem - it comes with the plan run: bun index.ts ${id} --until=story`, usage)
 const prints = audioPrints(dir, data, songFile)
 const stateOf = (clip: (typeof clips)[number]) => {
     const made = recordedLipsync(join(dir, lipsyncFile(clip.id)))
