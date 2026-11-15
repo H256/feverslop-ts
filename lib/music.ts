@@ -16,7 +16,7 @@ import type {
     Transcript,
 } from './project.ts'
 import {refineSections, slotVocals, vocalText} from './lyrics.ts'
-import {formatTime, round} from './frames.ts'
+import {barSeconds, formatTime, round} from './frames.ts'
 import {log} from './log.ts'
 import {lastLines, runProcess, SHORT_PROCESS_TIMEOUT_MS} from './process.ts'
 import {loadWhisperSettings, whisperOptions} from './settings.ts'
@@ -61,6 +61,7 @@ const isFiniteNumber = (value: unknown): value is number => typeof value === 'nu
 export function musicMapProblem(value: unknown): string | undefined {
     if (!isRecord(value)) return 'expected an object'
     if (!isFiniteNumber(value.bpm) || !isFiniteNumber(value.durationSec)) return 'bpm and durationSec must be finite numbers'
+    if (value.beatsPerBar !== undefined && value.beatsPerBar !== 3 && value.beatsPerBar !== 4) return 'beatsPerBar must be 3 or 4'
     if (!Array.isArray(value.downbeats) || !value.downbeats.every(isFiniteNumber)) return 'downbeats must be an array of finite numbers'
     if (!Array.isArray(value.barEnergy) || !value.barEnergy.every(isFiniteNumber)) return 'barEnergy must be an array of finite numbers'
     if (
@@ -177,8 +178,8 @@ export async function stemFramePower(stemFile: string): Promise<number[]> {
     }
 }
 
-export async function stemActivity(stemFile: string, bpm: number): Promise<{start: number; end: number}[]> {
-    return activityRanges(await stemFramePower(stemFile), ACTIVITY_HOP_SEC, 240 / bpm)
+export async function stemActivity(stemFile: string, bpm: number, beatsPerBar = 4): Promise<{start: number; end: number}[]> {
+    return activityRanges(await stemFramePower(stemFile), ACTIVITY_HOP_SEC, (beatsPerBar * 60) / bpm)
 }
 
 /** The mean square of the samples per frame of `hopSec`. */
@@ -409,7 +410,7 @@ export function pullLateOnsets<T extends Pick<Slot, 'start' | 'end' | 'bars'>>(
  * With the lyrics timing, the sections start where their vocals start and every clip gets the words sung in it.
  */
 export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], maxClipSec: number, timing?: LyricsTiming, vocalGap = 0): Timeline {
-    const barSec = 240 / music.bpm
+    const barSec = barSeconds(music)
     const barsPerSlot = 2 ** Math.floor(Math.log2(Math.max(1, Math.floor(maxClipSec / barSec))))
     const slots: Slot[] = []
     const sections = timing ? refineSections(music, lyricSections, timing) : music.sections

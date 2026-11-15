@@ -124,7 +124,7 @@ export async function planShots(run: ShotRun) {
         propActivity,
         shotMoments: plannedBefore ?? project.data.shotMoments,
     }
-    const beatProps = propActivity ? propActivityPerBeat(cutsInput, propActivity) : undefined
+    const beatProps = propActivity ? propActivityPerBeat({...cutsInput, singing}, propActivity) : undefined
     const beatSinging = singingPerBeat({...cutsInput, singing, lyricsTiming})
     const shotCounts = countShotsPerBeat(cutsInput)
     // the first shot of each clip of a beat

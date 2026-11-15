@@ -446,7 +446,11 @@ async function ffmpegCalls<T>(run: () => Promise<T>): Promise<{result: T; calls:
     const calls: string[][] = []
     const spawn = Bun.spawn
     const spy = spyOn(Bun, 'spawn').mockImplementation(((cmd: string[], opts: object) => {
-        if (cmd[0] === 'ffmpeg' && !cmd.includes('lavfi')) calls.push(cmd)
+        if (cmd[0] === 'ffmpeg' && !cmd.includes('lavfi')) {
+            // the filter graph goes to ffmpeg in a file (#992): it is pinned as the text it was, read now - the file is gone after the call
+            const at = cmd.findIndex(c => c === '-/filter_complex' || c === '-filter_complex_script')
+            calls.push(at < 0 ? cmd : cmd.flatMap((c, i) => (i === at ? ['-filter_complex'] : i === at + 1 ? [readFileSync(c, 'utf8')] : [c])))
+        }
         return spawn(cmd, opts as never)
     }) as typeof Bun.spawn)
     try {

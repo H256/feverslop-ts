@@ -20,13 +20,10 @@ describe('assembleFinal with interpolated clips', () => {
         const {join} = await import('node:path')
         const {assembleFinal, probeVideo} = await import('./assemble.ts')
         const dir = mkdtempSync(join(tmpdir(), 'fps-'))
-        const make = async (args: string[]) => {
-            const p = Bun.spawn(['ffmpeg', '-v', 'error', '-y', ...args], {stderr: 'pipe'})
-            if ((await p.exited) !== 0) throw new Error(await new Response(p.stderr).text())
-        }
+        const {ffmpegMake: make, testVideo} = await import('./test-media.ts')
         // two clips of 24 and 48 frames, interpolated x5: 120 and 240 frames at 120 fps (one frame more than needed in the first)
-        await make(['-f', 'lavfi', '-i', 'testsrc=size=64x36:rate=120', '-frames:v', '121', '-pix_fmt', 'yuv420p', join(dir, 'a.mp4')])
-        await make(['-f', 'lavfi', '-i', 'testsrc=size=64x36:rate=120', '-frames:v', '240', '-pix_fmt', 'yuv420p', join(dir, 'b.mp4')])
+        await testVideo(join(dir, 'a.mp4'), {frames: 121, fps: 120})
+        await testVideo(join(dir, 'b.mp4'), {frames: 240, fps: 120})
         await make(['-f', 'lavfi', '-i', 'sine=frequency=440:duration=3', join(dir, 'song.wav')])
         const clips = [
             {id: 'a', frames: 24, frameStart: 0},
@@ -56,11 +53,8 @@ describe('assembleFinal with very many clips (#992)', () => {
         const {join} = await import('node:path')
         const {assembleFinal, probeVideo} = await import('./assemble.ts')
         const dir = mkdtempSync(join(tmpdir(), 'many-'))
-        const make = async (args: string[]) => {
-            const p = Bun.spawn(['ffmpeg', '-v', 'error', '-y', ...args], {stderr: 'pipe'})
-            if ((await p.exited) !== 0) throw new Error(await new Response(p.stderr).text())
-        }
-        await make(['-f', 'lavfi', '-i', 'testsrc=size=64x36:rate=24', '-frames:v', '8', '-pix_fmt', 'yuv420p', join(dir, 'c.mp4')])
+        const {ffmpegMake: make, testVideo} = await import('./test-media.ts')
+        await testVideo(join(dir, 'c.mp4'), {frames: 8})
         await make(['-f', 'lavfi', '-i', 'sine=frequency=440:duration=80', join(dir, 'song.wav')])
         const count = 400
         const clips = Array.from({length: count}, (_, i) => ({id: `c${i}`, frames: 4, frameStart: i * 4})) as never

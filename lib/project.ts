@@ -102,6 +102,8 @@ export type LyricSection = {label: string; notes?: string[]; lines: string[]}
 export type MusicSection = {label: string; start: number; end: number; energy: number}
 export type MusicMap = {
     bpm: number
+    /** 4, or 3 for a waltz (#994); a map from before it has none and is 4 */
+    beatsPerBar?: 3 | 4
     durationSec: number
     downbeats: number[]
     barEnergy: number[]

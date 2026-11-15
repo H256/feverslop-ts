@@ -77,11 +77,51 @@ Other scopes are `{"kind":"character","id":"kael"}`, `{"kind":"beat","id":"b3"}`
 - Movement: “Kael turns toward his own left instead of right.” State whose left is meant; the character's left and screen-left are different.
 - End pose: “Kael turns away until his back faces the camera.” This is more precise than “turns completely around”, which could describe a full revolution.
 - Performance: “Mara dances in place, shifting her weight from one leg to the other with small sideways steps.”
-- Camera: “Close-up of the fretting hand and guitar neck during the solo; the face is out of frame.” This changes the picture, not the song: it cannot add a guitar solo to the audio.
+- Camera: “Medium close-up of Kael's face and shoulders during the solo, the guitar at the edge of the frame.” This changes the picture, not the song: it cannot add a guitar solo to the audio. Do not ask for a close view of the fretting hand - see [Instruments and a band](#instruments-and-a-band).
 
 A local edit preserves the number and duration of shots. A broader instruction may select several existing shots, and the proposal shows that selection before acceptance. A change requiring new shots, a different cut, new characters or new dialogue belongs in planning rather than a local edit.
 
 When rebuilding requests, automatic background-view selection uses the accepted direction and reselects changed shots. This may require a further LLM call; existing reference images are reused. A fixed music background view remains fixed by project configuration.
+
+## Instruments and a band
+
+The video model draws a player's hands from the words, not from the notes: it knows neither the tones nor the fingering. Fast hands come out as constant strumming, fingers on a neck as slow and wrong, a single hit as a smooth movement, and the time of a hit in the words is not kept. What it does draw well is a person with an instrument already in the hands, a calm steady motion, the body playing along, and the place reacting. So say what the picture should show, and leave the playing to the song. These patterns were tried on band clips with one seed and judged by eye (#1024); a second project carried the same result.
+
+| Say | Instead of |
+|---|---|
+| one calm action: “short, tight strokes near the bridge, the palm resting on the strings”, “a held chord”, “a slow slide up the neck” | “epic solo”, “shreds”, “rapid arpeggio”, “rakes a fast run”, “hammers the notes”, “a flurry of notes” |
+| the instrument is in the hands from the first frame: “Kael stands with the guitar already in both hands” | “Kael swings the guitar up”, “picks it up”, “gets ready to play” |
+| the body plays along: “head bashing slowly with the beat, shoulders rocking” | a description of the fingers |
+| a hit has a form, no time: “one tight strike, the palm damps the strings, stillness, a nod to the next hit” | “strikes at 0:05.6 and at 0:07.7” (the times are not kept) |
+| the fretting hand little or not at all: “face and shoulders, the neck at the edge of the frame” | “close-up of the fretting hand”, “tracks along the neck at the speed of his fingers” |
+| a clip opens on the place: “wide shot, Kael in the frame with the guitar from the first frame” | a close-up as the first shot of a clip: the person pops up from empty frames and the instrument may change its shape |
+
+```powershell
+# Who carries an instrumental stretch (a solo, a break), and how it looks. A time range of the song, one player.
+bun run direction demo --scope=time:176-210 --character=vex --preview --take `
+  --add="Vex carries the instrumental break: he plays a steady, tight riff with short pick strokes near the bridge, the camera stays on his face and body, the place and the other players react to the notes; the fretting hand is never shown close."
+
+# A break of single hits: the form of a hit, and the hands out of the frame.
+bun run direction demo --scope=shot:beat-09:shot4 --character=kael --preview --take `
+  --add="Kael plays single hits with silence between: one tight strike, the palm damps the strings, he stands still with his head bowed, a nod to the next hit; the shot is of his face and shoulders, the hands at the edge of the frame."
+
+# The guitar is in the hands already: no lifting, no picking up.
+bun run direction demo --scope=shot:beat-12:shot1 --character=kael --preview --take `
+  --add="Kael stands at the platform centre from the first frame with the guitar already in both hands, his head nodding with the beat."
+
+# A close-up of the fingers is wide or medium instead.
+bun run direction demo --scope=shot:beat-09:shot2 --size=medium --preview --take
+
+# A player the shot dropped stays in it (a medium shot of Kael, Thorne behind his left shoulder).
+bun run direction demo --scope=shot:beat-09:shot2 --with=thorne --preview --take `
+  --add="Thorne stands behind Kael's left shoulder, her bass at playing height, rocking forward and back with the beat."
+
+# A clip opens on the place, not on a face.
+bun run direction demo --scope=shot:beat-09:shot3 --size=medium --preview --take `
+  --add="Kael stands at the platform centre with the guitar in both hands, in the frame from the first frame, the platform and the basalt columns behind him."
+```
+
+The ids and the times are the ones of your project: `bun run direction <id>` lists the shots. A rule on shots of a beat is only as good as the shots the planner wrote: since #1024 it writes one calm action for a band by itself, so say it here only where a plan still comes out wrong.
 
 ## Scope and precedence
 

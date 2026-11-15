@@ -1,3 +1,4 @@
+import {testVideo} from './test-media.ts'
 import {describe, expect, test} from 'bun:test'
 import {mkdtempSync} from 'node:fs'
 import {tmpdir} from 'node:os'
@@ -42,32 +43,7 @@ describe('finish - the light grade and sharpen of the final video', () => {
     test('writes <name>-finished.mp4 next to the video, the same frames and the sound - with the clips matched and grain', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'finish-'))
         const video = join(dir, 'song.mp4')
-        const p = Bun.spawn(
-            [
-                'ffmpeg',
-                '-v',
-                'error',
-                '-y',
-                '-f',
-                'lavfi',
-                '-i',
-                'testsrc=size=64x36:rate=24',
-                '-f',
-                'lavfi',
-                '-i',
-                'sine=duration=1',
-                '-frames:v',
-                '24',
-                '-pix_fmt',
-                'yuv420p',
-                '-c:a',
-                'aac',
-                '-shortest',
-                video,
-            ],
-            {stderr: 'pipe'},
-        )
-        expect(await p.exited).toBe(0)
+        await testVideo(video, {frames: 24, sound: true})
         const done = await finishVideo(video, {...MILD_FINISH, colorMatch: 0.5, grain: 3}, [
             {id: 'a', start: 0, end: 0.5},
             {id: 'b', start: 0.5, end: 1},

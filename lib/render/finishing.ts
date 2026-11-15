@@ -1,4 +1,4 @@
-import {existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync} from 'node:fs'
+import {copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync} from 'node:fs'
 import {runEvent} from '../run-events.ts'
 import {basename, dirname, extname, join, relative} from 'node:path'
 import {log, styles} from '../log.ts'
@@ -152,17 +152,17 @@ export async function retake(
     const spliced = join(r.projectDir, `${work}_spliced.mp4`)
     await spliceVideo({original: video, rendered, plan, width: info.width, height: info.height, target: spliced})
     const record = existsSync(`${video}.json`) ? (JSON.parse(readFileSync(`${video}.json`, 'utf8')) as Record<string, unknown> & {retakes?: unknown[]}) : {}
-    const keep = archiveFiles(r.projectDir, `${clip.id}-${versionStamp()}`, [
-        file,
-        `${file}.json`,
-        boundaryFrameAsset(clip.id, 'ff'),
-        boundaryFrameAsset(clip.id, 'lf'),
-    ])
+    // the old clip is copied into the archive and replaced in one rename: a stop in between never leaves videos/ without the clip (#1008);
+    // its boundary frames are made again from the new file, they are moved
+    const keep = archiveFiles(r.projectDir, `${clip.id}-${versionStamp()}`, [boundaryFrameAsset(clip.id, 'ff'), boundaryFrameAsset(clip.id, 'lf')])
+    for (const old of [file, `${file}.json`]) if (existsSync(join(r.projectDir, old))) copyFileSync(join(r.projectDir, old), join(keep, basename(old)))
     renameSync(spliced, video)
+    // the record beside it written the same way: a half-written one never replaces the old
     await Bun.write(
-        `${video}.json`,
+        `${video}.json.partial`,
         JSON.stringify({...record, retakes: [...(record.retakes ?? []), {first: plan.first, end: plan.end, seed, at: new Date().toISOString()}]}, null, 2),
     )
+    renameSync(`${video}.json.partial`, `${video}.json`)
     rmSync(rendered, {force: true})
     const frames = await probeVideo(video)
     log.step('Saved', `${file} ${styles.muted(`frames ${plan.first}-${plan.end} are new, the old clip is in ${keep}`)}`)
