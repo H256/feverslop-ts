@@ -47,6 +47,45 @@ const castSchema = object({
     },
     locations: {type: 'array', items: object({name: str, aliases: strings, description: str})},
 })
+const optional = (properties: Record<string, unknown>, required: string[]) => ({type: 'object', additionalProperties: false, required, properties})
+// one element of a scene: an action line, or a line of dialogue that must say who speaks, how and in which language (#995)
+const elementSchema = {
+    anyOf: [
+        optional({type: {type: 'string', enum: ['action']}, text: str}, ['type', 'text']),
+        // a dialogue line must name who speaks, how and in which language - left optional, the model leaves them out
+        optional(
+            {
+                type: {type: 'string', enum: ['dialogue']},
+                speaker: str,
+                text: str,
+                kind: {type: 'string', enum: ['spoken', 'offscreen', 'voiceover']},
+                delivery: str,
+                language: str,
+                translation: str,
+            },
+            ['type', 'speaker', 'text', 'kind', 'language'],
+        ),
+    ],
+}
+const screenplayScenes = {
+    type: 'array',
+    items: optional(
+        {setting: {type: 'string', enum: ['INT', 'EXT', 'INT/EXT']}, location: str, time: str, shot: str, elements: {type: 'array', items: elementSchema}},
+        ['setting', 'location', 'time', 'elements'],
+    ),
+}
+const screenplaySchema = object({scenes: screenplayScenes})
+const adaptSchema = object({characters: {type: 'array', items: object({name: str, role: str, appearance: str, voice: str})}, scenes: screenplayScenes})
+const annotateSchema = object({
+    scenes: {
+        type: 'array',
+        items: object({location: str, time: str, shot: str, actions: strings, lines: {type: 'array', items: object({language: str, delivery: str})}}),
+    },
+})
+const notesSchema = object({notes: {type: 'array', maxItems: 8, items: str}})
+const propsSchema = object({props: {type: 'array', maxItems: 6, items: object({name: str, used: str, shape: str, colour: str, material: str})}})
+const viewsSchema = object({views: {type: 'array', minItems: 5, maxItems: 5, items: object({name: str, shows: str})}})
+const editsSchema = object({edits: {type: 'array', items: optional({scene: str, element: {type: 'integer'}, text: str, time: str}, ['scene'])}})
 
 export function briefPrompt(source: string, mode: Brief['mode'], dialogueLanguage: string | undefined): AskOptions {
     return {
@@ -122,6 +161,7 @@ const screenplayJson = `{
 export function screenplayWritePrompt(brief: Brief, outline: Outline): AskOptions {
     return {
         maxTokens: 16384,
+        schema: screenplaySchema,
         reasoning: 'medium',
         input: `Title: ${brief.title}
 Logline: ${brief.logline}
@@ -155,6 +195,7 @@ export function fountainAnnotatePrompt(
 ): AskOptions {
     return {
         maxTokens: 12288,
+        schema: annotateSchema,
         reasoning: 'low',
         input: JSON.stringify({scenes}),
         instructions: `You are a script supervisor. A screenplay has been read into scenes; you add what the structure cannot say. Do not rewrite dialogue - it is not part of your answer. Answer only with JSON: {"scenes": [{"location": "", "time": "", "shot": "", "actions": [], "lines": [{"language": "", "delivery": ""}]}]} - one entry per scene, in the same order.
@@ -167,6 +208,7 @@ export function fountainAnnotatePrompt(
 export function screenplayParsePrompt(source: string, language: string, missing: string[] = []): AskOptions {
     return {
         maxTokens: 24576,
+        schema: screenplaySchema,
         reasoning: 'low',
         input: `${missing.length ? `Your last attempt changed or lost these dialogue lines - they must appear exactly as in the screenplay, character for character:\n${missing.map(m => `- ${m}`).join('\n')}\n\n` : ''}Screenplay:
 ${source}`,
@@ -240,6 +282,7 @@ export function scriptNotesPrompt(screenplay: Screenplay, idea?: string, roleCha
                   .join('\n')}`
             : ''
     return {
+        schema: notesSchema,
         // thinking and answer share the limit: a long script made the model think through all of it and never answer
         maxTokens: 12288,
         reasoning: 'low',
@@ -268,6 +311,7 @@ ${screenplayToText(screenplay)}`,
  */
 export function propsPrompt(screenplay: Screenplay, cast: FilmCast): AskOptions {
     return {
+        schema: propsSchema,
         maxTokens: 4096,
         reasoning: 'low',
         input: `Cast: ${cast.characters.map(c => `${c.name} - ${c.appearance}`).join('\n')}
@@ -288,6 +332,7 @@ ${screenplayToText(screenplay)}`,
 // The one style that fits the film: genre, tone, setting and audience decide. No draw and no forced variety - the look has to carry the tone of the film.
 export function styleChoicePrompt(brief: Brief, summary: string, styleList: {id: string; name: string}[]): AskOptions {
     return {
+        schema: object({style: {type: 'string', enum: styleList.map(s => s.id)}, reason: str}),
         maxTokens: 2048,
         input: `Choose the film style from the list that suits this short film best, for a film generated with AI image and video models.
 The look has to carry the tone of the film: genre, tone, setting and audience decide, and the style that fits is the one to choose - even if it is the obvious one, not the most unusual.
@@ -312,6 +357,7 @@ summary: ${summary}`,
  */
 export function locationViewsPrompt(location: FilmLocation, hero: string, scenes: string): AskOptions {
     return {
+        schema: viewsSchema,
         maxTokens: 4096,
         reasoning: 'low',
         input: `Place: ${location.name}
@@ -521,6 +567,7 @@ The same character in another look - "${state.name}": ${state.change}`,
 /** The repair of a script that contradicts itself: the smallest changes to action lines and times of day that make it follow. */
 export function scriptFixPrompt(screenplay: Screenplay, notes: string[]): AskOptions {
     return {
+        schema: editsSchema,
         maxTokens: 8192,
         reasoning: 'medium',
         input: `Contradictions found:
@@ -711,6 +758,7 @@ export function adaptScreenplayPrompt(
         `- ${c.name}${c.aliases?.length ? ` (cues: ${c.aliases.join(', ')})` : ''}: ${c.role}`
     return {
         maxTokens: 16384,
+        schema: adaptSchema,
         reasoning: 'medium',
         input: `Title: ${brief.title}
 Logline: ${brief.logline}
