@@ -424,7 +424,9 @@ onMounted(() => {
         </button>
         <span v-if="draft.edits.value.size" class="muted">Save or discard your edits first.</span>
       </div>
-      <p v-if="refining.pending.value" role="status">This can take several minutes. The first run downloads the local model. The proposal is not applied automatically.</p>
+      <p v-if="refining.pending.value" role="status">
+        This can take several minutes. The first run downloads the local model. The proposal is not applied automatically.
+      </p>
       <template v-if="refinement">
         <p v-if="refinement.passage?.mode === 'line-window'">
           Words within block {{ refinement.passage.line + 1 }}: {{ refinement.passage.start.toFixed(3) }}–{{ refinement.passage.end.toFixed(3) }} s. Neighbours
@@ -443,7 +445,7 @@ onMounted(() => {
           <template v-if="!refinement.passage">Refinement keeps lines sung or left out as they are.</template>
           A missing transcript match does not mean a line was not sung.
         </p>
-        <div style="max-height: 20rem; overflow: auto">
+        <div class="tw-entries">
           <p v-for="entry in refinement.entries" :key="entry.line">
             <button class="btn mini" @click="choose(entry.line)">{{ entry.line + 1 }}</button>
             <b>{{ entry.text }}</b> [{{ entry.status }}] {{ entry.before.map(n => n.toFixed(2)).join('–')
@@ -654,6 +656,11 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* the list of refined lines scrolls inside its box */
+.tw-entries {
+  max-height: 20rem;
+  overflow: auto;
+}
 /* the bar's buttons in groups by what they do, a line between them (#834) */
 .tw-grp {
   display: inline-flex;
