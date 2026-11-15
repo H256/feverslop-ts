@@ -30,6 +30,16 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
         :aria-label="setting.label"
         @input="form.draft[setting.key] = valueOfField(setting, text($event))"
       />
+      <textarea
+        v-else-if="setting.multiline"
+        :id="inputId"
+        :disabled="off"
+        :value="fieldTextOf(setting, form.draft[setting.key])"
+        :placeholder="setting.auto?.label"
+        :aria-label="setting.label"
+        rows="3"
+        @input="form.draft[setting.key] = valueOfField(setting, text($event))"
+      />
       <input
         v-else
         :id="inputId"
@@ -41,14 +51,15 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
         @input="form.draft[setting.key] = valueOfField(setting, text($event))"
       />
     </div>
-    <p class="sf-note">
-      {{ setting.note }}
-      <span class="sf-default"
-        >Default <code>{{ labelOf(setting, setting.default) }}</code
-        ><button v-if="!off && !form.isDefault(setting)" class="btn mini" @click="form.toDefault(props.setting)">Use the default</button
-        ><button v-if="form.isChanged(setting.key)" class="btn mini" @click="form.undo(props.setting)">Undo</button></span
-      >
-    </p>
+    <p class="sf-note">{{ setting.note }}</p>
+    <div class="sf-default">
+      <span class="sf-default-label">Default</span>
+      <span class="sf-default-value">{{ labelOf(setting, setting.default) }}</span>
+      <span v-if="(!off && !form.isDefault(setting)) || form.isChanged(setting.key)" class="sf-actions">
+        <button v-if="!off && !form.isDefault(setting)" class="btn mini" @click="form.toDefault(props.setting)">Use the default</button>
+        <button v-if="form.isChanged(setting.key)" class="btn mini" @click="form.undo(props.setting)">Undo</button>
+      </span>
+    </div>
   </div>
 </template>
 
@@ -56,10 +67,11 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
 /* names of their own: .setting and .field are styled for other pages in workspace.css */
 .sf-row {
   display: grid;
-  grid-template-columns: minmax(120px, 26%) minmax(0, 1fr);
+  grid-template-columns: minmax(140px, 22%) minmax(0, 1fr);
   gap: var(--space-1) var(--space-3);
-  align-items: center;
-  padding: 8px 10px;
+  align-items: start;
+  padding: 18px 20px;
+  min-width: 0;
   border-left: 3px solid transparent;
   border-radius: var(--radius-s);
 }
@@ -75,33 +87,67 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
   opacity: 0.6;
 }
 .sf-label {
-  font-weight: 500;
+  font-weight: 600;
+  padding-top: 6px;
+  overflow-wrap: anywhere;
+}
+.sf-control {
+  min-width: 0;
 }
 .sf-control select,
-.sf-control input {
+.sf-control input,
+.sf-control textarea {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.sf-control textarea {
+  resize: vertical;
+  font: inherit;
+  line-height: 1.5;
+  padding: 10px 12px;
+}
+.sf-control input[type='number'] {
+  max-width: 12rem;
 }
 .sf-note {
   grid-column: 2;
   font-size: var(--text-s);
-  line-height: 1.4;
+  line-height: 1.55;
   color: var(--muted);
+  overflow-wrap: anywhere;
+  margin: 0;
 }
 .sf-default {
-  white-space: nowrap;
-  margin-left: 4px;
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: var(--text-s);
+  color: var(--muted);
+  min-width: 0;
+  margin-top: 4px;
 }
-.sf-default code {
-  margin-left: 3px;
+.sf-default-label {
+  font-weight: 600;
 }
-.sf-default .btn {
-  margin-left: var(--space-2);
+.sf-default-value {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.sf-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 @media (max-width: 640px) {
   .sf-row {
     grid-template-columns: 1fr;
   }
-  .sf-note {
+  .sf-note,
+  .sf-default {
     grid-column: 1;
   }
 }

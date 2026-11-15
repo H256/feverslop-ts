@@ -3,6 +3,21 @@ import {aboveRecommended, clipSeed, MAX_REF_AUDIOS, pixelSize} from '../comfy/he
 import {twoPassSizes} from '../comfy/h3-two-pass.ts'
 import {boardStatus, contextLength, dispatchOrder, pickServer, renderedFrames, resumesJob} from './render.ts'
 
+/** The options of a clip workflow with everything a test does not care about filled in; a test names only what it changes (#1006). */
+const clipOptions = (change: Record<string, unknown> = {}) => ({
+    prompt: 'p',
+    pictures: ['a.png'],
+    audios: ['d.wav'],
+    song: 's.wav',
+    songStart: 0,
+    frames: 22,
+    duration: 1,
+    seed: 1,
+    resolution: -1,
+    filenamePrefix: 'x',
+    ...change,
+})
+
 test('a job that is queued, running or finished is resumed', () => {
     expect(resumesJob('queued')).toBe(true)
     expect(resumesJob('running')).toBe(true)
@@ -92,18 +107,7 @@ describe('the turbo workflows', () => {
         for (const name of ['h3-ref2video', 'h3-ref2video-cpu-clip', 'h3-ref2video-film']) {
             const module = await import(`../comfy/workflows/${name}.ts`)
             expect(module.recommendedResolution).toBe('1344x768')
-            const {workflow, output} = module.default({
-                prompt: 'p',
-                pictures: ['a.png'],
-                audios: ['d.wav'],
-                song: 's.wav',
-                songStart: 0,
-                frames: 22,
-                duration: 1,
-                seed: 1,
-                resolution: -1,
-                filenamePrefix: 'x',
-            })
+            const {workflow, output} = module.default(clipOptions())
             const nodes = Object.values(workflow.build({outputs: {result: output}}).workflow) as {class_type: string; inputs: Record<string, unknown>}[]
             expect(nodes.find(n => n.class_type === 'MiniMaxH3SigmaShift')?.inputs).toMatchObject({shift_video: 12, shift_audio: 3})
             expect(nodes.find(n => n.class_type === 'BasicScheduler')?.inputs).toMatchObject({scheduler: 'simple', steps: 8})
@@ -132,19 +136,7 @@ describe('the size of a render', () => {
     test('the clip workflows render in the aspect they are given', async () => {
         for (const name of ['h3-ref2video', 'h3-ref2video-full', 'h3-ref2video-2pass']) {
             const module = await import(`../comfy/workflows/${name}.ts`)
-            const {size} = module.default({
-                prompt: 'p',
-                pictures: ['a.png'],
-                audios: ['d.wav'],
-                song: 's.wav',
-                songStart: 0,
-                frames: 22,
-                duration: 1,
-                seed: 1,
-                resolution: 2,
-                aspect: '9:16',
-                filenamePrefix: 'x',
-            })
+            const {size} = module.default(clipOptions({resolution: 2, aspect: '9:16'}))
             expect(size).toEqual({width: 1088, height: 1920})
         }
         expect(twoPassSizes(2, '9:16')).toEqual({final: {width: 1088, height: 1920}, first: {width: 544, height: 960}})
@@ -152,18 +144,7 @@ describe('the size of a render', () => {
     test('a clip workflow says the size it renders at - no size node on the server', async () => {
         for (const name of ['h3-ref2video', 'h3-ref2video-full', 'h3-ref2video-2pass']) {
             const module = await import(`../comfy/workflows/${name}.ts`)
-            const {workflow, output, size} = module.default({
-                prompt: 'p',
-                pictures: ['a.png'],
-                audios: ['d.wav'],
-                song: 's.wav',
-                songStart: 0,
-                frames: 22,
-                duration: 1,
-                seed: 1,
-                resolution: 1.2,
-                filenamePrefix: 'x',
-            })
+            const {workflow, output, size} = module.default(clipOptions({resolution: 1.2}))
             expect(size).toEqual({width: 1504, height: 832})
             const nodes = Object.values(workflow.build({outputs: {result: output}}).workflow) as {class_type: string}[]
             expect(nodes.some(n => n.class_type === 'ResolutionSelector')).toBe(false)
@@ -179,19 +160,7 @@ describe('the two-pass workflow', () => {
     })
     test('base model for 20 steps, the latent x2, then the base model again for 4 steps at denoise 0.2 - no turbo LoRA, its own noise, the guides set again on the large latent', async () => {
         const module = await import('../comfy/workflows/h3-ref2video-2pass.ts')
-        const {workflow, output} = module.default({
-            prompt: 'p',
-            pictures: ['a.png'],
-            audios: ['d.wav'],
-            song: 's.wav',
-            startFrame: 'f.png',
-            songStart: 0,
-            frames: 22,
-            duration: 1,
-            seed: 1,
-            resolution: -1,
-            filenamePrefix: 'x',
-        })
+        const {workflow, output} = module.default(clipOptions({startFrame: 'f.png'}))
         const nodes = Object.values(workflow.build({outputs: {result: output}}).workflow) as {class_type: string; inputs: Record<string, unknown>}[]
         expect(nodes.filter(n => n.class_type === 'BasicScheduler').map(n => n.inputs)).toMatchObject([
             {scheduler: 'simple', steps: 20, denoise: 1},
@@ -254,19 +223,7 @@ describe('context frames in the clip workflows', () => {
             ['h3-ref2video-2pass', 1],
         ] as const) {
             const module = await import(`../comfy/workflows/${name}.ts`)
-            const {workflow, output} = module.default({
-                prompt: 'p',
-                pictures: ['a.png'],
-                audios: ['d.wav'],
-                song: 's.wav',
-                startClip: 'tail.mp4',
-                songStart: 0,
-                frames: 39,
-                duration: 2,
-                seed: 1,
-                resolution: 1.2,
-                filenamePrefix: 'x',
-            })
+            const {workflow, output} = module.default(clipOptions({startClip: 'tail.mp4', frames: 39, duration: 2, resolution: 1.2}))
             const nodes = workflow.build({outputs: {result: output}}).workflow as Record<string, {class_type: string; inputs: Record<string, unknown>}>
             const load = Object.entries(nodes).find(([, n]) => n.class_type === 'VHS_LoadVideo')!
             expect(load[1].inputs.video).toBe('tail.mp4')
