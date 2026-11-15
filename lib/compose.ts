@@ -24,7 +24,7 @@ import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from '../comfy/helpers.ts'
 import type {Prop} from './props.ts'
 import type {ProjectConfig} from './config.ts'
 import {sequenceSheetDir, sheetFrame} from './sequenceSheet.ts'
-import {bandBreaks, barCuts, shotCuts} from './shot-cuts.ts'
+import {bandBreaks, barCuts, breakChanges, MIN_SHOT, shotCuts} from './shot-cuts.ts'
 
 // Builds MiniMax H3 full-reference (ref2v) requests deterministically from the project data.
 // Format: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md
@@ -272,9 +272,19 @@ type CutsInput = Pick<Input, 'slots' | 'mapping' | 'beats' | 'characters' | 'mus
  * same cuts. A beat whose shot plan was made for another number of shots - the cuts on the bars alone, before #968 - keeps those
  * until it is planned again: its shots are numbered through the beat, one more would shift every plan after it.
  */
-export function clipCuts({slots, mapping, beats, characters, music, propActivity, shotMoments}: CutsInput): Map<string, number[]> {
+export function clipCuts(input: CutsInput): Map<string, number[]> {
+    return cutsOfClips(input).cuts
+}
+
+/** The cuts of each clip that belong to a break of the band (#982): avoidWords leaves them where they are. */
+export function breakCuts(input: CutsInput): Map<string, number[]> {
+    return cutsOfClips(input).fixed
+}
+
+function cutsOfClips({slots, mapping, beats, characters, music, propActivity, shotMoments}: CutsInput) {
     const beatById = new Map(beats.map(b => [b.id, b]))
     const out = new Map<string, number[]>()
+    const fixed = new Map<string, number[]>()
     for (const {beat, scene} of scenesOf(slots, mapping, beatById)) {
         const stems = [...new Set(characters.filter(c => beat.characterIds.includes(c.id) && c.propStem).map(c => c.propStem!))]
         const breaks = bandBreaks(
@@ -287,9 +297,17 @@ export function clipCuts({slots, mapping, beats, characters, music, propActivity
         const planned = shotMoments?.[beat.id] ? asBeatShots(shotMoments[beat.id]!).shots.length : undefined
         const total = withBreaks.reduce((n, c) => n + c.length, 0)
         const chosen = planned !== undefined && planned !== total ? onBars : withBreaks
-        scene.forEach((slot, k) => out.set(slot.id, chosen[k]!))
+        scene.forEach((slot, k) => {
+            out.set(slot.id, chosen[k]!)
+            // only where the cuts of the breaks were taken: a beat that keeps the cuts on the bars has none
+            const changes = chosen === withBreaks && !slot.micro ? breakChanges(slot, music.downbeats, breaks) : []
+            fixed.set(
+                slot.id,
+                chosen[k]!.filter(t => changes.includes(t)),
+            )
+        })
     }
-    return out
+    return {cuts: out, fixed}
 }
 
 // How many shots each beat will render in total - used to size the per-shot moment lists (step 9b)
@@ -466,7 +484,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     let lastFraming: string | undefined
     const cameraCursor: Record<keyof typeof cameraMoves, number> = {low: 0, mid: 0, high: 0}
     // where every clip is cut - the planner's shots were counted from the same cuts
-    const cutsOf = clipCuts(input)
+    const {cuts: cutsOf, fixed: fixedCuts} = cutsOfClips(input)
 
     for (const {beat, scene} of scenesOf(slots, mapping, beatById)) {
         const moments = beat.moments?.length ? beat.moments : splitSentences(beat.summary)
@@ -861,6 +879,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             vocals.flatMap(v => v.words),
             120 / music.bpm,
             duration,
+            fixedCuts.get(slot.id),
         )
         const inShot = (j: number, t: number) => t >= cuts[j]! && (j === cuts.length - 1 || t < cuts[j + 1]!)
         // each shot sings the words heard in it: a line crossing a cut is split there
@@ -1473,19 +1492,22 @@ export function buildClipRequests(input: Input): ClipRequest[] {
  * Moves every cut (but the first, at 0) that falls into a sung word to the nearest gap between words, if one is
  * within `maxShift` seconds - a cut in the middle of a word breaks the lip-sync.
  */
-export function avoidWords(cuts: number[], words: TimedWord[], maxShift: number, duration: number) {
+export function avoidWords(cuts: number[], words: TimedWord[], maxShift: number, duration: number, fixed: number[] = []) {
     const sorted = [...words].sort((a, b) => a.start - b.start)
     const moved = [...cuts]
     for (let j = 1; j < moved.length; j++) {
         const t = moved[j]!
+        // the cut of a break of the band stays on it: the word is cut by it - the quiet keeps its own shot (#982)
+        if (fixed.includes(t)) continue
         const k = sorted.findIndex(w => w.start < t && w.end > t)
         if (k < 0) continue
         const word = sorted[k]!
         // just before or just after the word: in the middle of the gap, at most 0.1 s away from the word
         const before = word.start - Math.min(0.1, Math.max(0, word.start - (sorted[k - 1]?.end ?? 0)) / 2)
         const after = word.end + Math.min(0.1, Math.max(0, (sorted[k + 1]?.start ?? duration) - word.end) / 2)
-        const lower = moved[j - 1]! + 0.5
-        const upper = (moved[j + 1] ?? duration) - 0.5
+        // no shot shorter than MIN_SHOT comes out of a move
+        const lower = moved[j - 1]! + MIN_SHOT
+        const upper = (moved[j + 1] ?? duration) - MIN_SHOT
         if (lower >= upper) continue // neighbouring cuts are too close together to leave room for a move
         const options = [before, after].filter(o => Math.abs(o - t) <= maxShift && o > lower && o < upper)
         if (options.length) moved[j] = round(options.reduce((a, b) => (Math.abs(a - t) <= Math.abs(b - t) ? a : b)))
