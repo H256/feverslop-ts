@@ -57,7 +57,7 @@ dialog::backdrop {
   padding: 2px 8px;
   font-size: var(--text-s);
 }
-.btn-row {
+.ask .btn-row {
   justify-content: flex-end;
   margin-top: 12px;
 }
@@ -80,7 +80,7 @@ dialog::backdrop {
   padding: 2px 8px;
   font-size: var(--text-s);
 }
-.btn-row {
+.compare .btn-row {
   margin-top: 10px;
 }
 /* the messages at the foot of the page (#940): the failures not closed yet above the newest notice */

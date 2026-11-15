@@ -403,6 +403,7 @@ async function openChat(endpoint: Endpoint, prompt: ResponseCreateParamsStreamin
                 {role: 'user' as const, content: chatContent(prompt.input)},
             ],
             ...(prompt.max_output_tokens ? {max_tokens: prompt.max_output_tokens} : {}),
+            ...(typeof prompt.temperature === 'number' ? {temperature: prompt.temperature} : {}),
             ...(prompt.reasoning?.effort ? {reasoning_effort: prompt.reasoning.effort as 'low'} : {}),
             ...(extra.chat_template_kwargs ? {chat_template_kwargs: extra.chat_template_kwargs} : {}),
             ...(schema ? {response_format: {type: 'json_schema', json_schema: {name: 'answer', strict: true, schema}}} : {}),
@@ -470,6 +471,8 @@ export type AskOptions = {
     input: string
     maxTokens?: number
     reasoning?: ReasoningStrength
+    /** The sampling temperature of this call; without it the server's own default decides. Lower is steadier - for JSON and line formats. */
+    temperature?: number
     // data URLs (e.g. "data:image/png;base64,...") - only for a vision-capable model; see tools/replace-character.ts
     images?: string[]
     // askJson only: the shape of the answer - the server keeps the decoding to it (see fetchAndDisplayResponse)
@@ -487,7 +490,7 @@ export class EmptyAnswerError extends Error {
 
 const emptyAnswerNote = '\n\nKeep your thinking short and then write the answer itself - an empty answer is not acceptable.'
 
-export async function ask({instructions, input, maxTokens = 8192, reasoning = 'low', images, schema, label}: AskOptions) {
+export async function ask({instructions, input, maxTokens = 8192, reasoning = 'low', temperature, images, schema, label}: AskOptions) {
     const of = label ? `${label}: ` : ''
     const requestInput = images?.length
         ? [
@@ -519,7 +522,7 @@ export async function ask({instructions, input, maxTokens = 8192, reasoning = 'l
     for (const [i, {limit, level, note}] of attempts.entries()) {
         try {
             const {answer} = await fetchAndDisplayResponse(
-                {max_output_tokens: limit, input: requestInput, instructions: instructions + note, stream: true},
+                {max_output_tokens: limit, input: requestInput, instructions: instructions + note, stream: true, ...(temperature !== undefined ? {temperature} : {})},
                 level,
                 schema,
                 label,
