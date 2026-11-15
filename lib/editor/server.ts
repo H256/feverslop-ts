@@ -96,7 +96,9 @@ export function fromThisPage(request: Request): boolean {
     const origin = request.headers.get('origin')
     const site = request.headers.get('sec-fetch-site')
     if (site && site !== 'same-origin' && site !== 'none') return false
-    return !origin || new URL(origin).host === new URL(request.url).host
+    if (!origin) return true
+    // an Origin that is no URL ("null" from a sandboxed page) is not this page
+    return URL.canParse(origin) && new URL(origin).host === new URL(request.url).host
 }
 
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'])
