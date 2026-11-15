@@ -203,17 +203,36 @@ def vocal_activity(vocals: str, *, frame_length=2048, hop_length=512, min_durati
     return [{"start": round(s, 3), "end": round(e, 3)} for s, e in merged]
 
 
-def lyrics_prompt(lyrics_file: str) -> str:
+# faster-whisper keeps the first max_length // 2 - 1 = 223 tokens of the hotwords and drops the rest (#978)
+HOTWORD_TOKENS = 223
+
+
+def lyrics_prompt(lyrics_file: str, count_tokens=None) -> str:
     # the sung text only: no [Section] tags, no (performance notes), every line once
     lines: list[str] = []
     for raw in Path(lyrics_file).read_text(encoding="utf-8").splitlines():
         line = re.sub(r"\([^)]*\)", "", raw).strip()
         if line and not re.fullmatch(r"\[.*]", line) and line not in lines:
             lines.append(line)
-    return "\n".join(lines)
+    text = "\n".join(lines)
+    if count_tokens is None or count_tokens(" " + text.strip()) <= HOTWORD_TOKENS:
+        return text
+    # too long for the hint: the words that are sung are what it is for - every word once, in the order it first comes, so the
+    # whole song's vocabulary (names, rare words) fits instead of the first verses and choruses only
+    seen: set[str] = set()
+    words: list[str] = []
+    for line in lines:
+        for word in line.split():
+            key = re.sub(r"[^\w']", "", word).lower()
+            if key and key not in seen:
+                seen.add(key)
+                words.append(word)
+    return " ".join(words)
 
 
 def whisper_words(model, audio, language: str, lyrics_file: str, offset: float = 0.0) -> list[dict]:
+    tokenizer = getattr(model, "hf_tokenizer", None)
+    count_tokens = (lambda text: len(tokenizer.encode(text, add_special_tokens=False).ids)) if tokenizer else None
     segments, _info = model.transcribe(
         audio,
         language=language,
@@ -222,7 +241,7 @@ def whisper_words(model, audio, language: str, lyrics_file: str, offset: float =
         condition_on_previous_text=False,
         # hotwords (not initial_prompt) get re-injected into every ~30s window regardless of
         # condition_on_previous_text - the known lyrics keep steering transcription through the whole song
-        hotwords=lyrics_prompt(lyrics_file) or None,
+        hotwords=lyrics_prompt(lyrics_file, count_tokens) or None,
         hallucination_silence_threshold=2.0,
         # harsh/screamed vocals often don't score as "speech" to whisper's no-speech gate, so it silently skips
         # the whole segment instead of transcribing it - raised (default 0.6) so it still attempts a transcript;
