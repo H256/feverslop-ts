@@ -493,7 +493,8 @@ export class RunControl {
             started = Date.parse(lastRun(target.dir)?.startedAt ?? '')
             process.kill(holder)
             ended = (async () => {
-                while (lockHolder(target.dir) === holder) await Bun.sleep(200)
+                // not forever: the race below gives up after STOP_WAIT_MS, this loop must not outlive it
+                for (const until = Date.now() + STOP_WAIT_MS; lockHolder(target.dir) === holder && Date.now() < until; ) await Bun.sleep(200)
             })()
         }
         await Promise.race([ended, Bun.sleep(STOP_WAIT_MS)])
