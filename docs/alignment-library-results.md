@@ -58,6 +58,33 @@ Local reproducibility artifacts:
 
 The earlier twelve-line Mehr als Code result remains a valid small-sample measurement, but these full-song results provide the more representative picture of failure modes.
 
+## Composite-phone coverage follow-up — 2026-11-15
+
+The explicit `ʊɐ` → `ʊ`, `ɐ` token mapping was re-run with production code on
+the frozen full Flur input. Successful output lines increase 43 → 55; all 43
+previous candidates remain exactly identical. Within the manually edited active
+canonical subset, this is 42 → 54 of 55 lines. The new output exactly matches
+the previously evaluated spike-001 output. No reference times entered inference.
+
+Through the real build/apply service on in-memory copies, Flur's 54 still-active
+reference lines change as follows (the one erroneous omission remains a miss):
+
+| Metric | Before composite mapping | After |
+| --- | ---: | ---: |
+| Refined / retained | 42 / 12 | 54 / 0 |
+| Onset mean / median error | 247 / 69 ms | 87 / 51 ms |
+| Onsets within 200 ms / over 1s | 39 / 7 | 45 / 0 |
+| End mean / median error | 379 / 280 ms | 321 / 264 ms |
+| Ends within 200 ms / over 1s | 21 / 4 | 22 / 2 |
+
+Other songs' cached candidates are unchanged in this policy comparison; they
+were not re-inferred for this small mapping change. Library exports have no singer
+assignments, so this is not a test of project-specific same-singer collisions.
+No new French accuracy or listening validation is claimed. Missing `ʏ` remains
+unsupported. A separate experiment recovered ten neighbours of unsupported lines
+in EPA/Mehr by splitting failed windows, but introduced wrong repeated-phrase
+timing, so that isolation rule is not enabled. See #953 for the raw evidence.
+
 ## Actual application policy — 2026-11-14
 
 `tools/alignment-policy-report.ts` evaluates the cached original IPA output through

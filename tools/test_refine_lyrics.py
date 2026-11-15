@@ -1,8 +1,20 @@
 import unittest
-from refine_lyrics import windows, word_phones
+from refine_lyrics import windows, word_phones, phone_tokens
 
 
 class RefinementTests(unittest.TestCase):
+    def test_composite_uses_exact_existing_tokens(self):
+        self.assertEqual(phone_tokens('ʊɐ', {'ʊ': 7, 'ɐ': 9}), [7, 9])
+
+    def test_native_token_takes_precedence_over_decomposition(self):
+        self.assertEqual(phone_tokens('ʊɐ', {'ʊɐ': 3, 'ʊ': 7, 'ɐ': 9}), [3])
+        self.assertEqual(phone_tokens('aɪ', {'aɪ': 11}), [11])
+
+    def test_absent_phone_is_not_approximated_or_silently_split(self):
+        for phone, vocab in [('ʏ', {'y': 1, 'ɪ': 2}), ('ʊɐ', {'ʊ': 7}), ('ab', {'a': 1, 'b': 2})]:
+            with self.subTest(phone=phone), self.assertRaisesRegex(ValueError, 'Unsupported IPA'):
+                phone_tokens(phone, vocab)
+
     def test_windows_keep_neighbours_as_context_without_unbounded_audio(self):
         lines = [{'line': n, 'start': n * 5, 'end': n * 5 + 4} for n in range(12)]
         chunks = windows(lines, 60)
