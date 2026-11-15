@@ -3,10 +3,11 @@ import {HttpError} from '../api/http'
 import {STAGE_STEPS, STAGES, stageName} from '../features/plan/stages'
 /** Seconds as m:ss.s, or m:ss when not precise. */
 export function clock(seconds: number, precise = true) {
-  const whole = Math.max(0, seconds)
+  // round first, then split: 59.96 s is 1:00.0, never 0:60.0
+  const whole = precise ? Math.round(Math.max(0, seconds) * 10) / 10 : Math.floor(Math.max(0, seconds))
   const minutes = Math.floor(whole / 60)
   const rest = whole - minutes * 60
-  return precise ? `${minutes}:${rest.toFixed(1).padStart(4, '0')}` : `${minutes}:${String(Math.floor(rest)).padStart(2, '0')}`
+  return precise ? `${minutes}:${rest.toFixed(1).padStart(4, '0')}` : `${minutes}:${String(rest).padStart(2, '0')}`
 }
 export const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value))
 export const dateOf = (ms: number) => new Date(ms).toLocaleString(undefined, {dateStyle: 'short', timeStyle: 'short'})
