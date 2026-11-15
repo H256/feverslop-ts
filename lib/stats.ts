@@ -32,7 +32,10 @@ export function groupRows(timings: Timing[], key: (t: Timing) => string | undefi
     const groups = new Map<string, Timing[]>()
     for (const t of timings) {
         const k = key(t)
-        if (k !== undefined) groups.set(k, [...(groups.get(k) ?? []), t])
+        if (k === undefined) continue
+        const group = groups.get(k)
+        if (group) group.push(t)
+        else groups.set(k, [t])
     }
     return [...groups]
         .map(([k, all]) => {

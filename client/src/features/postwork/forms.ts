@@ -219,7 +219,6 @@ export function chainSources(id: string, finals: FinalChoice[]): Record<Step, st
 }
 
 /** What a post-work step has made: the videos of the steps, newest last, and those the timeline plays. */
-export const postworkVideos = (finals: EditorFinal[]) => finals.filter(f => f.postwork)
 
 /**
  * The newest video a step has made, from whichever video it started (#832): a marker on the finished video and on the refinished

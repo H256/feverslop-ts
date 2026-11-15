@@ -82,12 +82,8 @@
   align-items: center;
   margin-bottom: 8px;
 }
-.member textarea,
-textarea.prose {
+.member textarea {
   font: var(--text-m)/1.5 var(--sans);
-}
-textarea.prose {
-  width: 100%;
 }
 textarea.book {
   width: 100%;

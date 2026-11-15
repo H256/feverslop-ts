@@ -542,7 +542,6 @@ test('timing: fit previews a passage, keeps it unchecked and can undo in one ste
   await expect(page.locator('.tedit-head')).toContainText('estimated')
   await page.getByRole('button', {name: 'Undo', exact: true}).click()
   await expect(page.locator('.tword').first()).toHaveAttribute('title', /0:01.*0:02/)
-  await page.screenshot({path: 'test-results/timing-editor.png', fullPage: true})
 })
 
 test('timing: shift-select words and move them together without losing the gap', async ({page}) => {

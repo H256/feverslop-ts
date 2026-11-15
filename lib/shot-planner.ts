@@ -390,8 +390,9 @@ export function planPrompt(
     }
     return {
         reasoning: 'medium',
-        // thinking at medium easily takes 12k+ tokens on its own, the staged shots come on top
-        maxTokens: 16384,
+        // thinking at medium easily takes 12k+ tokens on its own, the staged shots come on top: of 84 real runs (14 beats, 3 repeats,
+        // low and medium) 3 reached 16384 and were asked again at twice the limit, 5 more ended within 1.4k of it (#981) - starting above it saves those calls
+        maxTokens: 24576,
         input: `${
             filmLook
                 ? `film look (the director's style - the shot sizes, the camera and the light of the shots follow it): ${filmLook}
@@ -585,11 +586,12 @@ ${story}`,
                         required: ['summary', 'moments', 'locationId', 'characterIds', 'intensity', 'weight', 'kind', 'continuous', 'stateAfter', 'entrance'],
                         properties: {
                             summary: {type: 'string'},
-                            moments: {type: 'array', items: {type: 'string'}},
+                            moments: {type: 'array', minItems: 1, items: {type: 'string'}},
                             locationId: {enum: locations.map(l => l.id)},
                             characterIds: {type: 'array', items: {enum: characters.map(c => c.id)}},
-                            intensity: {type: 'number'},
-                            weight: {type: 'integer'},
+                            // the ranges the prompt names: the code clamps them today, the server can keep the answer to them
+                            intensity: {type: 'number', minimum: 0, maximum: 1},
+                            weight: {type: 'integer', minimum: 1, maximum: 5},
                             kind: {enum: ['establish', 'build', 'hit', 'release']},
                             continuous: {type: 'boolean'},
                             stateAfter: {
