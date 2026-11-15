@@ -79,14 +79,12 @@ export async function renderClip(r: Renderer, clip: ClipRequest, stemFiles: Reco
             `${clip.id} skipped - it starts on the last frame of ${clip.startsFrom}, which is not rendered yet (${missing.find(p => p.kind === 'frame')!.file})`,
         )
     if (missing.length) return log.warn(`${clip.id} skipped - missing pictures: ${missing.map(p => p.file).join(', ')}`)
-    const withVocals = clip.assets.audio.some(a => a.stem === 'vocals')
     const missingStems = clip.assets.audio.filter(a => !(a.stem && stemFiles[a.stem] && existsSync(stemFiles[a.stem]!)))
     if (missingStems.length) return log.warn(`${clip.id} skipped - missing stem file(s) for: ${missingStems.map(a => a.stem).join(', ')}`)
     if (!(stemFiles.song && existsSync(stemFiles.song))) return log.warn(`${clip.id} skipped - missing the full song (needed for MiniMaxH3AddGuide)`)
 
     // a seed given: a take again with a derived one (checkTakes), else the clip's own
     const prepare = async (forced?: number) => {
-        const pictureUploads = clip.assets.pictures.map(p => ({from: join(r.projectDir, p.file), to: `${r.remoteDir}/${p.file}`}))
         // Upload the whole separated stem per track (not a per-clip cut) and let the workflow trim it to
         // this clip's span itself (TrimAudioDuration) - a pre-cut file can't account for the video model
         // rounding the render length up past clip.frames (see comfy/workflows/h3-ref2video.ts). The full,
@@ -95,12 +93,7 @@ export async function renderClip(r: Renderer, clip: ClipRequest, stemFiles: Reco
         // happens to need (an idle instrument otherwise has no audio backing its idle prompt text at all).
         // song can be a hand-supplied song.mp3 or song.flac as well as the usual wav - keep its real extension on upload,
         // LoadAudio needs it to demux correctly
-        const songRemote = `${r.remoteDir}/stems/song${extname(stemFiles.song!)}`
-        const uploads = [
-            ...pictureUploads,
-            ...clip.assets.audio.map(a => ({from: stemFiles[a.stem!]!, to: `${r.remoteDir}/stems/${a.stem}.wav`})),
-            {from: stemFiles.song!, to: songRemote},
-        ]
+        const {uploads, songRemote, audios, vocals} = clipInputs(r, clip, stemFiles, true)
         const seed = forced ?? clipSeed(r.config.seed, clip.id)
         const {default: videoWorkflow, renderFrames, recommendedResolution} = await loadWorkflow<VideoWorkflowModule>(r.config.videoWorkflow)
         r.noteResolution(recommendedResolution)
@@ -117,8 +110,8 @@ export async function renderClip(r: Renderer, clip: ClipRequest, stemFiles: Reco
             prompt: clip.prompt,
             // a pinned first frame (config.pinStartFrame) goes in as the guide only - as a reference picture too it is blended in twice
             pictures: clip.assets.pictures.filter(p => !((r.config.pinStartFrame || context) && p.kind === 'frame')).map(p => `${r.remoteDir}/${p.file}`),
-            audios: clip.assets.audio.map(a => `${r.remoteDir}/stems/${a.stem}.wav`),
-            ...(withVocals ? {vocals: `${r.remoteDir}/stems/vocals.wav`} : {}),
+            audios,
+            ...vocals,
             // the full mix, locked into the AV latent via MiniMaxH3AddGuide - see comfy/workflows/h3-ref2video.ts
             song: songRemote,
             ...(context
@@ -155,14 +148,18 @@ export async function renderClip(r: Renderer, clip: ClipRequest, stemFiles: Reco
     if (expected && (rendered.width !== expected.width || rendered.height !== expected.height)) {
         await Bun.write(
             `${target}.json`,
-            JSON.stringify({
-                workflow: r.config.videoWorkflow,
-                seed,
-                fingerprint: request,
-                renderedFrames: rendered.frames,
-                size: `${rendered.width}x${rendered.height}`,
-                rejected: 'size',
-            }, null, 2),
+            JSON.stringify(
+                {
+                    workflow: r.config.videoWorkflow,
+                    seed,
+                    fingerprint: request,
+                    renderedFrames: rendered.frames,
+                    size: `${rendered.width}x${rendered.height}`,
+                    rejected: 'size',
+                },
+                null,
+                2,
+            ),
         )
         const keep = archiveFiles(r.projectDir, `size-${versionStamp()}-${file.replace(/[\/]/g, '-')}`, [
             file,
@@ -222,18 +219,13 @@ export async function clipJob(
         workflow: VideoWorkflowModule
     },
 ) {
-    const songRemote = `${r.remoteDir}/stems/song${extname(stemFiles.song!)}`
-    const uploads = [
-        ...clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => ({from: join(r.projectDir, p.file), to: `${r.remoteDir}/${p.file}`})),
-        ...clip.assets.audio.map(a => ({from: stemFiles[a.stem!]!, to: `${r.remoteDir}/stems/${a.stem}.wav`})),
-        {from: stemFiles.song!, to: songRemote},
-        ...(job.extraUploads ?? []),
-    ]
+    const {uploads, songRemote, audios, vocals} = clipInputs(r, clip, stemFiles, false)
+    uploads.push(...(job.extraUploads ?? []))
     const result = job.workflow.default({
         prompt: job.prompt,
         pictures: clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => `${r.remoteDir}/${p.file}`),
-        audios: clip.assets.audio.map(a => `${r.remoteDir}/stems/${a.stem}.wav`),
-        ...(clip.assets.audio.some(a => a.stem === 'vocals') ? {vocals: `${r.remoteDir}/stems/vocals.wav`} : {}),
+        audios,
+        ...vocals,
         song: songRemote,
         ...(job.startClip ? {startClip: job.startClip} : job.startFrame ? {startFrame: job.startFrame} : {}),
         ...(job.endFrame ? {endFrame: job.endFrame} : {}),
@@ -297,9 +289,9 @@ export async function previewStart(r: Renderer, id: string): Promise<string | un
     // a sidecar that is half written (a run stopped in the middle of it) is no sidecar: the video's own frames count
     let record: {frames?: number} = {}
     try {
-      if (existsSync(`${video}.json`)) record = JSON.parse(readFileSync(`${video}.json`, 'utf8')) as {frames?: number}
+        if (existsSync(`${video}.json`)) record = JSON.parse(readFileSync(`${video}.json`, 'utf8')) as {frames?: number}
     } catch {
-      // read as nothing
+        // read as nothing
     }
     const frames = Math.min(record.frames ?? Infinity, framesOnGrid(await probeVideo(video)))
     const frame = `previews/${id}_lf.png`
@@ -574,4 +566,21 @@ export async function renderLipsync(
         ),
     )
     log.step('Saved', `${file} ${styles.muted(`${rendered.width}x${rendered.height}, ${clip.frames} frames · ${r.took(target)}`)}`)
+} /**
+ * What a music-video clip's job puts on the server and names to its workflow (#1008): its pictures (the frame pictures only when
+ * `withFrames`), one whole stem per track and the full song under its real extension - the same for a render, a preview and a retake.
+ */
+function clipInputs(r: Renderer, clip: ClipRequest, stemFiles: Record<string, string>, withFrames: boolean) {
+    const songRemote = `${r.remoteDir}/stems/song${extname(stemFiles.song!)}`
+    const uploads = [
+        ...clip.assets.pictures.filter(p => withFrames || p.kind !== 'frame').map(p => ({from: join(r.projectDir, p.file), to: `${r.remoteDir}/${p.file}`})),
+        ...clip.assets.audio.map(a => ({from: stemFiles[a.stem!]!, to: `${r.remoteDir}/stems/${a.stem}.wav`})),
+        {from: stemFiles.song!, to: songRemote},
+    ]
+    return {
+        uploads,
+        songRemote,
+        audios: clip.assets.audio.map(a => `${r.remoteDir}/stems/${a.stem}.wav`),
+        vocals: clip.assets.audio.some(a => a.stem === 'vocals') ? {vocals: `${r.remoteDir}/stems/vocals.wav`} : {},
+    }
 }
