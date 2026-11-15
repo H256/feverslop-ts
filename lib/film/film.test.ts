@@ -54,6 +54,24 @@ const cast: FilmCast = toCast(
     screenplay,
 )
 
+/** The input of buildFilmClipRequests for scene 1: the given coverage, then scene 2 with one shot (#1006: it was written out in every test). */
+const sceneOneInput = (coverage: SceneCoverage, candleShot: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
+    screenplay,
+    cast,
+    clips: packClips(
+        screenplay,
+        [coverage, toCoverage({soundscape: 's', people: true, shots: [candleShot]}, screenplay.scenes[1]!, cast).coverage],
+        'auto',
+    ).filter(c => c.sceneId === 's1'),
+    soundscapes: {},
+    stagings: {},
+    voices: {},
+    characterDescriptions: {},
+    locationDescriptions: {},
+    lookBrief: 'Look. More.',
+    ...extra,
+})
+
 describe('a choice per clip', () => {
     const base = {framing: 'two-shot', camera: 'c', seconds: 4}
     const views = {
@@ -673,28 +691,7 @@ describe('shot geography', () => {
             scene,
             cast,
         )
-        const [request] = buildFilmClipRequests({
-            screenplay,
-            cast,
-            clips: packClips(
-                screenplay,
-                [
-                    coverage,
-                    toCoverage(
-                        {soundscape: 's', people: true, shots: [{...base, characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]}]},
-                        screenplay.scenes[1]!,
-                        cast,
-                    ).coverage,
-                ],
-                'auto',
-            ).filter(c => c.sceneId === 's1'),
-            soundscapes: {},
-            stagings: {},
-            voices: {},
-            characterDescriptions: {},
-            locationDescriptions: {},
-            lookBrief: 'Look. More.',
-        })
+        const [request] = buildFilmClipRequests(sceneOneInput(coverage, {...base, characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]}))
         expect(request!.prompt).toContain('The camera is beside the bridge rail, looking along it.')
         expect(request!.prompt).toMatch(/At the start of the shot: <Subject 2> stands at the rail, one hand on it; <Subject 3> waits two steps away\./)
         expect(request!.prompt).toContain('foreground right, shoulder only, soft')
@@ -795,28 +792,7 @@ describe('motion and hand-over', () => {
             scene,
             cast,
         )
-        const [request] = buildFilmClipRequests({
-            screenplay,
-            cast,
-            clips: packClips(
-                screenplay,
-                [
-                    coverage,
-                    toCoverage(
-                        {soundscape: 's', people: true, shots: [{...base, characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]}]},
-                        screenplay.scenes[1]!,
-                        cast,
-                    ).coverage,
-                ],
-                'auto',
-            ).filter(c => c.sceneId === 's1'),
-            soundscapes: {},
-            stagings: {},
-            voices: {},
-            characterDescriptions: {},
-            locationDescriptions: {},
-            lookBrief: 'Look. More.',
-        })
+        const [request] = buildFilmClipRequests(sceneOneInput(coverage, {...base, characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]}))
         expect(request!.prompt).toMatch(
             /During the shot: <Subject 2> stays where she stands, does not step forward or back; <Subject 3> stands motionless, arms at his sides\./,
         )
@@ -945,33 +921,13 @@ describe('location views', () => {
             scene,
             cast,
         )
-        const [request] = buildFilmClipRequests({
-            screenplay,
-            cast,
-            clips: packClips(
-                screenplay,
-                [
-                    coverage,
-                    toCoverage(
-                        {
-                            soundscape: 's',
-                            people: true,
-                            shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]}],
-                        },
-                        screenplay.scenes[1]!,
-                        cast,
-                    ).coverage,
-                ],
-                'auto',
-            ).filter(c => c.sceneId === 's1'),
-            soundscapes: {},
-            stagings: {},
-            voices: {},
-            characterDescriptions: {},
-            locationDescriptions: {},
-            locationViews: {'the-bridge': views},
-            lookBrief: 'Look. More.',
-        })
+        const [request] = buildFilmClipRequests(
+            sceneOneInput(
+                coverage,
+                {framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]},
+                {locationViews: {'the-bridge': views}},
+            ),
+        )
         expect(request!.prompt).toContain('The picture shows the place from the water side, looking back toward the dunes.')
         expect(request!.prompt).toContain('The background is <Picture 1>.')
         expect(request!.prompt).not.toContain('sheet of views')
