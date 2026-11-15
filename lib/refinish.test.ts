@@ -1,3 +1,4 @@
+import {testVideo} from './test-media.ts'
 import {describe, expect, test} from 'bun:test'
 import {mkdtempSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
@@ -102,30 +103,7 @@ describe('the clip keeps its length and its sound', () => {
         const dir = mkdtempSync(join(tmpdir(), 'refinish-'))
         try {
             const original = join(dir, 'clip.mp4')
-            Bun.spawnSync([
-                'ffmpeg',
-                '-y',
-                '-v',
-                'error',
-                '-f',
-                'lavfi',
-                '-i',
-                'testsrc=size=64x64:rate=24',
-                '-f',
-                'lavfi',
-                '-i',
-                'sine=frequency=440',
-                '-frames:v',
-                '53',
-                '-shortest',
-                '-c:v',
-                'libx264',
-                '-pix_fmt',
-                'yuv420p',
-                '-c:a',
-                'aac',
-                original,
-            ])
+            await testVideo(original, {frames: 53, size: '64x64', sound: true})
             expect(framesOf(original)).toBe(53)
             const padded = join(dir, 'padded.mp4')
             await paddedClip(original, padded, 3)
