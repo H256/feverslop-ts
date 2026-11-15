@@ -137,6 +137,49 @@ const screenplayJson = `{
 - "speaker": the character cue, as the script writes it. "kind": "spoken" (the character is in the picture and speaks), "offscreen" (heard, but not in the picture) or "voiceover" (narration or thoughts, lips closed).
 - "shot" is optional - only when the heading of the scene names a shot or a view instead of a place: the heading as written, in English ("CLOSE UP - ANUBIS", "WIDE SHOT"). "delivery" is optional - the parenthetical, in English ("whispering", "out of breath"). "translation" is optional - only when the screenplay itself has a translation of the line under it (in brackets): the translation as written. "language" is the ISO 639-1 code of the language the line is spoken in, on every dialogue line: read the words of the line, not who says it - one character may speak two languages in the same film.`
 
+/** The shape of the screenplay's JSON (screenplayJson as a schema, #995): an element is an action or a dialogue line, not a mix. */
+const screenplaySchema = {
+    type: 'object',
+    required: ['scenes'],
+    properties: {
+        scenes: {
+            type: 'array',
+            minItems: 1,
+            items: {
+                type: 'object',
+                required: ['setting', 'location', 'time', 'elements'],
+                properties: {
+                    setting: {enum: ['INT', 'EXT', 'INT/EXT']},
+                    location: {type: 'string'},
+                    time: {type: 'string'},
+                    shot: {type: 'string'},
+                    elements: {
+                        type: 'array',
+                        items: {
+                            anyOf: [
+                                {type: 'object', required: ['type', 'text'], properties: {type: {const: 'action'}, text: {type: 'string'}}},
+                                {
+                                    type: 'object',
+                                    required: ['type', 'speaker', 'text', 'kind'],
+                                    properties: {
+                                        type: {const: 'dialogue'},
+                                        speaker: {type: 'string'},
+                                        text: {type: 'string'},
+                                        kind: {enum: ['spoken', 'offscreen', 'voiceover']},
+                                        delivery: {type: 'string'},
+                                        language: {type: 'string'},
+                                        translation: {type: 'string'},
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            },
+        },
+    },
+}
+
 export function screenplayWritePrompt(brief: Brief, outline: Outline): AskOptions {
     return {
         maxTokens: 16384,
@@ -160,6 +203,8 @@ ${filmableRules}
 
 Answer only with JSON in this format:
 ${screenplayJson}`,
+        // the shape of the answer (#995)
+        schema: screenplaySchema,
     }
 }
 
@@ -179,6 +224,34 @@ export function fountainAnnotatePrompt(
 - "location" and "time": the place and the time of day of the heading, in English, the same place always named the same way (DAY, NIGHT, DUSK, DAWN, ...). A heading that names a shot or a view instead of a place ("CLOSE UP - HIS FACE", "WIDE SHOT", "THE COLLISION") is not a new place: "location" and "time" are those of the scene before, never "unknown", and "shot" is the heading as written, in English. Otherwise "shot" is "".
 - "actions": the action lines of the scene, in the same order and the same number, tidied into plain present-tense English sentences - what the camera sees or the microphone hears, nothing added, nothing dropped.
 - "lines": one entry for every dialogue line of the scene, in the same order and the same number. "language" is the ISO 639-1 code of the language the line is spoken in - read its words, not who says it (the main language of the film is ${language}). "delivery" is the line's parenthetical in English ("whispering", "out of breath"), or "" when it has none.`,
+        // the shape of the answer (#995)
+        schema: {
+            type: 'object',
+            required: ['scenes'],
+            properties: {
+                scenes: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['location', 'time', 'actions', 'lines'],
+                        properties: {
+                            location: {type: 'string'},
+                            time: {type: 'string'},
+                            shot: {type: 'string'},
+                            actions: {type: 'array', items: {type: 'string'}},
+                            lines: {
+                                type: 'array',
+                                items: {
+                                    type: 'object',
+                                    required: ['language', 'delivery'],
+                                    properties: {language: {type: 'string'}, delivery: {type: 'string'}},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     }
 }
 
@@ -199,6 +272,8 @@ ${source}`,
 
 Answer only with JSON in this format:
 ${screenplayJson}`,
+        // the shape of the answer (#995)
+        schema: screenplaySchema,
     }
 }
 
@@ -835,5 +910,21 @@ ${filmableRules}
 
 Answer only with JSON in this format:
 {"characters": [{"name": "", "role": "", "appearance": "", "voice": ""}], ${screenplayJson.slice(1).trimStart()}`,
+        // the shape of the answer (#995)
+        schema: {
+            ...screenplaySchema,
+            required: ['characters', 'scenes'],
+            properties: {
+                characters: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['name', 'role', 'appearance', 'voice'],
+                        properties: {name: {type: 'string'}, role: {type: 'string'}, appearance: {type: 'string'}, voice: {type: 'string'}},
+                    },
+                },
+                ...screenplaySchema.properties,
+            },
+        },
     }
 }
