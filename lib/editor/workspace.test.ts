@@ -273,6 +273,14 @@ describe('what can be started', () => {
             args: ['demo', '--render=videos', '--only=slot-001,slot-002', '--again'],
         })
         expect(runCommand(film, {type: 'clips', ids: ['clip-001']})).toEqual({script: 'film.ts', args: ['demo', '--render=videos', '--only=clip-001']})
+        // the lip-sync preview (#1016): a tool of its own, asked for by clips and again - never by a dummy text or a size from the page
+        expect(runCommand(music, {type: 'lipsync'})).toEqual({script: 'tools/lipsync.ts', args: ['demo']})
+        expect(runCommand(music, {type: 'lipsync', only: ['slot-003'], again: true})).toEqual({
+            script: 'tools/lipsync.ts',
+            args: ['demo', '--only=slot-003', '--again'],
+        })
+        expect(() => runCommand(music, {type: 'lipsync', only: ['--scale=1']})).toThrow('no such only')
+        expect(() => runCommand(film, {type: 'lipsync'})).toThrow('music videos')
         expect(runCommand(music, {type: 'pictures', ids: ['hall'], again: true, newAnchor: true})).toEqual({
             script: 'index.ts',
             args: ['demo', '--render=images', '--only=hall', '--again', '--new-anchor'],

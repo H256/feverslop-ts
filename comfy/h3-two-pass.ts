@@ -17,6 +17,7 @@ import {
     type PixelSize,
     type Resolution,
     resolution,
+    scaledSize,
     type VideoWorkflowOptions,
     widget,
     withInputs,
@@ -94,7 +95,10 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
     const prompt = wf.PrimitiveStringMultiline({value: opts.prompt})
     const length = wf.PrimitiveInt({value: opts.frames})
     const sizes = twoPassSizes(opts.resolution, opts.aspect)
-    const size = resolution(wf, `${sizes.first.width}x${sizes.first.height}`, opts.aspect ?? 'landscape', TWO_PASS_DEFAULT)
+    // a preview stops after pass 1, and its scale is a factor on the pixels of the final size: pass 1 is a quarter of them, so 0.25 is pass 1 as it is
+    // (--preview) and a smaller one - the lip-sync preview's - makes pass 1 smaller still
+    const firstSize = opts.preview ? scaledSize(sizes.first, opts.preview.scale / 0.25) : sizes.first
+    const size = resolution(wf, `${firstSize.width}x${firstSize.height}`, opts.aspect ?? 'landscape', TWO_PASS_DEFAULT)
 
     const references = wf.MiniMaxH3ReferenceToVideo({
         prompt: widget(prompt.STRING),
@@ -156,7 +160,7 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
         return {
             images: wf.VAEDecode({samples: laidOut, vae: videoVae.VAE}).IMAGE,
             song: song?.AUDIO ?? wf.VAEDecodeAudio({samples: laidOut, vae: audioVae.VAE}).AUDIO,
-            size: sizes.first,
+            size: firstSize,
         }
     }
 

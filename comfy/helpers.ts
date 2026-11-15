@@ -106,7 +106,7 @@ export type VideoWorkflowOptions = {
     endFrame?: EndFrame
     filenamePrefix: string
 }
-export type PreviewOptions = {scale: number; steps: number}
+export type PreviewOptions = {scale: number; steps?: number}
 export type EndFrame = {image: string; at: number}
 export type VideoWorkflow = (opts: VideoWorkflowOptions) => WorkflowResult
 

@@ -10,6 +10,16 @@ from phoneme_alignment import ctc_path, fill_short_gaps, MODEL
 REVISION = 'ae45363bf3413b374fecd9dc8bc1df0e24c3b7f4'
 
 
+def phone_tokens(phone, vocab):
+    """Preserve native tokens; only split the explicitly evaluated IPA composite."""
+    if phone in vocab:
+        return [vocab[phone]]
+    parts = {'ʊɐ': ('ʊ', 'ɐ')}.get(phone)
+    if parts and all(part in vocab for part in parts):
+        return [vocab[part] for part in parts]
+    raise ValueError(f'Unsupported IPA symbol {phone!r}; original timing retained')
+
+
 def word_phones(words, speak):
     groups = [p.strip().split() for p in speak([' '.join(words)])[0].split('|') if p.strip()]
     if len(groups) != len(words):
@@ -41,9 +51,27 @@ def windows(lines, duration):
     return result
 
 
+def alignment_windows(request):
+    if 'window' not in request:
+        return windows(request['lines'], request['duration'])
+    window = request['window']
+    start, end = window.get('start'), window.get('end')
+    finite = lambda n: type(n) in (int, float) and math.isfinite(n)
+    if not all(finite(n) for n in (start, end, request['duration'])) or not 0 <= start < end <= request['duration'] or end - start > 30:
+        raise ValueError('Passage must fit within 30 seconds of the audio')
+    ids = [line['line'] for line in request['lines']]
+    targets = window.get('targets')
+    if (len(ids) != len(set(ids)) or not isinstance(targets, list) or not targets
+            or any(type(n) is not int or n not in ids for n in targets)
+            or len(targets) != len(set(targets))):
+        raise ValueError('Passage targets must be unique lines within its context')
+    return [{'start': start, 'end': end, 'targets': targets, 'lines': request['lines']}]
+
+
 def main():
     source, destination = map(Path, sys.argv[1:])
     request = json.loads(source.read_text(encoding='utf-8'))
+    chunks = alignment_windows(request)
     language = {'de': 'de', 'en': 'en-us', 'fr': 'fr-fr'}[request['language']]
     import espeakng_loader
     from phonemizer.backend.espeak.wrapper import EspeakWrapper
@@ -62,7 +90,6 @@ def main():
     model = AutoModelForCTC.from_pretrained(MODEL, revision=REVISION).eval()
     vocab = processor.tokenizer.get_vocab()
     results = []
-    chunks = windows(request['lines'], request['duration'])
     with tempfile.TemporaryDirectory(prefix='lyrics-refine-') as temp:
         audiofile = str(Path(temp) / 'vocals.wav')
         for index, chunk in enumerate(chunks):
@@ -77,10 +104,9 @@ def main():
                         word_id = len(words)
                         words.append({'line': line['line'], 'text': text})
                         for phone in group:
-                            if phone not in vocab:
-                                raise ValueError(f'Unsupported IPA symbol {phone!r}; original timing retained')
-                            phones.append({'word': word_id})
-                            tokens.append(vocab[phone])
+                            for token in phone_tokens(phone, vocab):
+                                phones.append({'word': word_id})
+                                tokens.append(token)
                 inputs = processor(audio, sampling_rate=rate, return_tensors='pt').input_values
                 with torch.inference_mode():
                     scores = model(inputs).logits[0].log_softmax(-1).numpy()

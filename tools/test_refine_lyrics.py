@@ -1,8 +1,39 @@
 import unittest
-from refine_lyrics import windows, word_phones
+from refine_lyrics import windows, word_phones, phone_tokens, alignment_windows
 
 
 class RefinementTests(unittest.TestCase):
+    def test_confirmed_passage_is_one_exact_window(self):
+        lines = [{'line': n, 'start': n * 3, 'end': n * 3 + 2} for n in range(6)]
+        request = {'lines': lines, 'duration': 60, 'window': {'start': 0, 'end': 20, 'targets': [3, 4]}}
+        self.assertEqual(alignment_windows(request), [{**request['window'], 'lines': lines}])
+        del request['window']
+        self.assertEqual(alignment_windows(request), windows(lines, 60))
+
+    def test_invalid_passage_fails_instead_of_clipping_or_repartitioning(self):
+        for window in [
+            {'start': 0, 'end': 31, 'targets': [0]},
+            {'start': 0, 'end': 5, 'targets': [1]},
+            {'start': 0, 'end': 5, 'targets': []},
+            {'start': 0, 'end': 5, 'targets': [0, 0]},
+            {'start': float('nan'), 'end': 5, 'targets': [0]},
+            {'start': 0, 'end': 61, 'targets': [0]},
+        ]:
+            with self.subTest(window=window), self.assertRaises(ValueError):
+                alignment_windows({'lines': [{'line': 0}], 'duration': 60, 'window': window})
+
+    def test_composite_uses_exact_existing_tokens(self):
+        self.assertEqual(phone_tokens('ʊɐ', {'ʊ': 7, 'ɐ': 9}), [7, 9])
+
+    def test_native_token_takes_precedence_over_decomposition(self):
+        self.assertEqual(phone_tokens('ʊɐ', {'ʊɐ': 3, 'ʊ': 7, 'ɐ': 9}), [3])
+        self.assertEqual(phone_tokens('aɪ', {'aɪ': 11}), [11])
+
+    def test_absent_phone_is_not_approximated_or_silently_split(self):
+        for phone, vocab in [('ʏ', {'y': 1, 'ɪ': 2}), ('ʊɐ', {'ʊ': 7}), ('ab', {'a': 1, 'b': 2})]:
+            with self.subTest(phone=phone), self.assertRaisesRegex(ValueError, 'Unsupported IPA'):
+                phone_tokens(phone, vocab)
+
     def test_windows_keep_neighbours_as_context_without_unbounded_audio(self):
         lines = [{'line': n, 'start': n * 5, 'end': n * 5 + 4} for n in range(12)]
         chunks = windows(lines, 60)

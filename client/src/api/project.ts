@@ -34,10 +34,11 @@ import type {
   TimingChange,
   TimingResult,
   TimingView,
+  LipsyncView,
 } from '../../../shared/workspace'
 import {errorOfAnswer, getJson, postForm, postJson} from './http'
 import type {DirectionEdit, DirectionRule, DirectionView} from '../../../shared/direction'
-import type {TimingRefinement, RefinementLanguage} from '../../../shared/timing-refinement'
+import type {TimingRefinement, RefinementLanguage, ConfirmedPassage} from '../../../shared/timing-refinement'
 
 const id = (value: string) => encodeURIComponent(value)
 
@@ -68,6 +69,7 @@ export function projectApi(root: string) {
     references: (signal?: AbortSignal) => get<{references: EditorReference[]}>('references', signal),
     singing: (signal?: AbortSignal) => get<{singing: SingingView | null}>('singing', signal),
     timing: (signal?: AbortSignal) => get<{timing: TimingView | null}>('timing', signal),
+    lipsync: (signal?: AbortSignal) => get<{lipsync: LipsyncView | null}>('lipsync', signal),
     timingWave: (signal?: AbortSignal) => get<{peaks: number[] | null}>('timing-wave', signal),
     casting: (signal?: AbortSignal) => get<CastingView>('casting', signal),
     /** The finished characters or places of the other music videos (#835): what import-asset can take over. */
@@ -127,7 +129,8 @@ export function projectApi(root: string) {
     previewConfig: (change: ConfigChange) => post<ConfigImpact>('config', {change, dryRun: true}),
     saveConfig: (change: ConfigChange) => post<ConfigResult>('config', {change}),
     saveTiming: (change: TimingChange) => post<TimingResult>('timing', change),
-    refineTiming: (language: RefinementLanguage) => post<TimingRefinement>('timing-refine', {language}),
+    refineTiming: (language: RefinementLanguage, passage?: ConfirmedPassage) =>
+      post<TimingRefinement>('timing-refine', {language, ...(passage ? {passage} : {})}),
     applyTimingRefinement: (id: string) => post<TimingResult>('timing-refine-apply', {id}),
     override: (clip: string, override: EditorOverride | null) => post<{written: true}>(`override/${id(clip)}`, override),
   }

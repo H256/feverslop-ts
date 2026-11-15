@@ -1,6 +1,7 @@
 import {usageArgs} from './command-schema.ts'
 import {creditsCommand, descriptionCommand, introCommand, labelCommand} from './postwork/commands.ts'
 import {refinishCommand} from './refinish-command.ts'
+import {lipsyncCommand} from './lipsync-command.ts'
 import {helpDetails} from './cli-help.ts'
 import {activeJobs, cancelJobs} from './comfy-cancel.ts'
 import {configureOutput, failRun, formatDuration, log, printBanner, runLogFile, runResult, runWarnings, setOutput, styles} from './log.ts'
@@ -71,7 +72,7 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         json: true,
     },
     timing: {
-        args: '<project-id> [--json | --set=timing.json | --refine=de|en|fr | --apply-refinement=<proposal-id>]',
+        args: '<project-id> [--json | --set=timing.json | --refine=de|en|fr [--refine-line=N --confirm-sung] | --apply-refinement=<proposal-id>]',
         description: 'Print or edit sung words, or prepare and explicitly apply a local phoneme refinement. Changed clip beats need planning again.',
         json: true,
     },
@@ -150,6 +151,12 @@ const commands: Record<string, {args: string; description: string; json?: boolea
     stats: {
         args: '[--by=variant,gpu] [--kind=clip|picture|song|interpolation|llm] [--project=id] [--since=7d] [--sort=name|median|p90|n|failed] [--top=N] [--compare] [--baseline="GPU or group"] [--details] [--json]',
         description: 'Compare measured render and LLM performance.',
+        json: true,
+    },
+    lipsync: {
+        args: usageArgs(lipsyncCommand),
+        description:
+            'Render the whole song as a close-up of a dummy singer at a fraction of the size, to judge the lyric timing before the real renders. Needs the timed lyrics.',
         json: true,
     },
     refinish: {

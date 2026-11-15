@@ -243,7 +243,7 @@ function nextCamera(level: keyof typeof cameraMoves, cursor: Record<keyof typeof
 }
 
 // More cuts with more musical energy - shared by buildClipRequests and the step that sizes the per-shot moment lists
-function shotCountFor(slot: Slot, beat: StoryBeat, opensScene: boolean) {
+export function shotCountFor(slot: Slot, beat: Pick<StoryBeat, 'kind'>, opensScene: boolean) {
     // a piece of a fight clip (config.fightClips) is one shot
     if (slot.micro) return 1
     const base = opensScene && beat.kind === 'establish' ? 1 : slot.energy < 0.45 ? 1 : slot.energy < 0.75 ? 2 : 4
@@ -1473,7 +1473,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
  * Moves every cut (but the first, at 0) that falls into a sung word to the nearest gap between words, if one is
  * within `maxShift` seconds - a cut in the middle of a word breaks the lip-sync.
  */
-function avoidWords(cuts: number[], words: TimedWord[], maxShift: number, duration: number) {
+export function avoidWords(cuts: number[], words: TimedWord[], maxShift: number, duration: number) {
     const sorted = [...words].sort((a, b) => a.start - b.start)
     const moved = [...cuts]
     for (let j = 1; j < moved.length; j++) {
@@ -1527,7 +1527,7 @@ function spread<T>(items: T[], k: number, n: number): T[] {
 }
 
 // Basic punctuation; a continuation fragment keeps its open hyphen instead of a full stop.
-function normalizeLyric(line: string) {
+export function normalizeLyric(line: string) {
     const clean = line
         .replace(/\.{2,}|…/g, '.')
         .replace(/[~*]+/g, '')

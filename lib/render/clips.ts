@@ -5,6 +5,8 @@ import {log, styles} from '../log.ts'
 import {type AudioWorkflow, clipSeed, resolveSeed, type VideoWorkflowModule, type WorkflowResult} from '../../comfy/helpers.ts'
 import {boundaryFrameAsset, type ClipRequest, CONTEXT_SETTLE} from '../compose.ts'
 import {secondsAt} from '../frames.ts'
+import {type AudioPrints, LIPSYNC_DIR, type LipsyncClip, lipsyncFile, lipsyncFingerprint, recordedLipsync} from '../lipsync.ts'
+import {fingerprint} from '../provenance.ts'
 import {extractFrame, framesOnGrid, probeVideo, trimHead} from '../assemble.ts'
 import {backdropSeconds, hasBackdropRun} from '../leak.ts'
 import {bestTake, checkClip, describe as describeFindings, type Finding} from '../clip-qa.ts'
@@ -214,7 +216,7 @@ export async function clipJob(
         startFrame?: string
         startClip?: string
         endFrame?: {image: string; at: number}
-        preview?: {scale: number; steps: number}
+        preview?: {scale: number; steps?: number}
         filenamePrefix: string
         extraUploads?: {from: string; to: string}[]
         workflow: VideoWorkflowModule
@@ -484,4 +486,79 @@ export async function saveBoundaryFrames(r: Renderer, clip: {id: string; frames:
 /** How many frames of the file the video uses. A clip rendered too short (warned about above) ends on its own last frame. */
 export function framesUsed(r: Renderer, clip: {frames: number}, available: number) {
     return Math.min(clip.frames, available)
+}
+
+/**
+ * The lip-sync preview of one clip of the cut (lib/lipsync.ts): a render of the configured video workflow at config.lipsyncScale of its
+ * pixels, its own steps - only the size is smaller, so the latents and the work are. The vocals stem and the full song go in as in a real
+ * clip. It is a file of previews/lipsync/, never of videos/ or previews/: nothing real goes stale by it. One made from another request
+ * (the prompt, the cut, the size, the audio) is put away and rendered again; the same one is left as it is.
+ */
+export async function renderLipsync(
+    r: Renderer,
+    clip: LipsyncClip,
+    stemFiles: Record<string, string>,
+    prints: AudioPrints,
+    {scale, again = false}: {scale: number; again?: boolean},
+) {
+    const file = lipsyncFile(clip.id)
+    const target = join(r.projectDir, file)
+    const request = fingerprint(...lipsyncFingerprint(clip, {...r.config, lipsyncScale: scale}, prints))
+    const made = recordedLipsync(target)
+    if (!again && made?.fingerprint === request) return log.step('Exists', styles.muted(file))
+    if (!(stemFiles[clip.track] && existsSync(stemFiles[clip.track]!)))
+        return log.warn(`${clip.id}: no lip-sync preview - missing the ${clip.track === 'song' ? 'full song' : `${clip.track} stem`}`)
+    if (!(stemFiles.song && existsSync(stemFiles.song))) return log.warn(`${clip.id}: no lip-sync preview - missing the full song`)
+    if (existsSync(target)) {
+        const keep = archiveFiles(r.projectDir, `${clip.id}-lipsync-${versionStamp()}`, [file, `${file}.json`])
+        log.step('Again', `${clip.id} ${styles.muted(`- the old one is in ${keep}`)}`)
+    }
+    const spec: RenderSpec = {kind: 'clip', id: `lipsync-${clip.id}`, parts: [request]}
+    const what: RenderWhat = {
+        label: `lip-sync preview ${clip.id}`,
+        spec,
+        kind: 'clip',
+        workflow: r.config.videoWorkflow,
+        resolution: `lipsync ${scale}`,
+    }
+    mkdirSync(dirname(target), {recursive: true})
+    // what clipJob takes of a clip: the audio tracks to upload - the dummy has no picture
+    const asClip = {
+        assets: {pictures: [], audio: [{label: '<Audio 1>', file: '', songStart: clip.start, songEnd: clip.end, stem: clip.track}]},
+    } as unknown as ClipRequest
+    const {seed} = await r.render(what, target, '.mp4', async () => {
+        const workflow = await loadWorkflow<VideoWorkflowModule>(r.config.videoWorkflow)
+        r.noteResolution(workflow.recommendedResolution)
+        const frames = workflow.renderFrames?.(clip.frames) ?? clip.frames
+        return r.clipJob(asClip, stemFiles, {
+            prompt: clip.prompt,
+            songStart: secondsAt(clip.frameStart),
+            frames,
+            seed: clipSeed(r.config.seed, clip.id),
+            // the scale only: the steps are the ones the workflow and config.json have
+            preview: {scale: scale},
+            workflow,
+            filenamePrefix: `${r.remoteDir}/${LIPSYNC_DIR}/${clip.id}`,
+        })
+    })
+    const rendered = await probeVideo(target)
+    await Bun.write(
+        `${target}.json`,
+        JSON.stringify(
+            {
+                lipsync: true,
+                workflow: r.config.videoWorkflow,
+                seed,
+                scale: scale,
+                fingerprint: request,
+                frameStart: clip.frameStart,
+                frames: clip.frames,
+                renderedFrames: rendered.frames,
+                size: `${rendered.width}x${rendered.height}`,
+            },
+            null,
+            2,
+        ),
+    )
+    log.step('Saved', `${file} ${styles.muted(`${rendered.width}x${rendered.height}, ${clip.frames} frames · ${r.took(target)}`)}`)
 }

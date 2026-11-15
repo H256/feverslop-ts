@@ -11,7 +11,7 @@ const ASK_MS = 4000
 export const authOf = (server: Pick<ComfyServer, 'credentials'>): Record<string, string> => {
     const credentials = server.credentials as {type?: string; token?: string; username?: string; password?: string} | undefined
     if (credentials?.token) return {Authorization: `Bearer ${credentials.token}`}
-    if (credentials?.username) return {Authorization: `Basic ${btoa(`${credentials.username}:${credentials.password ?? ''}`)}`}
+    if (credentials?.username) return {Authorization: `Basic ${Buffer.from(`${credentials.username}:${credentials.password ?? ''}`).toString('base64')}`}
     return {}
 }
 
