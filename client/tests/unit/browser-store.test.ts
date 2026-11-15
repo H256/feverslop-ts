@@ -23,10 +23,10 @@ test('blocked browser storage reads as nothing and writes nothing instead of thr
       },
     },
   }
-  expect(viewerStore.get('x')).toBeNull()
+  expect(viewerStore.get('x')).toBe(null)
   expect(() => viewerStore.set('x', '1')).not.toThrow()
   expect(() => viewerStore.remove('x')).not.toThrow()
-  expect(keptThisSession.get('x')).toBeNull()
+  expect(keptThisSession.get('x')).toBe(null)
   expect(() => keptThisSession.set('x', '1')).not.toThrow()
 })
 
@@ -36,5 +36,5 @@ test('a working storage keeps what is written', () => {
   viewerStore.set('a', 'b')
   expect(viewerStore.get('a')).toBe('b')
   viewerStore.remove('a')
-  expect(viewerStore.get('a')).toBeNull()
+  expect(viewerStore.get('a')).toBe(null)
 })
