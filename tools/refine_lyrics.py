@@ -10,6 +10,16 @@ from phoneme_alignment import ctc_path, fill_short_gaps, MODEL
 REVISION = 'ae45363bf3413b374fecd9dc8bc1df0e24c3b7f4'
 
 
+def phone_tokens(phone, vocab):
+    """Preserve native tokens; only split the explicitly evaluated IPA composite."""
+    if phone in vocab:
+        return [vocab[phone]]
+    parts = {'ʊɐ': ('ʊ', 'ɐ')}.get(phone)
+    if parts and all(part in vocab for part in parts):
+        return [vocab[part] for part in parts]
+    raise ValueError(f'Unsupported IPA symbol {phone!r}; original timing retained')
+
+
 def word_phones(words, speak):
     groups = [p.strip().split() for p in speak([' '.join(words)])[0].split('|') if p.strip()]
     if len(groups) != len(words):
@@ -77,10 +87,9 @@ def main():
                         word_id = len(words)
                         words.append({'line': line['line'], 'text': text})
                         for phone in group:
-                            if phone not in vocab:
-                                raise ValueError(f'Unsupported IPA symbol {phone!r}; original timing retained')
-                            phones.append({'word': word_id})
-                            tokens.append(vocab[phone])
+                            for token in phone_tokens(phone, vocab):
+                                phones.append({'word': word_id})
+                                tokens.append(token)
                 inputs = processor(audio, sampling_rate=rate, return_tensors='pt').input_values
                 with torch.inference_mode():
                     scores = model(inputs).logits[0].log_softmax(-1).numpy()

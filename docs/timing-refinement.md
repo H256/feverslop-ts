@@ -15,6 +15,14 @@ Use `--refine=en` or `--refine=fr` for those languages, and add `--json` for the
 
 Requires `uv`, Python 3.12 managed by uv, and `ffmpeg` on PATH. The first pass downloads dependencies and the model; subsequent passes reuse their caches. Inference runs locally on CPU. It processes windows of at most 30 seconds and loads the model once per run. Neighbouring lyrics provide context; unsupported pronunciations or collapsed word spans retain the original timing and appear for review. eSpeak sometimes merges English function words: in that case pronunciation falls back to separate source words to preserve their identities.
 
+The pinned vocabulary accepts the explicitly evaluated eSpeak composite `ʊɐ` as
+its existing `ʊ` and `ɐ` tokens when no native composite token exists. Native tokens
+always take precedence. Other missing phones (including `ʏ`) remain errors; this
+is not a general character splitter or an approximate pronunciation substitution.
+Unsupported windows still retain their original timing. Isolating their valid
+neighbours by cropping out the unsupported line remains experimental: that can
+lose necessary context and misplace repeated lyrics.
+
 Protection rules:
 
 - Hand edits, word anchors, structural groups/joins, disabled lines and ad-libs are retained.
