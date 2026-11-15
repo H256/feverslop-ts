@@ -7,7 +7,7 @@ import {log} from './log.ts'
 import {aboveRecommended, type PixelSize, type RecommendedResolution, type VideoWorkflowModule, type WorkflowResult} from '../comfy/helpers.ts'
 import {type RenderConfig, workflowPath} from './config.ts'
 import {type ClipRequest, CONTEXT_SETTLE} from './compose.ts'
-import type {LipsyncClip} from './lipsync.ts'
+import type {AudioPrints, LipsyncClip} from './lipsync.ts'
 import {type RetakeAsk, type RetakePlan} from './retake.ts'
 import {isOwnFile, isUserFile, recordedEditedPrompt, recordedPrompt} from './provenance.ts'
 import {anchorSpec, clipSpec, lookAnchorSpec, pictureSpec, type RenderSpec, sequenceSpec, specId} from './render-spec.ts'
@@ -448,7 +448,7 @@ export class Renderer implements Disposable {
         return clipsWork.renderClipPreview(this, clip, stemFiles)
     }
 
-    renderLipsync(clip: LipsyncClip, stemFiles: Record<string, string>, prints: {vocals: string; song: string}, options: {scale: number; again?: boolean}) {
+    renderLipsync(clip: LipsyncClip, stemFiles: Record<string, string>, prints: AudioPrints, options: {scale: number; again?: boolean}) {
         return clipsWork.renderLipsync(this, clip, stemFiles, prints, options)
     }
 
