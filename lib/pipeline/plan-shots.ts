@@ -15,6 +15,7 @@ import type {ProjectConfig} from '../config.ts'
 import type {Character, Location, LocationLayout, LyricsTiming, MusicMap, ProjectStore, PropStem, Singing, StoryBeat, Timeline} from '../project.ts'
 import {energyBar} from './energy-bar.ts'
 import {messageOf} from '../text.ts'
+import {keepAsPartials} from '../partials.ts'
 
 // The shot planning of a music video (index.ts steps 11-11c, #841): the story matched to the clips of the song, the beats blocked one
 // after the other, the shots of every beat planned from its blocking, the director's edits kept, and the view of the place per shot.
@@ -101,7 +102,10 @@ export async function planShots(run: ShotRun) {
     if (plannedBefore) {
         const missing = beats.filter(b => !plannedBefore[b.id]).map(b => b.id)
         log.step('Planning again', styles.muted(`${missing.join(', ')} - no plan of their own yet, the other ${beats.length - missing.length} stay`))
+        // gone from the file for the time of the run (the step must run), so a stop would lose the kept plans: they wait in the partials (#973)
         delete project.data.shotMoments
+        keepAsPartials(project.data, 'shotMoments', plannedBefore)
+        await project.save()
         // the beats planned now have no view yet - the views of the others stay (see shotViews), in project.json too: a run that
         // stops before step 11c (a failure, Ctrl+C) keeps them for the next one, which then asks only for the beats planned now
         const views = project.data.shotViews

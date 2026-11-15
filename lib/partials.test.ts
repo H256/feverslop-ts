@@ -1,5 +1,5 @@
 import {describe, expect, test} from 'bun:test'
-import {dropPartials, keepEach, keepFound, type Partials} from './partials.ts'
+import {dropPartials, keepAsPartials, keepEach, keepFound, type Partials} from './partials.ts'
 
 describe('keepEach', () => {
     const run = (data: {partials?: Partials}, key: string, input: unknown, calls: string[]) =>
@@ -118,5 +118,33 @@ describe('keepFound - the shot planning, one beat at a time (#340)', () => {
         const second: string[] = []
         await plan(data, second, {question: {'beat-02': 'shots of beat-02, closer'}})
         expect(second).toEqual(['beat-02'])
+    })
+})
+
+describe('a re-plan of some beats (#973)', () => {
+    test('the plans that stay wait in the partials: a stop during the re-plan does not lose them, the next run asks only for the others', async () => {
+        const data: {partials?: Partials} = {}
+        keepAsPartials(data, 'shotMoments', {'beat-01': 'plan of beat-01', 'beat-02': 'plan of beat-02'})
+        const asked: string[] = []
+        const plan = async (stopAt?: string) => {
+            for (const beat of ['beat-01', 'beat-02', 'beat-03', 'beat-04'])
+                await keepFound(
+                    data,
+                    async () => {},
+                    'shotMoments',
+                    beat,
+                    {question: beat},
+                    async () => {
+                        if (beat === stopAt) throw new Error('stopped')
+                        asked.push(beat)
+                        return `plan of ${beat}`
+                    },
+                )
+        }
+        await expect(plan('beat-04')).rejects.toThrow('stopped')
+        expect(Object.keys(data.partials!.shotMoments!).sort()).toEqual(['beat-01', 'beat-02', 'beat-03'])
+        asked.length = 0
+        await plan()
+        expect(asked).toEqual(['beat-04'])
     })
 })
