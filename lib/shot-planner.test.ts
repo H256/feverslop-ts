@@ -220,6 +220,50 @@ describe('the music of a beat in the planner prompt', () => {
         expect(instructions).toContain('Everybody else with an instrument is "playing: no"')
         expect(instructions).toContain('A beat may list "music"')
     })
+
+    test('the players of a band play one calm action, a hit has its form, the instrument is in their hands from the first frame (#1024)', () => {
+        const band: PlanContext = {
+            ...context,
+            characters: [...context.characters, {id: 'kai', name: 'Kai', role: 'guitarist', prop: 'guitar', propStem: 'guitar'}],
+            shotCounts: {'beat-01': 2},
+            beatProps: {'beat-01': [{characterId: 'kai', prop: 'guitar', activePerShot: [true, true]}]},
+            beatSinging: {},
+        }
+        const {instructions} = planPrompt(band, [{...beat, characterIds: ['runa', 'kai']}], undefined, undefined, [], {from: 0, to: 2, total: 2, written: []})
+        expect(instructions).toContain('as ONE calm, steady action')
+        expect(instructions).toContain('never a fast run, a sweep, an arpeggio')
+        expect(instructions).toContain('"playing" is the form of one hit')
+        expect(instructions).toContain("in the player's hands from the first frame")
+        // the hands of a solo are not an extreme close-up of the fingers on the neck
+        expect(instructions).toContain('Never an extreme close-up, and never a view along the neck')
+        expect(instructions).toContain('never takes its speed from a hand or an instrument')
+    })
+
+    test('the shots that open a clip are marked for a beat with players, and the rule about them is told (#1024)', () => {
+        const band: PlanContext = {
+            ...context,
+            characters: [...context.characters, {id: 'kai', name: 'Kai', role: 'guitarist', prop: 'guitar', propStem: 'guitar'}],
+            shotCounts: {'beat-01': 4},
+            clipOpens: {'beat-01': [1, 3]},
+            beatProps: {'beat-01': [{characterId: 'kai', prop: 'guitar', activePerShot: [true, true, true, true]}]},
+            beatSinging: {},
+        }
+        const call = {from: 0, to: 4, total: 4, written: []}
+        const {input, instructions} = planPrompt(band, [{...beat, characterIds: ['runa', 'kai']}], undefined, undefined, [], call)
+        expect(input).toContain('"opensClip":[1,3]')
+        expect(instructions).toContain('A beat may list "opensClip"')
+        // without a player in the beat the mark and the rule are left out, whatever the clips are
+        const noPlayers = planPrompt({...band, beatProps: undefined}, [beat], undefined, undefined, [], call)
+        expect(noPlayers.input).not.toContain('opensClip')
+        expect(noPlayers.instructions).not.toContain('A beat may list "opensClip"')
+    })
+
+    test('a beat with no instrument of the song has none of the playing rules (#1024)', () => {
+        const {instructions} = planPrompt(context, [beat], undefined, undefined, [], {from: 0, to: 2, total: 2, written: []})
+        expect(instructions).not.toContain('as ONE calm, steady action')
+        expect(instructions).not.toContain('never takes its speed from a hand or an instrument')
+        expect(instructions).not.toContain('Never an extreme close-up, and never a view along the neck')
+    })
 })
 
 describe('musicStretches - the music along the way for the beats', () => {
