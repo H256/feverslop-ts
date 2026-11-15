@@ -133,7 +133,7 @@ select.source {
   padding: 12px 14px 20px;
   min-height: 0;
 }
-.empty {
+.empty:not(.sung, .part) {
   color: var(--muted);
   padding: 32px 16px;
   text-align: center;
@@ -363,6 +363,18 @@ select.source {
   border-radius: var(--radius-m);
   margin-bottom: 8px;
 }
+.version-pic {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  display: block;
+  border-radius: var(--radius-s);
+}
+.version-pic:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .version img,
 .version .noimg {
   width: 92px;
@@ -376,6 +388,6 @@ select.source {
   padding: 2px 8px;
   font-size: var(--text-s);
 }
-.btn-row {
+.version .btn-row {
   margin-top: 5px;
 }

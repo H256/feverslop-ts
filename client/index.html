@@ -8,7 +8,11 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <script>
       // before the first paint, so that a chosen theme does not flash the other one
-      document.documentElement.dataset.theme = localStorage.getItem('theme') ?? 'system'
+      try {
+        document.documentElement.dataset.theme = localStorage.getItem('theme') ?? 'system'
+      } catch {
+        document.documentElement.dataset.theme = 'system'
+      }
     </script>
   </head>
   <body>
