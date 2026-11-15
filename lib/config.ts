@@ -89,10 +89,23 @@ export type PlanConfig = {
     propPictures: boolean
 }
 
+// The lip-sync preview (#1016): the whole song as a close-up of a dummy singer, to judge the lyric timing before the real renders
+export type LipsyncConfig = {
+    // the factor on the pixels of videoResolution, like preview.scale (0.125 = a third of the width and height of the clips)
+    lipsyncScale: number
+    // 1 = one dummy sings everything, 2 = a second one sings the lines of the second singer (the clip cuts at each change)
+    lipsyncDummies: 1 | 2
+    // what the dummy looks like, as the subject of the preview prompt - no picture goes in, the model makes one up
+    lipsyncDummy: string
+    lipsyncDummy2: string
+}
+export const LIPSYNC_DUMMY = 'a plain adult man in his thirties with a neutral expression, short dark hair and a plain grey t-shirt'
+export const LIPSYNC_DUMMY2 = 'a plain adult woman in her thirties with a neutral expression, long blond hair and a plain white t-shirt'
+
 // a project may use another model than the settings - never another server or key
 export type LlmConfig = {llm: {model?: string}}
 
-export type ProjectConfig = RenderConfig & PlanConfig & LlmConfig
+export type ProjectConfig = RenderConfig & PlanConfig & LlmConfig & LipsyncConfig
 
 export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     seed: -1,
@@ -125,6 +138,10 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     locationView: 'auto',
     clipPrompt: 'full',
     propPictures: false,
+    lipsyncScale: 0.125,
+    lipsyncDummies: 1,
+    lipsyncDummy: LIPSYNC_DUMMY,
+    lipsyncDummy2: LIPSYNC_DUMMY2,
     llm: {},
 }
 export const workflowDir = join(import.meta.dir, '..', 'comfy', 'workflows')
@@ -198,6 +215,18 @@ export const previewProblem = (value: unknown): string | undefined => {
         ? undefined
         : `preview must be like {"scale": 0.25, "steps": 4} - scale above 0 up to 1, steps a whole number from 1, got ${JSON.stringify(value)}`
 }
+export const lipsyncScaleProblem = (value: unknown): string | undefined =>
+    typeof value === 'number' && value > 0 && value <= 1
+        ? undefined
+        : `lipsyncScale must be a factor on the pixels above 0 up to 1, like 0.125, got ${JSON.stringify(value)}`
+export const lipsyncDummiesProblem = (value: unknown): string | undefined =>
+    value === 1 || value === 2
+        ? undefined
+        : `lipsyncDummies must be 1 (one dummy sings everything) or 2 (a second one for the second singer), got ${JSON.stringify(value)}`
+export const lipsyncDummyProblem = (key: string, value: unknown): string | undefined =>
+    typeof value === 'string' && value.trim() && !/[\r\n\0]/.test(value)
+        ? undefined
+        : `${key} must be one line of text describing the dummy, got ${JSON.stringify(value)}`
 export function finishSettingProblem(value: unknown): string | undefined {
     if (typeof value !== 'boolean') {
         if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -255,6 +284,13 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
         fail(`vocalGap must be 0 (off) or a number of seconds like 1.5, got ${JSON.stringify(config.vocalGap)}`)
     if (typeof config.fightClips !== 'boolean') fail(`fightClips must be true or false, got ${JSON.stringify(config.fightClips)}`)
     for (const problem of [finalFpsProblem(config.finalFps), finishSettingProblem(config.finish), interpolationModelProblem(config.interpolationModel)])
+        if (problem) fail(problem)
+    for (const problem of [
+        lipsyncScaleProblem(config.lipsyncScale),
+        lipsyncDummiesProblem(config.lipsyncDummies),
+        lipsyncDummyProblem('lipsyncDummy', config.lipsyncDummy),
+        lipsyncDummyProblem('lipsyncDummy2', config.lipsyncDummy2),
+    ])
         if (problem) fail(problem)
     const leakWrong = leakRetriesProblem(config.leakRetries)
     if (leakWrong) fail(leakWrong)

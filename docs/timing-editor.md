@@ -29,3 +29,16 @@ When a fixed clip boundary crosses a word, select that word and choose its text 
 The **Clip text and windows** preview shows saved and draft clip text. A continued word produces `Rosma-` in one clip and `-rienbaum.` in the next; source lyrics are unchanged. Preview windows include 0.2 seconds of prompt padding. Singer-specific delivery and shot planning still happen in the plan stage.
 
 Undo/Redo work on complete actions (Ctrl+Z / Ctrl+Shift+Z, or the buttons). Saving remains separate from planning. Anchors, groups and review flags alone do not invalidate shot plans. Changing audible timing or word parts can invalidate affected plans and rendered clips. Local movement of a video clip boundary is a separate follow-up.
+
+## Lip-sync preview
+
+Before the real previews and the final render, **Lip-sync preview** (on the Timing page, or `bun run lipsync <id>`) renders the whole song as a frontal close-up of a dummy singer on a plain grey background - small, so it is quick. It tells whether the mouth follows the **saved** timing and whether the model makes up singing where the vocals stem only has bleed.
+
+- It uses the cut of the song (every clip is one clip of the preview, cut where the song is cut), the saved lyric timing and the configured video workflow with its own steps. Only the size is smaller: `lipsyncScale`, 0.125 of the pixels by default.
+- The vocals stem and the full song go in as in a real clip, and the prompt has the same parts and the same clip text (`From … to …, <Subject 1> sings <d>…</d>`, held notes, the time before the first word). The clips nobody sings in get the vocals stem too: a mouth that moves there is what the preview is for.
+- No story, cast or look is needed, and no picture: the dummy is a subject made of words (`lipsyncDummy`). With `lipsyncDummies` 2 a second dummy sings the lines of the second singer, with a cut at each change.
+- The files are `previews/lipsync/<clip>.mp4`. A clip made from another prompt, size or audio is marked outdated; **Render** makes the missing and outdated ones, **Render all again** puts the old ones away (`old/attempts/`). Nothing real goes stale by them.
+- The player plays the clips one after the other, with the song as their sound, and shows the line sung. It plays only when you press Play.
+- Cuts inside a clip (shots the plan would make) are not part of it - only the cuts of the song and the changes of the dummy.
+
+The four settings are on the Settings page (Lip-sync preview) and in `config.json`; `--scale=`, `--dummies=`, `--dummy=` and `--dummy2=` say another value for one run.

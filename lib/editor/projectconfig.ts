@@ -328,6 +328,43 @@ const DEFINITIONS: Definition[] = [
         for: 'both',
         note: 'Over everything, last, 0-100: 0 = off, about 3 is light.',
     },
+    {
+        key: 'lipsyncScale',
+        label: 'Size of the preview',
+        group: 'Lip-sync preview',
+        control: 'number',
+        step: 0.005,
+        for: 'music',
+        note: 'The Timing page can render the whole song as a close-up of a dummy singer, to judge the lyric timing before the real renders. This is the factor on the pixels of the video size: 0.125 is about a third of the width and height. Only the size is smaller - the workflow and its steps are the ones above. A change makes the previews made so far outdated.',
+    },
+    {
+        key: 'lipsyncDummies',
+        label: 'Dummy singers',
+        group: 'Lip-sync preview',
+        control: 'select',
+        for: 'music',
+        choices: () => [
+            {value: 1, label: '1: one dummy sings everything'},
+            {value: 2, label: '2: a second dummy sings the lines of the second singer, with a cut at each change'},
+        ],
+        note: 'Who sings in the preview. The singers are the ones of the Singers page; with one dummy the cuts are those of the song only.',
+    },
+    {
+        key: 'lipsyncDummy',
+        label: 'First dummy',
+        group: 'Lip-sync preview',
+        control: 'text',
+        for: 'music',
+        note: 'What the dummy looks like, as one line of text: the subject of the preview prompt. No picture goes in - the video model makes the face up.',
+    },
+    {
+        key: 'lipsyncDummy2',
+        label: 'Second dummy',
+        group: 'Lip-sync preview',
+        control: 'text',
+        for: 'music',
+        note: 'The same for the second dummy; only used with two dummies.',
+    },
 ]
 const definitionsOf = (target: EditorTarget) => DEFINITIONS.filter(d => d.for === 'both' || d.for === target.kind)
 

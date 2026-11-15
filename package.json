@@ -55,6 +55,7 @@
         "editor": "bun editor.ts",
         "add-view": "bun tools/add-view.ts",
         "refinish": "bun tools/refinish.ts",
+        "lipsync": "bun tools/lipsync.ts",
         "label": "bun tools/label.ts",
         "intro": "bun tools/intro.ts",
         "credits": "bun tools/credits.ts",
