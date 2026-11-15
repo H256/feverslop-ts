@@ -18,79 +18,13 @@ const filmableRules = `The film is generated clip by clip with an AI video model
 - A hand does one simple thing in a shot: hold something out, take it, put it down, push a door. Several fiddly steps on a mechanism (opening an umbrella, unlocking a door, tying a knot, loading a gun) are not shown being done - the shot starts with it done (the umbrella is already open in his hand) or shows only the last, simple step; the video model fumbles them.
 - Weather that falls or blows (rain, snow, wind, smoke) is in the picture of every outdoor shot of a scene that has it - falling streaks of rain, drifting snow in the air - and on the people and things in it (wet hair and clothes, dripping), not only in the sound or on the ground.`
 const str = {type: 'string'} as const
-const strings = {type: 'array', items: str} as const
 const object = (properties: Record<string, unknown>) => ({type: 'object', additionalProperties: false, required: Object.keys(properties), properties})
-
-// The whole shape of a film answer (#995). Every field of the instructions is listed: a server that keeps the answer to a schema
-// leaves out what the schema does not name (see the comment on coveragePrompt).
-const briefSchema = object({title: str, language: str, logline: str, genre: str, tone: str, setting: str})
-const outlineSchema = object({
-    characters: {type: 'array', items: object({name: str, role: str, appearance: str, voice: str})},
-    scenes: {
-        type: 'array',
-        items: object({heading: str, characters: strings, summary: str, purpose: str, begins: str, changes: str, seconds: {type: 'number'}}),
-    },
-    setups: {type: 'array', items: object({event: str, setup: str})},
-})
-const castSchema = object({
-    characters: {
-        type: 'array',
-        items: object({
-            name: str,
-            aliases: strings,
-            role: str,
-            appearance: str,
-            voice: str,
-            voiceOnly: {type: 'boolean'},
-            states: {type: 'array', items: object({name: str, change: str, from: {type: 'integer'}})},
-        }),
-    },
-    locations: {type: 'array', items: object({name: str, aliases: strings, description: str})},
-})
 const optional = (properties: Record<string, unknown>, required: string[]) => ({type: 'object', additionalProperties: false, required, properties})
-// one element of a scene: an action line, or a line of dialogue that must say who speaks, how and in which language (#995)
-const elementSchema = {
-    anyOf: [
-        optional({type: {type: 'string', enum: ['action']}, text: str}, ['type', 'text']),
-        // a dialogue line must name who speaks, how and in which language - left optional, the model leaves them out
-        optional(
-            {
-                type: {type: 'string', enum: ['dialogue']},
-                speaker: str,
-                text: str,
-                kind: {type: 'string', enum: ['spoken', 'offscreen', 'voiceover']},
-                delivery: str,
-                language: str,
-                translation: str,
-            },
-            ['type', 'speaker', 'text', 'kind', 'language'],
-        ),
-    ],
-}
-const screenplayScenes = {
-    type: 'array',
-    items: optional(
-        {setting: {type: 'string', enum: ['INT', 'EXT', 'INT/EXT']}, location: str, time: str, shot: str, elements: {type: 'array', items: elementSchema}},
-        ['setting', 'location', 'time', 'elements'],
-    ),
-}
-const screenplaySchema = object({scenes: screenplayScenes})
-const adaptSchema = object({characters: {type: 'array', items: object({name: str, role: str, appearance: str, voice: str})}, scenes: screenplayScenes})
-const annotateSchema = object({
-    scenes: {
-        type: 'array',
-        items: object({location: str, time: str, shot: str, actions: strings, lines: {type: 'array', items: object({language: str, delivery: str})}}),
-    },
-})
-const notesSchema = object({notes: {type: 'array', maxItems: 8, items: str}})
-const propsSchema = object({props: {type: 'array', maxItems: 6, items: object({name: str, used: str, shape: str, colour: str, material: str})}})
-const viewsSchema = object({views: {type: 'array', minItems: 5, maxItems: 5, items: object({name: str, shows: str})}})
 const editsSchema = object({edits: {type: 'array', items: optional({scene: str, element: {type: 'integer'}, text: str, time: str}, ['scene'])}})
 
 export function briefPrompt(source: string, mode: Brief['mode'], dialogueLanguage: string | undefined): AskOptions {
     return {
         maxTokens: 4096,
-        schema: briefSchema,
         input: `${mode === 'screenplay' ? 'Screenplay' : 'Story idea'}:
 ${source}`,
         instructions: `You are a script editor. You are given ${mode === 'screenplay' ? 'a screenplay' : 'a story idea for a short film'} in any language. Answer only with JSON:
@@ -123,7 +57,6 @@ export function outlinePrompt(idea: string, brief: Brief, targetSeconds: number)
     return {
         maxTokens: 8192,
         reasoning: 'medium',
-        schema: outlineSchema,
         input: `Story idea:
 ${idea}
 
@@ -254,7 +187,6 @@ const screenplaySchema = {
 export function screenplayWritePrompt(brief: Brief, outline: Outline): AskOptions {
     return {
         maxTokens: 16384,
-        schema: screenplaySchema,
         reasoning: 'medium',
         input: `Title: ${brief.title}
 Logline: ${brief.logline}
@@ -290,7 +222,6 @@ export function fountainAnnotatePrompt(
 ): AskOptions {
     return {
         maxTokens: 12288,
-        schema: annotateSchema,
         reasoning: 'low',
         input: JSON.stringify({scenes}),
         instructions: `You are a script supervisor. A screenplay has been read into scenes; you add what the structure cannot say. Do not rewrite dialogue - it is not part of your answer. Answer only with JSON: {"scenes": [{"location": "", "time": "", "shot": "", "actions": [], "lines": [{"language": "", "delivery": ""}]}]} - one entry per scene, in the same order.
@@ -331,7 +262,6 @@ export function fountainAnnotatePrompt(
 export function screenplayParsePrompt(source: string, language: string, missing: string[] = []): AskOptions {
     return {
         maxTokens: 24576,
-        schema: screenplaySchema,
         reasoning: 'low',
         input: `${missing.length ? `Your last attempt changed or lost these dialogue lines - they must appear exactly as in the screenplay, character for character:\n${missing.map(m => `- ${m}`).join('\n')}\n\n` : ''}Screenplay:
 ${source}`,
@@ -357,7 +287,6 @@ export function castPrompt(screenplay: Screenplay, outline?: Outline, problems: 
     return {
         maxTokens: 12288,
         reasoning: 'medium',
-        schema: castSchema,
         input: `${setting ? `Setting (era and place): ${setting}\n\n` : ''}${problems.length ? `Your last answer left these out - every speaker cue and every slugline place of the screenplay must be covered by an alias:\n${problems.map(p => `- ${p}`).join('\n')}\n\n` : ''}${
             outline
                 ? `Planning notes (use them for appearance and voice where they cover a character):
@@ -445,7 +374,6 @@ export function scriptNotesPrompt(screenplay: Screenplay, idea?: string, roleCha
                   .join('\n')}`
             : ''
     return {
-        schema: notesSchema,
         // thinking and answer share the limit: a long script made the model think through all of it and never answer
         maxTokens: 12288,
         reasoning: 'low',
@@ -480,7 +408,6 @@ ${screenplayToText(screenplay)}`,
  */
 export function propsPrompt(screenplay: Screenplay, cast: FilmCast): AskOptions {
     return {
-        schema: propsSchema,
         maxTokens: 4096,
         reasoning: 'low',
         input: `Cast: ${cast.characters.map(c => `${c.name} - ${c.appearance}`).join('\n')}
@@ -522,7 +449,6 @@ ${screenplayToText(screenplay)}`,
 // The one style that fits the film: genre, tone, setting and audience decide. No draw and no forced variety - the look has to carry the tone of the film.
 export function styleChoicePrompt(brief: Brief, summary: string, styleList: {id: string; name: string}[]): AskOptions {
     return {
-        schema: object({style: {type: 'string', enum: styleList.map(s => s.id)}, reason: str}),
         maxTokens: 2048,
         input: `Choose the film style from the list that suits this short film best, for a film generated with AI image and video models.
 The look has to carry the tone of the film: genre, tone, setting and audience decide, and the style that fits is the one to choose - even if it is the obvious one, not the most unusual.
@@ -553,7 +479,6 @@ summary: ${summary}`,
  */
 export function locationViewsPrompt(location: FilmLocation, hero: string, scenes: string): AskOptions {
     return {
-        schema: viewsSchema,
         maxTokens: 4096,
         reasoning: 'low',
         input: `Place: ${location.name}
@@ -967,7 +892,6 @@ export function adaptScreenplayPrompt(
         `- ${c.name}${c.aliases?.length ? ` (cues: ${c.aliases.join(', ')})` : ''}: ${c.role}`
     return {
         maxTokens: 16384,
-        schema: adaptSchema,
         reasoning: 'medium',
         input: `Title: ${brief.title}
 Logline: ${brief.logline}
