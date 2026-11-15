@@ -1,6 +1,7 @@
 import {shallowRef} from 'vue'
 import type {EditorServer} from '../../../shared/workspace'
 import {workspace} from '../api/workspace'
+import {viewerStore} from '../lib/browser-store'
 import {joined} from '../lib/format'
 import {defineService} from './service'
 
@@ -30,7 +31,7 @@ export function createServers() {
   }
   const kept = (): string[] => {
     try {
-      const value: unknown = JSON.parse(localStorage.getItem(KEPT) ?? '[]')
+      const value: unknown = JSON.parse(viewerStore.get(KEPT) ?? '[]')
       return Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string') : []
     } catch {
       return []
@@ -43,7 +44,7 @@ export function createServers() {
     return wanted.length ? wanted : up
   }
   const choose = (names: string[]) => {
-    localStorage.setItem(KEPT, JSON.stringify(names))
+    viewerStore.set(KEPT, JSON.stringify(names))
     // none of them reachable: the run says so itself
     chosen = names.length ? names : undefined
   }

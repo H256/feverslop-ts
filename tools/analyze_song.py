@@ -27,6 +27,10 @@ tempo, beat_frames = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
 bpm = float(np.atleast_1d(tempo)[0])
 beats = librosa.frames_to_time(beat_frames, sr=sr)
 
+# a song with fewer than two bars of beats (silence, noise, a very short file) has no phase to pick: a mean over nothing is NaN
+if len(beats) < 8:
+    sys.exit(f"Song analysis: found only {len(beats)} beat(s) in {duration:.1f} s - the song is too short, too quiet or has no steady beat")
+
 # Downbeats: assume 4/4 and pick the beat phase with the strongest onsets
 phase = max(range(4), key=lambda p: onset_env[beat_frames[p::4]].mean())
 downbeats = beats[phase::4]
