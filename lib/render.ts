@@ -310,6 +310,8 @@ export class Renderer implements Disposable {
     ready?: Promise<Server[]>
     connected: Server[] = []
     machines = new Map<string, ReturnType<typeof describeMachine>>() // server name -> GPU and versions
+    // what this run put into a server's input folder: server + remote path -> the source file (path, size, time) - sent once, not per clip
+    uploaded = new Map<string, string>()
     lastModels = new Map<string, string>() // server name -> the models its last job used (another set means a cold start)
     renderMs = new Map<string, number>() // target -> time spent on its ComfyUI job(s)
     busy = new Set<string>() // server names

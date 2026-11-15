@@ -25,6 +25,19 @@ export const MIN_WORD_SEC = 0.05 // shorter than this is a word without a real p
 const LINE_GAP_BARS = 4 // more silence than this between two words of one line: one of them was matched somewhere else
 // (largest real gap inside a line over the projects folder: 3.55 bars, the wrong ones 4.2 to 30)
 
+// Japanese, Chinese and Thai are written without spaces: a line would be one "word" and could not be placed word by word (#977)
+const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}]/u
+const segmenter = new Intl.Segmenter(undefined, {granularity: 'word'})
+
+/** The words of a line: by its spaces, and where a part is written without them, by the language's own word boundaries. */
+export function splitWords(text: string): string[] {
+    return text.split(' ').flatMap(part =>
+        UNSPACED.test(part)
+            ? [...segmenter.segment(part)].filter(s => s.isWordLike).map(s => s.segment)
+            : [part],
+    )
+}
+
 export type SungLine = {line: number; sectionIndex: number; section: string; text: string; words: string[]}
 
 /**
@@ -39,7 +52,7 @@ export function sungLines(lyricSections: LyricSection[]): SungLine[] {
                 .replace(/\([^)]*\)/g, ' ')
                 .replace(/\s+/g, ' ')
                 .trim()
-            const words = text.split(' ').filter(w => normalizeWord(w))
+            const words = splitWords(text).filter(w => normalizeWord(w))
             if (words.length) lines.push({line: lines.length, sectionIndex, section: section.label, text, words})
         }
     })
