@@ -1,3 +1,4 @@
+import type {MusicMap} from './project.ts'
 // All video timing is done in whole frames on one grid for the whole song. A clip owns the frames
 // [frameStart, frameStart + frames), consecutive clips share their boundary frame, so the clips add
 // up to exactly the song's frame count - no rounding drift, whatever the clip lengths are.
@@ -42,3 +43,6 @@ export function formatTimestamp(seconds: number) {
     const minutes = Math.floor(seconds / 60)
     return `${String(minutes).padStart(2, '0')}:${(seconds - minutes * 60).toFixed(3).padStart(6, '0')}`
 }
+
+/** The length of a bar in seconds: its beats at the song's tempo - 4 unless the analysis found a waltz. */
+export const barSeconds = (music: Pick<MusicMap, 'bpm' | 'beatsPerBar'>) => ((music.beatsPerBar ?? 4) * 60) / music.bpm

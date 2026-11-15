@@ -31,9 +31,23 @@ beats = librosa.frames_to_time(beat_frames, sr=sr)
 if len(beats) < 8:
     sys.exit(f"Song analysis: found only {len(beats)} beat(s) in {duration:.1f} s - the song is too short, too quiet or has no steady beat")
 
-# Downbeats: assume 4/4 and pick the beat phase with the strongest onsets
-phase = max(range(4), key=lambda p: onset_env[beat_frames[p::4]].mean())
-downbeats = beats[phase::4]
+# The meter: 4 beats to the bar, or 3 when the accent comes round every third beat clearly more than every fourth (a waltz; #994).
+# How strongly a phase of m beats stands out from the beats in general, in units of their spread - the best phase of each meter.
+strength = onset_env[beat_frames].astype(float)
+
+
+def accent(m: int) -> float:
+    spread = strength.std() or 1.0
+    return max((strength[p::m].mean() - strength.mean()) / spread for p in range(m))
+
+
+# conservative: 3 only with enough beats to tell and a clear margin - a 4/4 song stays 4/4 whatever its pattern. Measured on 14 of
+# the project songs (all 4/4): the accent of a third beat 0.02-0.16, of a fourth 0.04-0.32; a synthetic waltz 0.26 against 0.06.
+beats_per_bar = 3 if len(beats) >= 24 and accent(3) > 0.2 and accent(3) > accent(4) * 1.5 + 0.1 else 4
+
+# Downbeats: pick the beat phase with the strongest onsets
+phase = max(range(beats_per_bar), key=lambda p: onset_env[beat_frames[p::beats_per_bar]].mean())
+downbeats = beats[phase::beats_per_bar]
 
 # Energy per bar, normalized 0..1
 rms = librosa.feature.rms(y=y)[0]
@@ -89,6 +103,7 @@ for label, start, end in zip(labels, starts, ends):
 
 print(json.dumps({
     "bpm": round(bpm, 2),
+    "beatsPerBar": beats_per_bar,
     "durationSec": round(duration, 3),
     "downbeats": [round(float(t), 3) for t in downbeats],
     "barEnergy": [round(float(e), 3) for e in bar_energy],

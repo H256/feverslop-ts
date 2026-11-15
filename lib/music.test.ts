@@ -430,3 +430,18 @@ describe('a line starting at the end of a clip', () => {
         expect(cut[0]!.end).toBe(8)
     })
 })
+
+describe('the meter (#994)', () => {
+    test('a bar is four beats unless the analysis found a waltz', async () => {
+        const {barSeconds} = await import('./frames.ts')
+        expect(barSeconds({bpm: 120})).toBe(2)
+        expect(barSeconds({bpm: 120, beatsPerBar: 4})).toBe(2)
+        expect(barSeconds({bpm: 120, beatsPerBar: 3})).toBe(1.5)
+    })
+    test('beatsPerBar is 3 or 4, and absent in a map from before it', () => {
+        const map = {bpm: 120, durationSec: 10, downbeats: [0, 2], barEnergy: [0.5], sections: []}
+        expect(musicMapProblem(map)).toBeUndefined()
+        expect(musicMapProblem({...map, beatsPerBar: 3})).toBeUndefined()
+        expect(musicMapProblem({...map, beatsPerBar: 5})).toContain('beatsPerBar')
+    })
+})
