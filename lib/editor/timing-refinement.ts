@@ -48,9 +48,7 @@ export function buildRefinement(data: Project, candidates: Candidate[], language
             continue
         }
         if (line.confidence === 0 && !line.presenceByHand) {
-            entry.status = 'omit'
-            entry.reason = 'No words matched the transcript. Proposed omission, not proof of silence.'
-            report.change.lines.push({line: line.line, off: true})
+            entry.reason = 'No words matched the transcript. Presence is unknown; original timing and sung state retained. Listen and correct manually.'
             continue
         }
         const candidate = candidates.find(c => c.line === line.line)
@@ -113,7 +111,9 @@ export function buildRefinement(data: Project, candidates: Candidate[], language
     let removed: boolean
     do {
         removed = false
-        const audible = lines.filter(l => !l.off && !report.change.lines.some(c => c.line === l.line && c.off))
+        // Unmatched unconfirmed placeholders stay visible, but their interpolated
+        // spans are not reliable collision anchors. Explicit decisions still are.
+        const audible = lines.filter(l => !l.off && (l.confidence > 0 || l.byHand || l.presenceByHand || l.words.some(w => w.anchor)))
         for (let i = 1; i < audible.length; i++) {
             const left = audible[i - 1]!,
                 right = audible[i]!
@@ -138,6 +138,8 @@ export function buildRefinement(data: Project, candidates: Candidate[], language
 }
 
 export function applyRefinement(data: Project, report: TimingRefinement, requests: Pick<ClipRequest, 'id' | 'beatId'>[]) {
+    if (report.change.lines.some(line => line.off !== undefined))
+        throw new Error('This older proposal changes lyric presence. Prepare refinement again; leave lines out manually after listening.')
     if (refinementFingerprint(data) !== report.fingerprint) throw new Error('Timing or singers changed. Prepare the refinement again.')
     const old = structuredClone(data.lyricsTiming!)
     const result = applyTiming(data, report.change, requests)
