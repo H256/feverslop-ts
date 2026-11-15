@@ -257,10 +257,6 @@ const LATE_ONSET_SEC = 1
 const LATE_ONSET_COST = 0.8
 
 /**
- * Cuts every section into clips of a power-of-two bar count that fits the hardware limit.
- * With the lyrics timing, the sections start where their vocals start and every clip gets the words sung in it.
- */
-/**
  * Splits the bars of a section into clips of 1..maxBars bars so that as few sung words as possible are cut in two by a clip
  * boundary: a clip that ends in the middle of a word leaves the video model half a word at its end and a fragment at the start
  * of the next clip. Only the timing of the words is used. Dynamic programming over the bar boundaries, minimizing
@@ -401,6 +397,10 @@ export function pullLateOnsets<T extends Pick<Slot, 'start' | 'end' | 'bars'>>(
     }
 }
 
+/**
+ * Cuts every section into clips of a power-of-two bar count that fits the hardware limit.
+ * With the lyrics timing, the sections start where their vocals start and every clip gets the words sung in it.
+ */
 export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], maxClipSec: number, timing?: LyricsTiming, vocalGap = 0): Timeline {
     const barSec = 240 / music.bpm
     const barsPerSlot = 2 ** Math.floor(Math.log2(Math.max(1, Math.floor(maxClipSec / barSec))))

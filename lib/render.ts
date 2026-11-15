@@ -84,22 +84,22 @@ export async function renderedFrames(clip: {frames: number; startsFrom?: string}
     return renderFrames?.(clip.frames + lead) ?? clip.frames + lead
 }
 
-// description: the plain visual description (characterDescriptions/locationDescriptions), not the image prompt -
-// used as the subject of the sequence-sheet video prompt (see renderSequenceSheet), which needs to say what the
-// subject looks like without the medium/style/pose/background language the image prompt carries.
-/** The id of the request a clip is rendered from (lib/render-spec.ts) - what its sidecar records and the final video compares. */
 /** The steps of config.json for a workflow's options - only what is set; -1 leaves the workflow's own. */
 export const stepOptions = (config: Pick<RenderConfig, 'videoSteps' | 'videoRefineSteps'>) => ({
     ...(config.videoSteps !== -1 ? {steps: config.videoSteps} : {}),
     ...(config.videoRefineSteps !== -1 ? {refineSteps: config.videoRefineSteps} : {}),
 })
 
+/** The id of the request a clip is rendered from (lib/render-spec.ts) - what its sidecar records and the final video compares. */
 export const clipFingerprint = (
     clip: ClipRequest,
     projectDir: string,
     config: Pick<RenderConfig, 'videoWorkflow' | 'videoResolution'> & Partial<Pick<RenderConfig, 'videoAspect' | 'videoSteps' | 'videoRefineSteps'>>,
 ) => specId(clipSpec(clip, projectDir, config))
 
+// description: the plain visual description (characterDescriptions/locationDescriptions), not the image prompt -
+// used as the subject of the sequence-sheet video prompt (see renderSequenceSheet), which needs to say what the
+// subject looks like without the medium/style/pose/background language the image prompt carries.
 // look: another look of the character `base` (a film's states) - with sequence sheets its sheet starts on base's anchor and
 // shows the change, instead of an anchor drawn from the prompt (renderSequenceSheet)
 export type PictureJob = {

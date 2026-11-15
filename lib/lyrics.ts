@@ -563,10 +563,6 @@ export function tightenStarts(timing: LyricsTiming, peaks: number[]): {timing: L
     return {timing: {...timing, lines}, moved}
 }
 
-/**
- * The words sung inside a clip, grouped per line. A word belongs to the clip whose frames contain its start
- * (lib/frames.ts), times are relative to the clip's first frame.
- */
 /** The timing without the lines left out on the Timing page (`off`): what is sung. */
 export const sungOnly = (timing: LyricsTiming): LyricsTiming => (timing.lines.some(l => l.off) ? {...timing, lines: timing.lines.filter(l => !l.off)} : timing)
 
@@ -575,6 +571,10 @@ export function vocalText(words: TimedWord[], trailing = false, leading = !!word
     return (leading ? '-' : '') + words.map((w, i) => `${i && !w.joined ? ' ' : ''}${w.text}`).join('') + (trailing ? '-' : '')
 }
 
+/**
+ * The words sung inside a clip, grouped per line. A word belongs to the clip whose frames contain its start
+ * (lib/frames.ts), times are relative to the clip's first frame.
+ */
 export function slotVocals(slot: Pick<Slot, 'start' | 'end'>, timing: LyricsTiming): SlotVocal[] {
     const first = frameAt(slot.start)
     const last = frameAt(slot.end)
