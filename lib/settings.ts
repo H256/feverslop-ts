@@ -345,7 +345,7 @@ const splitList = (value: string) =>
 export function authHeaders(server: ComfyServer): Record<string, string> {
     const c = server.credentials
     if (c?.type === 'bearer_token') return {Authorization: `Bearer ${c.token}`}
-    if (c?.type === 'basic') return {Authorization: `Basic ${btoa(`${c.username}:${c.password}`)}`}
+    if (c?.type === 'basic') return {Authorization: `Basic ${Buffer.from(`${c.username}:${c.password}`).toString('base64')}`}
     return {}
 }
 

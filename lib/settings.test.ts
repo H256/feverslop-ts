@@ -2,7 +2,7 @@ import {mkdtempSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {afterEach, describe, expect, test} from 'bun:test'
-import {loadSettings, maskSecret, normalizeUrl, parseComfyEntries, readSettingsFile} from './settings.ts'
+import {authHeaders, loadSettings, maskSecret, normalizeUrl, parseComfyEntries, readSettingsFile} from './settings.ts'
 
 const envKeys = [
     'FEVERSLOP_SETTINGS',
@@ -125,4 +125,9 @@ describe('settings', () => {
         expect((await loadSettings()).llm.vision).toEqual({apiKey: 'env-vision-key'})
         expect((await loadSettings()).sources.visionApiKey).toBe('env')
     })
+})
+
+test('authHeaders: basic credentials with non-ASCII characters are UTF-8 base64 (#976)', () => {
+  const header = authHeaders({credentials: {type: 'basic', username: 'jörg', password: 'pä$$'}} as never)
+  expect(Buffer.from(header.Authorization!.slice(6), 'base64').toString('utf8')).toBe('jörg:pä$$')
 })

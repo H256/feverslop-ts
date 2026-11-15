@@ -63,6 +63,7 @@ test('the built page cannot swallow API errors or bypass host/origin checks', ()
         expect((await handler(new Request('http://localhost/workspace-assets/missing.js'))).status).toBe(404)
         expect((await handler(new Request('http://evil.example/workspace-assets/assets/app-12345678.js'))).status).toBe(403)
         expect((await handler(new Request('http://localhost/api/run', {method: 'POST', headers: {origin: 'http://evil.example'}}))).status).toBe(403)
+expect((await handler(new Request('http://localhost/api/run', {method: 'POST', headers: {origin: 'null'}}))).status).toBe(403)
         expect((await handler(new Request('http://localhost/workspace-assets/assets/app-12345678.js', {method: 'POST'}))).status).toBe(404)
     }))
 
