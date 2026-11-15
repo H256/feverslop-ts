@@ -385,8 +385,8 @@ onMounted(() => {
       <template v-if="refinement">
         <p>
           {{ refinement.entries.filter(e => e.status === 'refined').length }} refined ·
-          {{ refinement.entries.filter(e => e.status === 'omit').length }} proposed omissions ·
-          {{ refinement.entries.filter(e => e.status === 'review').length }} need manual review. Unheard lyrics may still be sung; check omissions.
+          {{ refinement.entries.filter(e => e.status === 'review' || e.status === 'omit').length }} need manual review. Refinement keeps lines sung or left out
+          as they are. A missing transcript match does not mean a line was not sung.
         </p>
         <div style="max-height: 20rem; overflow: auto">
           <p v-for="entry in refinement.entries" :key="entry.line">

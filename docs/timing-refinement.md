@@ -2,7 +2,7 @@
 
 Whisper still supplies the rough timing and text-presence evidence. An optional local phoneme pass refines that timing using `facebook/wav2vec2-lv-60-espeak-cv-ft`, pinned to revision `ae45363bf3413b374fecd9dc8bc1df0e24c3b7f4`. This is multilingual speech alignment, not a singing-specialized model or a guarantee of lip sync.
 
-In the Timing page, open **Refine timing from vocals**, choose German, English or French, and **Prepare refinement**. Save or discard existing edits first. The proposal lists old/new line bounds, provides listening buttons, and explains omissions or rejected results. **Apply proposal** saves the usable changes together; **Dismiss** leaves the timing alone. Newly refined words remain unchecked.
+In the Timing page, open **Refine timing from vocals**, choose German, English or French, and **Prepare refinement**. Save or discard existing edits first. The proposal lists old/new line bounds, provides listening buttons, and explains missing evidence or rejected results. **Apply proposal** saves the usable timing changes together; **Dismiss** leaves the timing alone. Newly refined words remain unchecked. Applying refinement never leaves lines out.
 
 The CLI uses the same service:
 
@@ -26,11 +26,21 @@ lose necessary context and misplace repeated lyrics.
 Protection rules:
 
 - Hand edits, word anchors, structural groups/joins, disabled lines and ad-libs are retained.
-- A line with zero transcript-match confidence is proposed for omission, never silently forced into the audio. This is not proof that it was not sung; partially matched lines remain active. Explicitly re-enabling a line records your presence decision so a later pass does not omit it again.
+- A line with zero transcript-match confidence is marked for manual review; its timing and sung/left-out state remain unchanged. Missing text evidence is not proof that it was not sung. Refinement never changes lyric presence. Leave out lines explicitly after listening, using the normal editor/CLI action. Older saved proposals containing presence changes must be prepared again. Explicitly re-enabling a line records your presence decision and allows it to be considered for alignment.
 - Long notes have no generic maximum word duration. A line may be shortened at an independently confirmed next onset only when both lines have the same single singer and no internal singer change. A second estimate from the same model is not a confirmed onset.
 - Onset movements over three seconds, invalid words, excerpt-edge results and new same-singer collisions are withheld. Collisions between independently analysed windows may need a manual anchor before another pass.
+- Unmatched, unconfirmed placeholder spans remain visible for correction, but are not reliable collision anchors. Manual timing, word anchors and explicit presence decisions still participate in collision protection. This does not make uncertain neighbouring timing acoustically correct.
 - Applying a stale proposal fails if timing, singers, duration, stem reference or the stem file changed. Preparing a proposal does not change the song timing.
 
 Applying updates clip vocals and invalidates affected shot plans through the existing timing save logic. Rebuild those plans to update video prompts. It does not recut the timeline or regenerate videos. The previous `lyricsTiming` object is saved under `.timing-refinement/before-<proposal-id>.json`; the latest proposal and candidate output are kept alongside it for diagnosis. These are local project artifacts, not a new pipeline cache stage. Existing projects and normal planning do not automatically download or run this experimental model.
 
-The isolated-song test covered 14 lines from “Mehr als Code”: 10 refinement proposals, 2 proposed omissions and 2 withheld collisions. It reproduced the expected omissions and the held “Herz” ending at 83.82 seconds. A 96 ms collision between separate windows was rejected by policy. The known “Zahl” boundary remains inaccurate without a confirmed next onset: plausible model output still requires listening. The real project was not altered by this test.
+Historical baseline test, before the presence-preserving fix: 14 lines from “Mehr als Code” yielded 10 refinements, 2 omissions and 2 withheld collisions. The omission behavior has been removed. The held “Herz” ended at 83.82 seconds; a 96 ms collision between separate windows was rejected. The known “Zahl” boundary remains inaccurate without a confirmed next onset: plausible model output still requires listening.
+
+Regression replay on “Flimmernder Hof” reused the saved pre-apply timing and raw
+candidate output, without running inference or writing the project. Previously:
+35 refined, 18 omitted, 11 review. After the fix: the exact same 35 timing changes,
+29 review, zero presence changes. This preserves useful candidates rather than
+rolling all timing back. It does not repair inaccurate word boundaries. Already
+applied omissions remain until explicitly re-enabled; no automatic recovery or
+reset of later user edits occurs. In particular, the missing “Sagst ganz leise”
+was absent from model input, not acoustically determined to be unsung.
