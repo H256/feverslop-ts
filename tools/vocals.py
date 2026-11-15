@@ -166,7 +166,7 @@ def separate(song: str, stems_dir: str, model_name: str = "htdemucs_ft", only: l
 
 
 def vocal_activity(vocals: str, *, frame_length=2048, hop_length=512, min_duration=0.4, merge_gap=0.5,
-                    low_percentile=20.0, high_percentile=85.0, ratio=0.35) -> list[dict]:
+                    low_percentile=20.0, high_percentile=85.0, ratio=0.35, floor_db=-50.0) -> list[dict]:
     """Time ranges where the vocals stem is loud relative to itself, independent of whisper - screamed/growled
     vocals that whisper can't transcribe still show up here, giving the alignment step real acoustic grounding
     to place interpolated words in instead of spreading them blindly across a whole silent-looking gap."""
@@ -179,7 +179,9 @@ def vocal_activity(vocals: str, *, frame_length=2048, hop_length=512, min_durati
     low, high = np.percentile(rms, low_percentile), np.percentile(rms, high_percentile)
     threshold = low + (high - low) * ratio
     times = librosa.frames_to_time(np.arange(len(rms)), sr=sr, hop_length=hop_length)
-    active = rms > threshold
+    # relative to the stem itself is not enough: a stem that only carries the bleed of the others (a song without vocals, an
+    # instrumental part) has a loud end too - nothing below the absolute floor is singing (#993)
+    active = (rms > threshold) & (rms > 10 ** (floor_db / 20))
 
     ranges: list[tuple[float, float]] = []
     start = None
