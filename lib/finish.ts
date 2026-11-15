@@ -1,4 +1,4 @@
-import {renameSync} from 'node:fs'
+import {renameSync, rmSync} from 'node:fs'
 import {colorMatchFilter, type Span} from './colormatch.ts'
 import {probeVideo} from './assemble.ts'
 import {startSpinner, styles} from './log.ts'
@@ -68,6 +68,23 @@ export function finishFilter(f: Finish, match?: string): string {
 /** `<name>.mp4` -> `<name>-finished.mp4` */
 export const finishedName = (video: string) => video.replace(/\.mp4$/, '-finished.mp4')
 
+/** On Windows the rename fails while a player holds the target open: a few tries, then the words for it (#991). */
+async function renameWhenFree(from: string, to: string) {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            renameSync(from, to)
+            return
+        } catch (error) {
+            const code = (error as NodeJS.ErrnoException).code
+            if ((code !== 'EBUSY' && code !== 'EPERM') || attempt >= 5) {
+                if (code === 'EBUSY' || code === 'EPERM') throw new Error(`${to} is open in another program (a player?) - close it and finish again; the new video is kept as ${from}`)
+                throw error
+            }
+            await Bun.sleep(400)
+        }
+    }
+}
+
 /**
  * Writes the finished copy of a video next to it; the sound is copied as it is. `spans`: where each clip is in the video, in
  * seconds - needed for the color match. Returns the file and the filter chain used.
@@ -120,9 +137,13 @@ export async function finishVideo(video: string, f: Finish, spans: Span[] = []):
             if (found) frame = Number(found.at(-1)!.slice(6))
         }
         if ((await proc.exited) !== 0) throw new Error(`ffmpeg could not finish ${video}:\n${await stderr}`)
+    } catch (error) {
+        // a failed or stopped run leaves no half-written file next to the video
+        rmSync(partial, {force: true})
+        throw error
     } finally {
         stopSpinner()
     }
-    renameSync(partial, target)
+    await renameWhenFree(partial, target)
     return {file: target, filter}
 }

@@ -1,5 +1,5 @@
 import {describe, expect, test} from 'bun:test'
-import {buildClipRequests, type Input, layoutLine, singingPerBeat} from './compose.ts'
+import {buildClipRequests, type Input, layoutLine, singingPerBeat, splitSentences} from './compose.ts'
 import type {BeatShots, Character, StoryBeat} from './project.ts'
 import {slotVocals} from './lyrics.ts'
 
@@ -548,5 +548,12 @@ describe('the layout of the place', () => {
         expect(layoutLine(false, 'Elias walks down the corridor.', undefined)).toContain(
             'as the scene began - a floor plan, not a shot of its own; everyone is now where the shots below put them',
         )
+    })
+})
+
+describe('splitSentences (#1004)', () => {
+    test('a full stop after an abbreviation does not end the sentence', () => {
+        expect(splitSentences('Warm light, e.g. candles. A second sentence. Dr. Who stays.')).toEqual(['Warm light, e.g. candles.', 'A second sentence.', 'Dr. Who stays.'])
+        expect(splitSentences('Plain. Two!  Three?')).toEqual(['Plain.', 'Two!', 'Three?'])
     })
 })

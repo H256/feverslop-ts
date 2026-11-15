@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import PageBar from '../../components/PageBar.vue'
 import CastMemberForm from './CastMemberForm.vue'
+import {stableKeys} from '../../lib/stable-key'
 import {newMember, type DraftMember} from './forms'
 
 /**
@@ -11,9 +12,7 @@ const props = defineProps<{members: DraftMember[]; title: string; kind: 'charact
 const add = () => props.members.push(newMember(props.kind))
 const remove = (n: number) => props.members.splice(n, 1)
 // a stable key for each form, new ones too: removing one does not move the typing of another
-const keys = new WeakMap<object, number>()
-let next = 0
-const keyOf = (member: DraftMember) => keys.get(member) ?? keys.set(member, next++).get(member)!
+const keyOf = stableKeys<DraftMember>()
 </script>
 
 <template>

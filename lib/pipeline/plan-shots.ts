@@ -405,12 +405,22 @@ export async function planShots(run: ShotRun) {
                           properties: {moments: {type: 'array', minItems: risky.length, maxItems: risky.length, items: {type: 'string'}}},
                       },
                   })
-                  if (rewritten.moments?.length === risky.length)
+                  if (rewritten.moments?.length === risky.length) {
+                      // a name the rewrite wrote differently is mapped as in the planning steps; a name it dropped is a character gone from
+                      // the clip (the braces attach the picture) - that moment keeps its text (#983)
+                      const {texts: fixed} = await resolveUnknownTokens(rewritten.moments.map(String), cast.characters)
+                      const namesOf = (text: string) => new Set([...text.matchAll(/\{([^{}\n]+)\}/g)].map(m => m[1]!))
                       risky.forEach((r, k) => {
+                          const kept = namesOf(r.moment)
+                          const now = namesOf(fixed[k]!)
+                          if ([...kept].some(name => !now.has(name))) {
+                              log.warn(`${r.beatId}: the rewrite of a flagged moment lost a name in braces - the moment stays as it is`)
+                              return
+                          }
                           const {risky: _flag, ...shot} = result[r.beatId]!.shots[r.j]!
-                          result[r.beatId]!.shots[r.j] = {...shot, action: String(rewritten.moments[k])}
+                          result[r.beatId]!.shots[r.j] = {...shot, action: fixed[k]!}
                       })
-                  else log.warn('the rewrite did not come back with one entry per moment - the moments stay as they are')
+                  } else log.warn('the rewrite did not come back with one entry per moment - the moments stay as they are')
               }
               return result
           })
