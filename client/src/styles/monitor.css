@@ -363,6 +363,18 @@ select.source {
   border-radius: var(--radius-m);
   margin-bottom: 8px;
 }
+.version-pic {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  display: block;
+  border-radius: var(--radius-s);
+}
+.version-pic:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .version img,
 .version .noimg {
   width: 92px;
