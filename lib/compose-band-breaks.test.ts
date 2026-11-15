@@ -70,3 +70,22 @@ describe('a break of the band inside a clip', () => {
         expect(c.prompt).toContain('cut in 3 shots')
     })
 })
+
+describe('the windows the planner is told (#982)', () => {
+    // no break (the guitar plays into the second shot and stops there): the cuts are on the bars; a sung word crosses the middle one,
+    // so compose moves it out of the word - and the planner is told the second shot's heard time from the cut that is made
+    const stops = {guitar: [{start: 0, end: 165.287}]}
+    const words = [{text: 'rain', start: 3.7, end: 4.3}]
+    const sung = {...base, slots: [{...slots[0]!, vocals: [{line: 0, text: 'rain', start: 3.7, end: 4.3, words}]}]}
+    const planned = {b1: {shots: [shot('Gtr strums.'), shot('Lead sings.')]}}
+    const singing = {singers: ['lead'], lines: [{line: 0, text: 'rain', singers: ['lead']}]}
+    test('with a sung word over a cut, the heard time follows the cut that is made, out of the word', () => {
+        expect(clipCuts({...sung, shotMoments: planned}).get('slot-025')).toEqual([0, 3.973])
+        const [still] = propActivityPerBeat({...sung, shotMoments: planned}, stops).b1!
+        const [moved] = propActivityPerBeat({...sung, shotMoments: planned, singing}, stops).b1!
+        // cut on the bar: 3.973 s into the clip, the guitar stops at 165.287 - 160.287 = 5 s: heard 1.027 s of the second shot
+        expect(still!.heardPerShot![1]).toEqual([{start: 0, end: 1.027}])
+        // the cut moved out of the word (before it, 3.6 s): heard 1.4 s of the shot that now starts there
+        expect(moved!.heardPerShot![1]).toEqual([{start: 0, end: 1.4}])
+    })
+})

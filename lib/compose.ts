@@ -340,8 +340,21 @@ export function shotsOfClips(input: CutsInput): Map<string, {clip: string; shots
 
 // The real-time [start, end) window of each shot of a beat, in shot order - from the cuts compose makes (clipCuts); avoidWords
 // still moves a cut out of a sung word, by a fraction of a second.
-function shotWindowsPerBeat(input: CutsInput): Record<string, {start: number; end: number}[]> {
-    const cuts = clipCuts(input)
+/**
+ * The shots' windows as compose cuts them, the words included (#982): with singing, `avoidWords` moves a cut out of a sung word, so the
+ * planner is told the times of the cuts that are made, not of the ones before. The words are all of the clip's (compose keeps those of
+ * the singers on screen) - the same cuts wherever a singer of the clip is on screen, which is what a performed clip is.
+ */
+function shotWindowsPerBeat(input: CutsInput & Partial<Pick<Input, 'singing'>>): Record<string, {start: number; end: number}[]> {
+    const {cuts: planned, fixed} = cutsOfClips(input)
+    const cuts = new Map(
+        input.slots.map(slot => {
+            const at = planned.get(slot.id)!
+            if (!input.singing || !slot.vocals?.length) return [slot.id, at] as const
+            const words = slot.vocals.flatMap(v => v.words)
+            return [slot.id, avoidWords(at, words, 120 / input.music.bpm, slot.end - slot.start, fixed.get(slot.id))] as const
+        }),
+    )
     const windows: Record<string, {start: number; end: number}[]> = {}
     input.slots.forEach((slot, i) => {
         const beatId = input.mapping[i]!.beatId
@@ -385,7 +398,7 @@ export function activeSpans(window: {start: number; end: number}, ranges: {start
 // `heardPerShot`: when in a shot it is heard, in seconds of the shot, where that is not (nearly) the whole of it - the planner
 // writes the playing for those times only, and the stopping and coming back in (#968).
 // Characters without a stem-bound prop (a non-instrument prop, or no prop at all) never appear here.
-export function propActivityPerBeat(input: CutsInput, activity: PropActivity): Record<string, ShotProps> {
+export function propActivityPerBeat(input: CutsInput & Partial<Pick<Input, 'singing'>>, activity: PropActivity): Record<string, ShotProps> {
     const {beats, characters} = input
     const windows = shotWindowsPerBeat(input)
     const propped = characters.filter((c): c is Character & {prop: string; propStem: PropStem} => Boolean(c.prop && c.propStem && activity[c.propStem]?.length))
