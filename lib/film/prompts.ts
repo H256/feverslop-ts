@@ -81,6 +81,43 @@ Answer only with JSON:
 - "setups": for every event that has to be believable (an escape, a surprise, an object that is used), what has to be shown before it and in which scene - an escape from a rope needs the rope shown, and what makes it give way. [] if nothing needs it.
 - If the idea lists the steps of the story (an arc, beats, an ending), every step happens, in that order, in a scene of its own or inside one: none dropped, none reordered, no other ending.
 Names, headings and the story are written in English; the dialogue language only matters later, in the script.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['characters', 'scenes', 'setups'],
+            properties: {
+                characters: {
+                    type: 'array',
+                    minItems: 1,
+                    items: {
+                        type: 'object',
+                        required: ['name', 'role', 'appearance', 'voice'],
+                        properties: {name: {type: 'string'}, role: {type: 'string'}, appearance: {type: 'string'}, voice: {type: 'string'}},
+                    },
+                },
+                scenes: {
+                    type: 'array',
+                    minItems: 1,
+                    items: {
+                        type: 'object',
+                        required: ['heading', 'characters', 'summary', 'purpose', 'begins', 'changes', 'seconds'],
+                        properties: {
+                            heading: {type: 'string'},
+                            characters: {type: 'array', items: {type: 'string'}},
+                            summary: {type: 'string'},
+                            purpose: {type: 'string'},
+                            begins: {type: 'string'},
+                            changes: {type: 'string'},
+                            seconds: {type: 'number', minimum: 1},
+                        },
+                    },
+                },
+                setups: {
+                    type: 'array',
+                    items: {type: 'object', required: ['event', 'setup'], properties: {event: {type: 'string'}, setup: {type: 'string'}}},
+                },
+            },
+        },
     }
 }
 
@@ -203,6 +240,44 @@ Characters:
 - "voiceOnly": true for a character who is never seen (a narrator, a voice on the phone), else false.
 - "states": almost always []. Only if the script changes how the character LOOKS - for a stretch of the film or for the rest of it - in a way a picture has to show: wounded and bloody, in disguise, covered in mud or soot, soaked, in other clothes, much older. Each: "name" (a word or two, e.g. "wounded"), "from" (the number of the scene, as in the [Scene n] headings of the screenplay, in which the script FIRST shows this look - not earlier: a look the script gives in scene 19 is not used in scene 10) and "change" - what is different from the normal appearance, concrete and visible, one or two sentences, and only what the script itself says changes: other clothes only if the script says so, never invented to fit the mood. At most two per character. A state is how the body and clothes look - never a pose, a place or an action ("lying in a crater", "dying" are the scene, not the look), and never only a detail of one body part: it has to show in a picture of the whole person. A mood, a bruise that is barely visible or a change of a few seconds is not a state.
 Locations: the "description" is the place as the film first shows it - what stands there in every scene. Leave out what the script reveals, uncovers, builds, breaks or changes later, and every object that someone picks up, carries, uses or moves (a radio on a shelf, a weapon, a cup) - even when the script's own scene description lists it there: those belong to the shots that need them, not to the place. Each place that can be filmed as one set, in order of appearance. Sluglines name views and moments as much as places: the same place under several names, seen closer or from another side, at another time of day, is one location with all those names as aliases - a new location only where the look is clearly another (a clearing and the dense forest around it, the inside of a hut and its yard). Fewer, clearly different places are better than many that overlap. "aliases" are the names the sluglines use for it. "description": what it looks like, in one or two sentences - what is where, materials, light. No people and no action.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['characters', 'locations'],
+            properties: {
+                characters: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['name', 'aliases', 'role', 'appearance', 'voice', 'voiceOnly', 'states'],
+                        properties: {
+                            name: {type: 'string'},
+                            aliases: {type: 'array', items: {type: 'string'}},
+                            role: {type: 'string'},
+                            appearance: {type: 'string'},
+                            voice: {type: 'string'},
+                            voiceOnly: {type: 'boolean'},
+                            states: {
+                                type: 'array',
+                                items: {
+                                    type: 'object',
+                                    required: ['name', 'change'],
+                                    properties: {name: {type: 'string'}, change: {type: 'string'}, from: {type: 'integer', minimum: 1}},
+                                },
+                            },
+                        },
+                    },
+                },
+                locations: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['name', 'aliases', 'description'],
+                        properties: {name: {type: 'string'}, aliases: {type: 'array', items: {type: 'string'}}, description: {type: 'string'}},
+                    },
+                },
+            },
+        },
     }
 }
 
