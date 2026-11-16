@@ -18,6 +18,10 @@ const KEYS = [
   {name: '← →', value: 'the line by 0.05 s, with Shift by 0.5 s - Tab picks a word, Esc the line again'},
   {name: 'Space', value: 'listen to the line or the word; a click on the waveform plays from there'},
   {name: '↑ ↓', value: 'the line before or after'},
+  {
+    name: 'B',
+    value: 'a boundary between two lines that meet: ← → move it, . and , go to the next or the last new sound heard, Esc leaves it - Shift+B the one before',
+  },
   {name: 'N', value: 'the next line that wants a look - a cut in a word, an early start, an old prompt, a guessed time; Shift+N goes back'},
   {name: 'Ctrl+Z / Ctrl+Shift+Z', value: 'undo / redo'},
 ]

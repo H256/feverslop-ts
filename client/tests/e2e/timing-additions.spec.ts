@@ -357,3 +357,48 @@ test('a boundary without an overlap shows its handle only on hover', async ({pag
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await expect(joint).toHaveCSS('opacity', '1')
 })
+
+test('B chooses a boundary, the arrows move it, Esc leaves it', async ({page}) => {
+  await stubProject(page)
+  const lines = [
+    {
+      line: 0,
+      section: 'Chorus',
+      text: 'Ich bin',
+      words: [
+        {text: 'Ich', start: 1, end: 2},
+        {text: 'bin', start: 2, end: 3},
+      ],
+      estimated: false,
+      byHand: false,
+      beats: [],
+    },
+    {
+      line: 1,
+      section: 'Chorus',
+      text: 'nicht mehr',
+      words: [
+        {text: 'nicht', start: 2.5, end: 3.5},
+        {text: 'mehr', start: 3.5, end: 5},
+      ],
+      estimated: false,
+      byHand: false,
+      beats: [],
+    },
+  ]
+  await page.route('**/api/timing', r =>
+    r.request().method() === 'POST' ? r.fallback() : r.fulfill({json: {timing: {duration: 10, lines, cuts: [], beats: [], unplanned: [], outdated: []}}}),
+  )
+  await page.goto(`${editor.base}/p/music/demo/timing`)
+  await expect(page.locator('.toverlap')).toHaveCount(1)
+  await page.locator('.tedit').focus()
+  await page.keyboard.press('b')
+  await expect(page.locator('.tjoint.active')).toHaveCount(1)
+  for (let n = 0; n < 11; n++) await page.keyboard.press('ArrowRight')
+  await expect(page.locator('.toverlap')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.tjoint.active')).toHaveCount(0)
+  // every press is one step back, as with a line
+  for (let n = 0; n < 11; n++) await page.keyboard.press('Control+z')
+  await expect(page.locator('.toverlap')).toHaveCount(1)
+})

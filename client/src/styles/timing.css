@@ -318,3 +318,35 @@
 .tedit:hover .tjoint:not(.overlapping):hover {
   opacity: 1;
 }
+
+/* where a new sound starts, while a boundary is dragged: the stops it snaps to (#1104) */
+.tonset {
+  position: absolute;
+  top: 28px;
+  height: 94px;
+  width: 0;
+  border-left: 1px dotted var(--accent);
+  pointer-events: none;
+  z-index: 3;
+}
+.tonset::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  bottom: -6px;
+  border: 4px solid transparent;
+  border-bottom-color: var(--accent);
+}
+
+/* the boundary the keys work on */
+.tedit .tjoint.active {
+  opacity: 1;
+}
+.tjoint.active::before {
+  width: 4px;
+  left: 4px;
+}
+.tjoint.active::after {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

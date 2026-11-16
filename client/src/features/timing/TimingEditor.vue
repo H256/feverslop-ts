@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import {computed, onMounted, onScopeDispose, ref, watchEffect} from 'vue'
+import {computed, onMounted, onScopeDispose, ref, watch, watchEffect} from 'vue'
 import type {TimingLine, TimingView} from '../../../../shared/workspace'
 import {usePointerDrag} from '../../composables/usePointerDrag'
 import {cssColor, cssVar, prepareCanvas} from '../../lib/canvas'
 import {clock} from '../../lib/format'
 import {ChromeService} from '../../services/chrome'
 import type {TimingDraft} from './useTimingDraft'
+import {onsetsIn} from './fit'
 import {cutsIn} from './words'
 
 /**
@@ -117,7 +118,7 @@ const headShown = computed(() => props.head !== undefined && props.head >= span.
 
 const follow = usePointerDrag()
 /** Dragging in seconds: one undo step per drag, on the window - the boxes are drawn anew while dragging. */
-function drag(event: PointerEvent, move: (by: number, event: PointerEvent) => void, pick?: () => void) {
+function drag(event: PointerEvent, move: (by: number, event: PointerEvent) => void, pick?: () => void, done?: () => void) {
   if (event.button !== 0) return
   event.stopPropagation()
   event.preventDefault()
@@ -143,13 +144,21 @@ function drag(event: PointerEvent, move: (by: number, event: PointerEvent) => vo
       props.draft.settle()
       frozen.value = undefined
       snapped.value = undefined
+      done?.()
     },
   )
 }
-const snapTime = (time: number, event: PointerEvent, exclude: number[] = []) => {
+const snapTime = (time: number, event: PointerEvent, exclude: number[] = [], onsets: number[] = []) => {
   snapped.value = undefined
   if (!snap.value || event.altKey) return time
-  const threshold = ((span.value.to - span.value.from) / Math.max(1, width.value)) * 7
+  const perPixel = (span.value.to - span.value.from) / Math.max(1, width.value)
+  // a new sound is what a boundary is dragged to: it pulls from further away than the edges of words do
+  const heard = onsets.reduce<number | undefined>((best, t) => (best === undefined || Math.abs(t - time) < Math.abs(best - time) ? t : best), undefined)
+  if (heard !== undefined && Math.abs(heard - time) < perPixel * 14) {
+    snapped.value = heard
+    return heard
+  }
+  const threshold = perPixel * 7
   const candidates = [
     ...props.view.cuts.flatMap(c => [c.start, c.end]),
     ...props.view.lines.filter(l => !ghost(l)).flatMap(l => props.draft.wordsOf(l).flatMap(w => [w.start, w.end])),
@@ -228,16 +237,63 @@ const joints = computed(() => {
   }
   return out
 })
+// the boundary the keys work on: B chooses one (Shift+B the one before), then ← → move it, . and , go to the next or the last new sound
+const activeJoint = ref<string>()
+const jointKey = (j: {a: TimingLine; b: TimingLine}) => `${j.a.line}-${j.b.line}`
+const active = computed(() => joints.value.find(j => jointKey(j) === activeJoint.value))
+watch(joints, () => {
+  if (activeJoint.value && !active.value) activeJoint.value = undefined
+})
+function joinKey(event: KeyboardEvent): boolean {
+  const list = joints.value
+  if ((event.key === 'b' || event.key === 'B') && list.length) {
+    const at = list.findIndex(j => jointKey(j) === activeJoint.value)
+    activeJoint.value = jointKey(list[(at + (event.key === 'B' ? -1 : 1) + list.length) % list.length]!)
+    return true
+  }
+  const j = active.value
+  if (!j) return false
+  if (event.key === 'Escape') {
+    activeJoint.value = undefined
+    return true
+  }
+  const t = props.draft.startOf(j.b)
+  const target =
+    event.key === 'ArrowLeft' || event.key === 'ArrowRight'
+      ? t + (event.key === 'ArrowLeft' ? -1 : 1) * (event.shiftKey ? 0.5 : 0.05)
+      : event.key === '.' && props.peaks
+        ? onsetsIn(props.peaks, t + 0.03, t + 6)[0]
+        : event.key === ',' && props.peaks
+          ? onsetsIn(props.peaks, Math.max(0, t - 6), t - 0.03).at(-1)
+          : undefined
+  if (target === undefined) return event.key === '.' || event.key === ','
+  props.draft.remember()
+  try {
+    props.draft.moveBoundary(j.a, j.b, target)
+    error.value = ''
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : String(cause)
+  }
+  props.draft.settle()
+  return true
+}
+/** Where a new sound starts around the lines, shown and snapped to while a boundary is dragged. */
+const joining = ref(false)
+const onsets = computed(() => (joining.value && props.peaks ? onsetsIn(props.peaks, span.value.from, span.value.to) : []))
 const dragJoint = (event: PointerEvent, a: TimingLine, b: TimingLine) => {
   let base: ReturnType<typeof props.draft.boundaryBase>
   let initial = 0
   const pps = width.value / (span.value.to - span.value.from)
   drag(
     event,
-    (_by, e) => props.draft.moveBoundary(a, b, snapTime(initial + (e.clientX - event.clientX) / pps, e, [initial]), base, e.shiftKey),
+    (_by, e) => props.draft.moveBoundary(a, b, snapTime(initial + (e.clientX - event.clientX) / pps, e, [initial], onsets.value), base, e.shiftKey),
     () => {
       base = props.draft.boundaryBase(a, b)
       initial = props.draft.startOf(b)
+      joining.value = true
+    },
+    () => {
+      joining.value = false
     },
   )
 }
@@ -299,6 +355,7 @@ function key(event: KeyboardEvent) {
     return draft.redo()
   }
   if (event.ctrlKey || event.metaKey || event.altKey) return
+  if (joinKey(event)) return event.preventDefault()
   const line = draft.line.value
   if (!line) return
   const at = props.view.lines.indexOf(line)
@@ -383,6 +440,13 @@ defineExpose({focus: () => editor.value?.focus({preventScroll: true}), playLine}
           </div>
         </template>
       </template>
+      <div
+        v-for="t in onsets"
+        :key="`o${t}`"
+        class="tonset"
+        :style="{left: `${xOf(t)}px`}"
+        title="A new sound starts here: the boundary snaps to it (Alt: free)"
+      />
       <template v-for="j in joints" :key="`j${j.a.line}-${j.b.line}`">
         <div
           v-if="j.overlap > 0.001"
@@ -391,7 +455,7 @@ defineExpose({focus: () => editor.value?.focus({preventScroll: true}), playLine}
           :title="`Overlap of ${j.overlap.toFixed(2)} s: drag the handle to the right place`"
         />
         <div
-          :class="['tjoint', {overlapping: j.overlap > 0.001}]"
+          :class="['tjoint', {overlapping: j.overlap > 0.001, active: jointKey(j) === activeJoint}]"
           :style="{left: `${xOf(draft.startOf(j.b)) - 6}px`}"
           :title="`Boundary between &quot;${j.a.text}&quot; and &quot;${j.b.text}&quot;: the earlier line ends here, the later one starts here and its words are fitted after it (Shift: the later line moves along as a whole)`"
           @pointerdown="dragJoint($event, j.a, j.b)"
