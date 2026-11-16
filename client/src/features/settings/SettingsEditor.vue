@@ -94,14 +94,14 @@ const save = toasts.guard(async () => {
 .se-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   margin-bottom: 24px;
 }
 .se-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   max-width: 72rem;
-  gap: 24px;
+  gap: var(--space-6);
 }
 .se-group {
   border: 1px solid var(--line);
