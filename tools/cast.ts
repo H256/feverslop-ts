@@ -11,9 +11,9 @@ import {extraArgument} from '../lib/command-schema.ts'
 import {existsSync, readFileSync} from 'node:fs'
 import {parseArgs} from 'node:util'
 import {log, styles} from '../lib/log.ts'
-import {askJson, configureLlm} from '../lib/llm.ts'
+import {configureLlm} from '../lib/llm.ts'
 import {loadSettings} from '../lib/settings.ts'
-import {castStemsPrompt} from '../lib/cast-stems.ts'
+import {askLayers} from '../lib/cast-stems.ts'
 import {type CastChange, commandTarget, planCommand, readCast, writeCast, writeLayers} from '../lib/editor/preproduction.ts'
 cli('cast')
 
@@ -50,7 +50,7 @@ if (args.stems) {
     const result = await writeLayers(t, async (players, candidates) => {
         log.step('Playing', styles.muted(players.map(p => `${p.name} (${p.propStem})`).join(', ')))
         log.step('Asking', styles.muted(candidates.map(c => `${c.name}: ${c.prop}`).join(', ')))
-        return (await askJson<{layers?: {name: string; propStem: string}[]}>(castStemsPrompt(players, candidates))).layers ?? []
+        return askLayers(players, candidates)
     })
     if (!result.players.length) log.success('nobody of the cast plays an instrument of the song - nothing to ask')
     else if (!result.asked.length) log.success('everybody who carries something has a layer of the song - nothing to ask')

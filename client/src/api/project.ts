@@ -35,6 +35,7 @@ import type {
   TimingResult,
   TimingView,
   LipsyncView,
+  CastLayersResult,
 } from '../../../shared/workspace'
 import {errorOfAnswer, getJson, postForm, postJson} from './http'
 import type {DirectionEdit, DirectionRule, DirectionView} from '../../../shared/direction'
@@ -131,6 +132,8 @@ export function projectApi(root: string) {
     setCasting: (body: {kind: 'character' | 'location'; id: string; value: string}) => post<{written: true}>('casting', body),
     saveSinging: (change: SingingChange) => post<SingingResult>('singing', change),
     saveCast: (change: CastChange) => post<CastResult>('cast', change),
+    // the layer of the song for a band member the cast left without one: the language model is asked once (bun run cast <id> --stems)
+    castLayers: () => post<CastLayersResult>('cast-layers', {}),
     saveBeatCast: (change: BeatCastChange) => post<BeatCastResult>('beat-cast', change),
     storyForCast: (body: StoryForCast) => post<StoryResult>('book/for-cast', body),
     dropStoryProposal: () => post<{dropped: true}>('book/drop-proposal', {}),

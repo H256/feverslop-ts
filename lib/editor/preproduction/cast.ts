@@ -1,5 +1,5 @@
 import {existsSync} from 'node:fs'
-import {type Candidate, giveLayers, type Player, stemQuestion} from '../../cast-stems.ts'
+import {type Candidate, giveLayers, notAskedYet, type Player, stemQuestion} from '../../cast-stems.ts'
 import {writeJsonFile} from '../../json-file.ts'
 import {join} from 'node:path'
 import {toSlug} from '../../slug.ts'
@@ -135,8 +135,11 @@ export function castView(kind: EditorKind, data: Data): CastView | undefined {
         }
     }
     const cast = (data as Project).cast!
+    // somebody of the band plays an instrument of the song and another carries something with no layer set, and was not asked yet (#1085)
+    const layerQuestion = notAskedYet(stemQuestion(cast.characters).candidates, (data as Project).castLayersAsked).map(({name, prop}) => ({name, prop}))
     return {
         characters: cast.characters.map(c => ({id: c.id, name: c.name, role: c.role, prop: c.prop, group: c.isGroup})),
+        ...(layerQuestion.length ? {layerQuestion} : {}),
         locations: cast.locations.map(l => ({id: l.id, name: l.name})),
         canAdd: true,
         stage,
@@ -299,7 +302,10 @@ export async function writeLayers(
         if (!candidates.length) return none
         const layers = await askLayers(players, candidates)
         const {given, dropped} = giveLayers(data as Project as Parameters<typeof giveLayers>[0], candidates, layers)
-        if (given.length) save(target, data)
+        // who was asked is kept, also when the answer is "none": the page shows the question only to those who were not
+        const project = data as Project
+        project.castLayersAsked = [...new Set([...(project.castLayersAsked ?? []), ...candidates.map(c => c.name)])]
+        save(target, data)
         return {...none, given, dropped}
     })
 }

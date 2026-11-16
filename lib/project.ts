@@ -181,6 +181,7 @@ export type Project = {
     partials?: Partials // answers of a running step, one per element (lib/partials.ts) - not a step
     // which library asset each role or place of casting.json was copied from, in which version (lib/casting.ts) - not a step
     castingCopies?: Record<string, {library: string; fingerprint: string}>
+    castLayersAsked?: string[] // who carries something and was asked for the layer of the song (lib/cast-stems.ts): the answer "none" is kept by this
     // The YuE2 style/tags prompt written for lyrics.txt (music-style.txt is the optional direction hint for it) -
     // lyrics.txt itself isn't cached here, it's a plain input file like story-idea.txt, generated once into
     // existence and then treated as fixed (delete it, or edit it, to get a new one - see index.ts)
@@ -225,7 +226,7 @@ export type Project = {
     shotViewPlans?: Record<string, string> // effective direction plan used to choose each cached view
     shotMoments?: Record<string, BeatShots | string[]> // beatId -> the staged shots of the beat, replacing beat.moments when not --legacy-moments (string[]: a plan from before the staging)
 }
-export type StepName = Exclude<keyof Project, 'formatVersion' | 'inputs' | 'partials' | 'castingCopies' | 'shotViewPlans'>
+export type StepName = Exclude<keyof Project, 'formatVersion' | 'inputs' | 'partials' | 'castingCopies' | 'castLayersAsked' | 'shotViewPlans'>
 
 /** An input whose change redoes steps (lib/inputs.ts); `assumed` is the value it had before fingerprints existed. */
 export type TrackedInput = {value: string | Uint8Array; steps: StepName[]; assumed?: string}

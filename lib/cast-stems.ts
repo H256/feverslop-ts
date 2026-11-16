@@ -1,4 +1,4 @@
-import type {AskOptions} from './llm.ts'
+import {type AskOptions, askJson} from './llm.ts'
 import {dropPartials} from './partials.ts'
 import type {PropStem} from './project.ts'
 
@@ -20,6 +20,14 @@ export function stemQuestion(characters: Extracted[]): {players: Player[]; candi
     const players = characters.filter(hasStem).map(c => ({name: c.name, role: c.role ?? '', prop: c.prop!, propStem: c.propStem!}))
     const candidates = players.length ? characters.filter(c => c.prop && !hasStem(c)).map(c => ({name: c.name, role: c.role ?? '', prop: c.prop!})) : []
     return {players, candidates}
+}
+
+/** Those of the candidates who were not asked before (`castLayersAsked` of the project) - the page shows the question only to them. */
+export const notAskedYet = <T extends {name: string}>(candidates: T[], asked: string[] | undefined): T[] => candidates.filter(c => !asked?.includes(c.name))
+
+/** The language model's answer to the question: the layer of each who was asked ("" for none). */
+export async function askLayers(players: Player[], candidates: Candidate[]): Promise<{name: string; propStem: string}[]> {
+    return (await askJson<{layers?: {name: string; propStem: string}[]}>(castStemsPrompt(players, candidates))).layers ?? []
 }
 
 export function castStemsPrompt(players: Player[], candidates: Candidate[]): AskOptions {

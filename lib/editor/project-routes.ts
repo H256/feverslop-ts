@@ -15,6 +15,7 @@ import {loadSettings} from '../settings.ts'
 import {readTimings} from '../timings.ts'
 import {readFineWaveform} from '../waveform.ts'
 import {assetSources} from './asset-sources.ts'
+import {askLayers} from '../cast-stems.ts'
 import {writeBeatCast} from './beat-cast.ts'
 import {pickVersion, writeOverride} from './choices.ts'
 import {dryRun, replaceDryRun} from './dry-run.ts'
@@ -31,6 +32,7 @@ import {
     readLook,
     stageOf,
     writeCast,
+    writeLayers,
     writeLook,
     writeStory,
     writeStoryForCast,
@@ -470,6 +472,16 @@ export const PROJECT_ROUTES: readonly Route[] = [
     },
     {method: 'POST', path: 'singing', changes: [writeSinging], handle: async c => json(await writeSinging(c.target, await c.body<SingingChange>()))},
     {method: 'POST', path: 'cast', changes: [writeCast], handle: async c => json(await writeCast(c.target, await c.body<CastChange>()))},
+    // the layer of the song for a band member the cast left without one: the language model is asked once (bun run cast <id> --stems)
+    {
+        method: 'POST',
+        path: 'cast-layers',
+        changes: [writeLayers],
+        handle: async c => {
+            configureLlm((await loadSettings({projectModel: await kindOf(c.target).llmModel(c.target.dir)})).llm)
+            return json(await writeLayers(c.target, askLayers))
+        },
+    },
     {method: 'POST', path: 'beat-cast', changes: [writeBeatCast], handle: async c => json(await writeBeatCast(c.target, await c.body<BeatCastChange>()))},
     {
         method: 'POST',
