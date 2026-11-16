@@ -89,6 +89,8 @@ export type NewProject = {
     style?: string
     musicStyle?: string
     singers?: string
+    voice?: string // who sings the song: auto, female, male or mixed (--voice)
+    songLength?: string // seconds, for a song to be made (--song-length)
     language?: string
 }
 /** A new film, as the start page's form asks it: the options of `bun run film:init` (#831, #827). */

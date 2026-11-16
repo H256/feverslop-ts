@@ -108,9 +108,23 @@ const language = computed(() => languageLabel(props.draft.language))
     <template v-else>
       <FormField label="Song idea"><textarea v-model="draft.idea" rows="3" placeholder="What the song is about, its mood, its genre" /></FormField>
       <FormField label="Lyrics of your own (optional - else they are written from the idea)"><textarea v-model="draft.lyrics" rows="4" /></FormField>
+      <FormField label="Musical style (optional - genre, mood, instruments; the LLM invents one if empty)">
+        <textarea v-model="draft.musicStyle" rows="2" placeholder="dark synthwave, female vocals, slow, 80s drum machine" />
+      </FormField>
+      <FormField label="Song length in seconds (optional)">
+        <input v-model="draft.songLength" type="text" inputmode="numeric" placeholder="the workflow's own" />
+      </FormField>
     </template>
     <FormField label="Story idea (optional)"><textarea v-model="draft.storyIdea" rows="2" placeholder="What the video shows" /></FormField>
     <FormField label="Visual style (optional - picked from the examples if empty)"><textarea v-model="draft.style" rows="2" /></FormField>
+    <FormField :label="draft.from === 'idea' ? 'Who sings the song' : 'Who sings in the song (the story casts to match)'">
+      <select v-model="draft.voice" aria-label="Who sings the song">
+        <option value="auto">{{ draft.from === 'idea' ? 'Leave it to the LLM' : 'Leave it open' }}</option>
+        <option value="female">A woman</option>
+        <option value="male">A man</option>
+        <option value="mixed">A duet - a woman and a man</option>
+      </select>
+    </FormField>
     <div class="np-pair">
       <fieldset class="np-singers">
         <legend>Who sings on screen</legend>

@@ -1,5 +1,5 @@
 import {expect, test} from 'bun:test'
-import {nextOf} from './status.ts'
+import {nextOf, withSongToMake} from './status.ts'
 
 // #828: the next step, one at a time - and after the pictures one clip first, before the GPU time of all of them
 const estimates = {pictures: async (n: number) => `${n} pictures`, clips: async (c: {frames: number}[]) => `${c.length} clip(s)`}
@@ -28,4 +28,11 @@ test('the next step: the plan, the pictures, one clip first, the rest, the final
     })
     expect((await nextOf(run, [], state({missingClips: [clip('slot-002')]}), estimates, 'final video')).command).toBe(`${run} --render=videos`)
     expect((await nextOf(run, [], state({}), estimates, 'final video')).command).toBe(`${run} --render=final`)
+})
+
+// #1089: a song still to be made comes before the plan - every plan run hears it
+test('a song to be made is the next step, whatever else is', () => {
+    const plan = {command: 'bun index.ts demo', why: '3 step(s) to generate'}
+    expect(withSongToMake(plan, true, 'demo').command).toBe('bun index.ts demo --render=song')
+    expect(withSongToMake(plan, false, 'demo')).toBe(plan)
 })

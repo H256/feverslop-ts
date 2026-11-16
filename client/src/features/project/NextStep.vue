@@ -19,9 +19,11 @@ const ask = useAsk()
 const toasts = useToasts()
 
 // a stage of the preproduction still to plan: story, cast or look - the shots are the plan run of the status
+// a song still to be made comes first: every plan run hears it, so none can start before (#1089)
+const songFirst = computed(() => /--render=song\b/.test(status.value?.next.command ?? ''))
 const preproduction = computed(() => {
   const next = project.value.plan.next
-  return next && next !== 'plan' ? next : undefined
+  return !songFirst.value && next && next !== 'plan' ? next : undefined
 })
 // "22 step(s) to generate: songStyle, music, …" as "22 step(s) to generate" - the step names are in the title, asked for by pointing (#834)
 const said = (why: string) => why.replace(/: [\w-]+(, [\w-]+)+…?$/, '')
@@ -67,7 +69,7 @@ const runNext = toasts.guard(async () => {
     </template>
     <span v-else class="ns-why muted">Everything is done</span>
     <button
-      v-if="project.kind === 'music' && project.plan.stage === 'look'"
+      v-if="!songFirst && project.kind === 'music' && project.plan.stage === 'look'"
       class="btn mini"
       title="The casting photos: the pictures of the cast and the places, before the shots are planned"
       @click="toasts.guard(renderLookPictures)()"
@@ -75,7 +77,7 @@ const runNext = toasts.guard(async () => {
       Render the pictures
     </button>
     <button
-      v-if="project.plan.next && project.plan.next !== 'plan'"
+      v-if="!songFirst && project.plan.next && project.plan.next !== 'plan'"
       class="btn mini"
       title="Every stage up to the shots in one run, without stopping"
       @click="toasts.guard(planStage)()"
@@ -84,7 +86,7 @@ const runNext = toasts.guard(async () => {
     </button>
     <!-- a planned project planned again, from a step or by what changed: the question says what it would do first (#836) -->
     <button
-      v-else-if="project.plan.stage === 'plan'"
+      v-else-if="!songFirst && project.plan.stage === 'plan'"
       class="btn mini"
       title="What a plan run would make again - from a step, or by what changed - asked before it runs"
       @click="toasts.guard(planStage)()"

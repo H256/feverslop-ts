@@ -20,6 +20,12 @@ export type NewProjectDraft = {
   lyrics: string
   storyIdea: string
   style: string
+  /** a song to be made: its genre, mood and instruments (--music-style) - the LLM invents one when empty */
+  musicStyle: string
+  /** who sings the song: `auto` leaves it to the LLM (--voice) */
+  voice: 'auto' | 'female' | 'male' | 'mixed'
+  /** a song to be made: its target length in seconds, empty for the workflow's own (--song-length) */
+  songLength: string
   singersMode: SingersMode
   singers: string
   language: string
@@ -35,6 +41,9 @@ export const newProjectDraft = (): NewProjectDraft => ({
   lyrics: '',
   storyIdea: '',
   style: '',
+  musicStyle: '',
+  voice: 'auto',
+  songLength: '',
   singersMode: 'nobody',
   singers: '',
   language: '',
@@ -86,6 +95,10 @@ export function newProjectRequest(draft: NewProjectDraft): NewProject {
     lyrics: draft.from === 'library' ? undefined : said(draft.lyrics),
     storyIdea: said(draft.storyIdea),
     style: said(draft.style),
+    // only a song to be made has a musical style and a length; the voice is the story's casting hint for every song
+    musicStyle: draft.from === 'idea' ? said(draft.musicStyle) : undefined,
+    songLength: draft.from === 'idea' ? said(draft.songLength)?.trim() : undefined,
+    voice: draft.voice === 'auto' ? undefined : draft.voice,
     // the same as before: --singers=auto, the names, or nothing - nobody
     singers: draft.singersMode === 'auto' ? 'auto' : draft.singersMode === 'names' ? said(draft.singers)?.trim() : undefined,
     language: said(draft.language)?.trim(),
@@ -101,6 +114,7 @@ export function newProjectProblem(draft: NewProjectDraft, taken: readonly string
   if (draft.from === 'song' && !draft.lyrics.trim() && !draft.storyIdea.trim()) return 'A song needs its lyrics or a story idea: the story is planned from them.'
   if (draft.from === 'idea' && !draft.idea.trim()) return 'The idea the song is made from.'
   if (draft.from === 'library' && !draft.librarySong) return 'The song of the library.'
+  if (draft.from === 'idea' && draft.songLength.trim() && !(Number(draft.songLength) > 0)) return 'The song length: seconds, a positive number - or empty.'
   if (draft.singersMode === 'names' && !draft.singers.trim()) return 'Who sings: their names, or another choice.'
   if (draft.language.trim() && !languageLabel(draft.language)) return `The language: "${draft.language.trim()}" is no language code - like en or de.`
   return undefined

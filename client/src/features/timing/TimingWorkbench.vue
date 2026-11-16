@@ -443,7 +443,7 @@ onMounted(() => {
           <template v-if="!refinement.passage">Refinement keeps lines sung or left out as they are.</template>
           A missing transcript match does not mean a line was not sung.
         </p>
-        <div style="max-height: 20rem; overflow: auto">
+        <div class="tw-entries">
           <p v-for="entry in refinement.entries" :key="entry.line">
             <button class="btn mini" @click="choose(entry.line)">{{ entry.line + 1 }}</button>
             <b>{{ entry.text }}</b> [{{ entry.status }}] {{ entry.before.map(n => n.toFixed(2)).join('–')
@@ -654,6 +654,11 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* the lines the transcript matched, a list that scrolls instead of growing the page */
+.tw-entries {
+  max-height: 20rem;
+  overflow: auto;
+}
 /* the bar's buttons in groups by what they do, a line between them (#834) */
 .tw-grp {
   display: inline-flex;
