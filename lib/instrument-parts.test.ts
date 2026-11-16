@@ -1,5 +1,5 @@
 import {describe, expect, test} from 'bun:test'
-import {instrumentParts, type PartsInput} from './instrument-parts.ts'
+import {howStemPlays, instrumentParts, leadOf, stemLoudDb, type PartsInput} from './instrument-parts.ts'
 
 // a 120 s song of 2 s bars, 0.05 s frames; every stem is a function of the time
 const hop = 0.05,
@@ -75,5 +75,53 @@ describe('instrumentParts - the vocal gaps of a song and how each stem plays in 
         const gaps = instrumentParts(song({stems: {}}))
         expect(gaps[0]!.parts[0]!.stems).toEqual([])
         expect(gaps[0]!.parts[0]!.leads).toBeUndefined()
+    })
+})
+
+describe('the pieces the shots use (#1024)', () => {
+    const edges = downbeats.concat(length)
+    test('the playing level of a stem is its loud bars over the song', () => {
+        // one bar in ten is 10 dB louder: the 95th percentile of the bars is that loud level
+        const stem = power(t => (t % 20 < 2 ? loud * 10 : loud))
+        expect(stemLoudDb(stem, hop, edges)).toBeCloseTo(10 * Math.log10(loud * 10), 0)
+    })
+    test('a window is sustained, hits with pauses between, or still', () => {
+        const loudDb = 10 * Math.log10(loud)
+        expect(
+            howStemPlays(
+                power(() => loud),
+                hop,
+                loudDb,
+                10,
+                18,
+            ).articulation,
+        ).toBe('sustained')
+        expect(
+            howStemPlays(
+                power(t => (t % 2 < 0.5 ? loud : quiet)),
+                hop,
+                loudDb,
+                10,
+                18,
+            ).articulation,
+        ).toBe('hits')
+        expect(
+            howStemPlays(
+                power(() => quiet),
+                hop,
+                loudDb,
+                10,
+                18,
+            ).articulation,
+        ).toBe('still')
+    })
+    test('a stem leads when it is above its own level by a margin, and the others are not', () => {
+        expect(leadOf({guitar: 3, bass: 0, drums: -2})).toBe('guitar')
+        // too close to the next one, on its level only, or nothing above its level
+        expect(leadOf({guitar: 0.6, bass: 0})).toBeUndefined()
+        expect(leadOf({guitar: 0, bass: 0})).toBeUndefined()
+        expect(leadOf({guitar: -3, bass: -5})).toBeUndefined()
+        expect(leadOf({})).toBeUndefined()
+        expect(leadOf({guitar: 2})).toBe('guitar')
     })
 })

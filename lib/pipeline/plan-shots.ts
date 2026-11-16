@@ -1,4 +1,5 @@
 import {countShotsPerBeat, propActivityPerBeat, shotsOfClips, singingPerBeat} from '../compose.ts'
+import {playerStemPowers} from './stem-power.ts'
 import {applyDirectionOverlay, directionNotTaken, directionPlanNotes, directionPlanRules, dropStaleEdits, recordPlannedDirection} from '../direction/service.ts'
 import {directionViewCache} from '../direction/views.ts'
 import {formatTime} from '../frames.ts'
@@ -124,7 +125,17 @@ export async function planShots(run: ShotRun) {
         propActivity,
         shotMoments: plannedBefore ?? project.data.shotMoments,
     }
-    const beatProps = propActivity ? propActivityPerBeat({...cutsInput, singing}, propActivity) : undefined
+    // how each instrument is heard in each shot (#1024): single hits with silence between, who carries the part - only with a band on screen
+    const stemPowers =
+        propActivity && cast.characters.some(c => c.propStem)
+            ? await playerStemPowers(
+                  project.dir,
+                  {...project.data.stems, ...project.data.instrumentStems},
+                  ['drums', 'bass', 'other', 'guitar', 'piano'],
+                  music,
+              )
+            : undefined
+    const beatProps = propActivity ? propActivityPerBeat({...cutsInput, singing}, propActivity, stemPowers) : undefined
     const beatSinging = singingPerBeat({...cutsInput, singing, lyricsTiming})
     const shotCounts = countShotsPerBeat(cutsInput)
     // the first shot of each clip of a beat
