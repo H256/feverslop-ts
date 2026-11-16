@@ -68,6 +68,29 @@ describe('the singer voice in a generated song', () => {
     })
 })
 
+describe('the lyrics prompt', () => {
+    test('the duration is the limit the song is cut off at, with room left for the parts without words', () => {
+        const input = songLyricsPrompt('a lighthouse', 'English', 210).input
+        expect(input).toContain('Maximum length: 210 seconds - the song is cut off there')
+        expect(input).toContain('room left for the intro, instrumental parts and the outro')
+        expect(input).toContain('about 233 sung words at most in all')
+        expect(input).not.toContain("per second")
+        expect(songLyricsPrompt('a lighthouse', 'English').input).not.toContain('Maximum length')
+    })
+    test('the musical style is part of it only when there is one', () => {
+        const input = songLyricsPrompt('a lighthouse', 'German', undefined, 'auto', ' hard rock, 170 BPM\n').input
+        expect(input).toContain('Musical style - the lyrics must fit its sound, tempo and mood: hard rock, 170 BPM\n')
+        expect(songLyricsPrompt('a lighthouse', 'German').input).not.toContain('Musical style')
+    })
+    test('rhymes, numbered verses and a break without words are asked for; thinking gets room beside the answer', () => {
+        const options = songLyricsPrompt('a lighthouse', 'German')
+        expect(options.input).toContain('Lines rhyme')
+        expect(options.input).toContain('[Verse 1], [Verse 2]')
+        expect(options.input).toContain('[Instrumental Break] is a part without words')
+        expect(options.maxTokens).toBeGreaterThanOrEqual(12000)
+    })
+})
+
 describe('a character described from its pictures (create-asset, import-asset)', () => {
     test('the anchor and the full-body views of the sheet go in together, the clothing is asked for garment by garment', () => {
         const prompt = characterImageDescriptionPrompt(['data:a', 'data:front', 'data:back'], {name: 'Vyvian', role: 'singer'})

@@ -163,6 +163,27 @@ Everything can be overridden, lowest first: the settings file → the project's 
 Prefer the settings file or the env var over `--llm-key` - flags end up in the shell history. Without a terminal
 (CI, scripts), `bun run setup` prints these env vars instead of asking.
 
+**Which model for the lyrics.** A model that follows a brief closely is good at the story, the cast and the shots, but it can
+write flat, rhymeless lyrics - and one that thinks for long may use up its token limit before the lyrics start. If you have a
+stronger or freer writer on another server, let it write the song (step `1`, `1a`) and keep the other model for the rest.
+`--llm-url=` and `--llm-model=` belong together: the saved model (settings file or project) stays in force next to a new URL, and a
+server without that model stops the run (`The LLM server … has no model …`). Only the song step on the other server - the
+rest of the project goes on with your usual model in the next run, without the flags (finished steps are kept):
+
+```powershell
+# the lyrics and the song from the writing server
+bun index.ts my-project --render=song --llm-url=http://llm-writer.lan/v1 --llm-model=Qwen3.8-Flash-Next
+
+# a server with a single model needs no --llm-model
+bun index.ts my-project --render=song --llm-url=http://llm-writer.lan/v1
+
+# then everything else with the model from the settings
+bun index.ts my-project
+```
+
+Lyrics are only written when `input/lyrics.txt` does not exist yet - write your own, or delete the file to have them
+written again. The musical direction in `input/music-style.txt` (if there is one) is part of the lyrics prompt.
+
 Answers with a fixed shape (the cast, the beats, the views, the singers, the style shortlist) are asked with a JSON
 schema on the server's Chat Completions API (`response_format`), so the server keeps the answer to that shape and to the
 ids of the cast; the Responses API of llama.cpp ignores a schema. A server that refuses it is asked the plain way, and
@@ -367,7 +388,8 @@ Without `input/song.wav`, `--render=song` writes it from `input/idea.txt` - or f
    `idea.txt`, `music-style.txt`, `lyrics.txt` or `singerVoice` changed, or with `--redo=songStyle`.
 3. **Song audio** (step `1b`) - renders the song with the YuE2 ComfyUI workflow (`songWorkflow` in `config.json`,
    default `yue2-song`) and writes `input/song.wav`. `songDuration` (default: the workflow's own, 360s) is only an
-   upper bound - the model decides the actual song length.
+   the maximum length: the song is cut off there, whatever is left of the lyrics - a song that is shorter ends by itself.
+   Set it high enough for the lyrics, or leave it at `-1`.
 
 Once `input/song.wav` exists, `--render=song` renders it again only when the lyrics or the style changed in this run.
 To get a new song: edit `music-style.txt` or `lyrics.txt` (or delete `lyrics.txt` for new lyrics) and run
@@ -669,7 +691,7 @@ Settings per project, all optional - read at every run and checked field by fiel
 | `videoAspect`                         | the clips' aspect ratio: `"16:9"` (default, landscape), `"9:16"` (portrait), `"2:1"`, `"2:3"`, … - megapixels are computed in it, a `"WIDTHxHEIGHT"` keeps its own ratio and is turned to its orientation |
 | `imageWorkflow`, `videoWorkflow`, `songWorkflow`, `sequenceWorkflow` | a workflow file in `comfy/workflows/`, without `.ts` - see [Workflows](#workflows) |
 | `sequenceSheets`                      | `true` (default) = every character and place gets a multi-angle reference sheet (a turnaround video, sampled into frames) instead of one flat picture - see [docs/comfyui.md](docs/comfyui.md#reference-sheets); `false` = one plain picture each, cheaper while trying things out |
-| `songDuration`                        | `--render=song`: an upper bound in seconds for the generated song - the model decides the actual length; `-1` = the workflow's own default (360s for `yue2-song`) |
+| `songDuration`                        | `--render=song`: the maximum length in seconds of the generated song - YuE2 cuts it off there, a shorter song ends by itself; `-1` = the workflow's own default (360s for `yue2-song`) |
 | `finalFps`                            | `24` (default) = one final video at 24 fps; `60` (or `48`, `30`, …) = also `<project>-60fps.mp4`: every clip gets more frames by frame interpolation on ComfyUI, shot by shot (never across a cut - the cuts are read from the picture), kept in `videos/interpolated/`. A ComfyUI job per clip (~1 min for an 8 s clip at 1080p on an RTX 5090) |
 | `finish`                              | `false` (default) = off; `true` = a light grade and sharpen of the final video(s), written as `<name>-finished.mp4` next to them: black level 0.025, white level 0.98, contrast and saturation 1.03, CAS sharpen 0.4 (the "mild" one - stronger looked overdone on tides); `{"sharpen": 0.3}` changes single fields (`blackLevel`, `whiteLevel`, `contrast`, `saturation`, `sharpen`, `colorMatch`, `colorReference`, `grain`) - see [Finishing](#finishing-finish). The clips come out with lifted blacks (level ~29 instead of 16), whatever the prompt says about haze. Off in `true`, to be switched on as fields: `colorMatch` (0-1) = every clip that part of the way to one reference in black, white and mean color, so the cuts do not jump - the reference is the median of all clips, or the clip `colorReference` names (`"slot-014"`); 1 removes the jumps, but also the mood of a darker or warmer scene, 0.5 halves them (tides: the mean jump of black + white at a cut 11.3 -> 5.6). `grain` (0-100, ~3 is light) = film grain over everything, last |
 | `interpolationModel`                  | the model for `finalFps`, a file in ComfyUI's `models/frame_interpolation/`: `"rife_v4.26_heavy.safetensors"` (default), any RIFE 4.25/4.26 or `"film_net_fp16.safetensors"` - from Hugging Face `Comfy-Org/frame_interpolation` |
