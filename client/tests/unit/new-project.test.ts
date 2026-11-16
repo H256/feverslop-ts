@@ -39,7 +39,7 @@ describe('a new music video from the form', () => {
   test('a song to be made: its musical style, voice and length go to init - #1089', () => {
     const draft = {...newProjectDraft(), id: 'rain', from: 'idea' as const, idea: 'rain', musicStyle: 'synthwave', voice: 'female' as const, songLength: '90'}
     const request = newProjectRequest(draft)
-    expect(request).toMatchObject({musicStyle: 'synthwave', voice: 'female', songLength: '90'})
+    expect([request.musicStyle, request.voice, request.songLength]).toEqual(['synthwave', 'female', '90'])
     // left open: nothing is sent; a song that is there has no style or length to make
     expect(newProjectRequest({...draft, voice: 'auto', musicStyle: ' '}).voice).toBeUndefined()
     expect(newProjectRequest({...draft, voice: 'auto', musicStyle: ' '}).musicStyle).toBeUndefined()
