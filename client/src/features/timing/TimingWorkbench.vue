@@ -424,7 +424,9 @@ onMounted(() => {
         </button>
         <span v-if="draft.edits.value.size" class="muted">Save or discard your edits first.</span>
       </div>
-      <p v-if="refining.pending.value" role="status">This can take several minutes. The first run downloads the local model. The proposal is not applied automatically.</p>
+      <p v-if="refining.pending.value" role="status">
+        This can take several minutes. The first run downloads the local model. The proposal is not applied automatically.
+      </p>
       <template v-if="refinement">
         <p v-if="refinement.passage?.mode === 'line-window'">
           Words within block {{ refinement.passage.line + 1 }}: {{ refinement.passage.start.toFixed(3) }}–{{ refinement.passage.end.toFixed(3) }} s. Neighbours
@@ -654,7 +656,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* the lines the transcript matched, a list that scrolls instead of growing the page */
+/* the list of refined lines (the lines the transcript matched) scrolls inside its box instead of growing the page */
 .tw-entries {
   max-height: 20rem;
   overflow: auto;

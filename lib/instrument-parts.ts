@@ -46,6 +46,8 @@ const VOCAL_MARGIN_DB = 20
 const VOCAL_FLOOR_DB = -50
 // a stem has to be above its usual level by this much more than every other stem to lead
 const LEAD_MARGIN_DB = 1
+// and it is above its own usual level by more than this: a stem on its level is no lead, whatever the rounding says
+const LEAD_MIN_DB = 0.5
 // bars with less than this energy are a pause, the rest is low/mid/high by the song's own thirds
 const PAUSE_ENERGY = 0.1
 
@@ -130,7 +132,8 @@ function partRuns(energy: number[], edges: number[], from: number, to: number, t
     return runs
 }
 
-function playsIn(power: number[], hopSec: number, loudDb: number, from: number, to: number) {
+/** How one stem plays between `from` and `to` (seconds), held against its own playing level `loudDb` (stemLoudDb). */
+export function howStemPlays(power: number[], hopSec: number, loudDb: number, from: number, to: number) {
     let windows = 0,
         playing = 0,
         pauses = 0,
@@ -151,6 +154,21 @@ function playsIn(power: number[], hopSec: number, loudDb: number, from: number, 
     return {duty, pauses, articulation, relDb: db(meanPower(power, hopSec, from, to)) - loudDb}
 }
 
+/** A stem's own playing level: its loud bars (the 95th percentile of the level of each bar) over the whole song, in dB. */
+export function stemLoudDb(power: number[], hopSec: number, edges: number[]): number {
+    return percentile(
+        Array.from({length: edges.length - 1}, (_, i) => db(meanPower(power, hopSec, edges[i]!, edges[i + 1]!))),
+        0.95,
+    )
+}
+
+/** The stem above its own usual level while every other one is not (by LEAD_MARGIN_DB or more): it carries the part. `rel`: each stem's relDb. */
+export function leadOf(rel: Record<string, number>): string | undefined {
+    const ranked = Object.entries(rel).sort((a, b) => b[1] - a[1])
+    const [best, second] = ranked
+    return best && best[1] > LEAD_MIN_DB && (!second || best[1] - second[1] >= LEAD_MARGIN_DB) ? best[0] : undefined
+}
+
 export function instrumentParts(input: PartsInput): InstrumentGap[] {
     const {downbeats, durationSec, barEnergy, hopSec} = input
     if (downbeats.length < 2 || barEnergy.length < downbeats.length) return []
@@ -158,24 +176,16 @@ export function instrumentParts(input: PartsInput): InstrumentGap[] {
     const thirds: [number, number] = [percentile(barEnergy, 0.33), percentile(barEnergy, 0.66)]
     // each stem's own playing level: its loud bars over the whole song
     const loud: Record<string, number> = {}
-    for (const [stem, power] of Object.entries(input.stems))
-        loud[stem] = percentile(
-            Array.from({length: edges.length - 1}, (_, i) => db(meanPower(power, hopSec, edges[i]!, edges[i + 1]!))),
-            0.95,
-        )
+    for (const [stem, power] of Object.entries(input.stems)) loud[stem] = stemLoudDb(power, hopSec, edges)
     return vocalGapBars(input, edges).map(([from, to]) => {
         const parts = partRuns(barEnergy, edges, from, to, thirds, input.minPartSec ?? MIN_PART_SEC).map((run): SongPart => {
             const start = edges[run.from]!,
                 end = edges[run.to]!
             const stems = Object.entries(input.stems).map(([stem, power]): PartStem => {
-                const {relDb, duty, pauses, articulation} = playsIn(power, hopSec, loud[stem]!, start, end)
+                const {relDb, duty, pauses, articulation} = howStemPlays(power, hopSec, loud[stem]!, start, end)
                 return {stem, relDb: round(relDb), duty: round(duty), pauses, articulation}
             })
-            const ranked = [...stems].sort((a, b) => b.relDb - a.relDb)
-            const leads =
-                ranked.length && ranked[0]!.relDb > 0 && (ranked.length === 1 || ranked[0]!.relDb - ranked[1]!.relDb >= LEAD_MARGIN_DB)
-                    ? ranked[0]!.stem
-                    : undefined
+            const leads = leadOf(Object.fromEntries(stems.map(s => [s.stem, s.relDb])))
             const energy = barEnergy.slice(run.from, run.to).reduce((a, b) => a + b, 0) / (run.to - run.from)
             return {start: round(start), end: round(end), energy: round(energy), level: run.level, stems, ...(leads ? {leads} : {})}
         })

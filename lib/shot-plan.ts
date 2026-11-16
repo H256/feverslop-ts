@@ -1,3 +1,4 @@
+import type {Articulation} from './instrument-parts.ts'
 import type {BeatShots, Character, ShotPlan, StoryBeat} from './project.ts'
 import {handsOf} from './project.ts'
 import {readTokens, tokenCharacter} from './refs.ts'
@@ -87,7 +88,15 @@ export type ShotSingers = {singerIds: string[]; singingPerShot: boolean[]; singe
  * Whose instrument is heard in which shot of a beat. `heardPerShot[j]`: when in shot j it is heard, in seconds of the shot - only
  * where that is not (nearly) the whole shot (#968).
  */
-export type ShotProps = {characterId: string; prop: string; activePerShot: boolean[]; heardPerShot?: ({start: number; end: number}[] | undefined)[]}[]
+/** How the instrument of a player is heard in a shot, from its stem (lib/instrument-parts.ts): single hits with silence between, and whether it carries the part (#1024). */
+export type ShotHow = {articulation: Articulation; leads?: boolean}
+export type ShotProps = {
+    characterId: string
+    prop: string
+    activePerShot: boolean[]
+    heardPerShot?: ({start: number; end: number}[] | undefined)[]
+    howPerShot?: (ShotHow | undefined)[]
+}[]
 const sungBy = (singers: ShotSingers | undefined, j: number) => singers?.singersPerShot?.[j] ?? (singers?.singingPerShot[j] ? singers.singerIds : [])
 
 /**

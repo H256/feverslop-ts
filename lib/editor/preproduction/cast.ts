@@ -1,4 +1,5 @@
 import {existsSync} from 'node:fs'
+import {type Candidate, giveLayers, notAskedYet, type Player, stemQuestion} from '../../cast-stems.ts'
 import {writeJsonFile} from '../../json-file.ts'
 import {join} from 'node:path'
 import {toSlug} from '../../slug.ts'
@@ -134,8 +135,11 @@ export function castView(kind: EditorKind, data: Data): CastView | undefined {
         }
     }
     const cast = (data as Project).cast!
+    // somebody of the band plays an instrument of the song and another carries something with no layer set, and was not asked yet (#1085)
+    const layerQuestion = notAskedYet(stemQuestion(cast.characters).candidates, (data as Project).castLayersAsked).map(({name, prop}) => ({name, prop}))
     return {
         characters: cast.characters.map(c => ({id: c.id, name: c.name, role: c.role, prop: c.prop, group: c.isGroup})),
+        ...(layerQuestion.length ? {layerQuestion} : {}),
         locations: cast.locations.map(l => ({id: l.id, name: l.name})),
         canAdd: true,
         stage,
@@ -280,6 +284,31 @@ export function applyCastJoin(data: Project, join: {name: string; role: string}[
 }
 
 export const readCast = (target: EditorTarget): CastView | undefined => castView(target.kind, dataOf(target))
+
+/**
+ * The layers of the song for those of a music video's cast who carry something and have none, while others play an instrument of
+ * the song (#1085): `askLayers` is the language model's answer to lib/cast-stems.ts' question. Only the layers are written - the
+ * looks stay - and what is built on them goes (DROPPED_BY_LAYERS); nothing happens when nobody is asked or the answer gives none.
+ */
+export async function writeLayers(
+    target: EditorTarget,
+    askLayers: (players: Player[], candidates: Candidate[]) => Promise<{name: string; propStem: string}[]>,
+): Promise<{players: string[]; asked: string[]; given: {id: string; name: string; propStem: string}[]; dropped: string[]}> {
+    return withProjectLock(target.dir, target.id, async () => {
+        const data = readJson<Data>(join(target.dir, 'project.json'))
+        if (!data || target.kind !== 'music' || !(data as Project).cast) throw new Error('no cast of a music video yet - plan up to the cast first')
+        const {players, candidates} = stemQuestion((data as Project).cast!.characters)
+        const none = {players: players.map(p => p.name), asked: candidates.map(c => c.name), given: [], dropped: []}
+        if (!candidates.length) return none
+        const layers = await askLayers(players, candidates)
+        const {given, dropped} = giveLayers(data as Project as Parameters<typeof giveLayers>[0], candidates, layers)
+        // who was asked is kept, also when the answer is "none": the page shows the question only to those who were not
+        const project = data as Project
+        project.castLayersAsked = [...new Set([...(project.castLayersAsked ?? []), ...candidates.map(c => c.name)])]
+        save(target, data)
+        return {...none, given, dropped}
+    })
+}
 
 export async function writeCast(target: EditorTarget, change: CastChange): Promise<CastResult> {
     return withProjectLock(target.dir, target.id, () => {

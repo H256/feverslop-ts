@@ -170,7 +170,9 @@ export async function projectStatus(id: string): Promise<Status> {
 
     const settings = await loadSettings({projectModel: config.llm.model})
     const servers = settings.comfy.map(s => s.name)
-    const toPlan = steps.filter(s => s.state === 'redo' || s.state === 'missing').map(s => s.step)
+    // the song's style is written by --render=song only, never by a plan run: listing it as a step to generate sent a project
+    // with a finished song.wav round in circles - the run generated nothing and the same "next" came back
+    const toPlan = steps.filter(s => (s.state === 'redo' || s.state === 'missing') && s.step !== 'songStyle').map(s => s.step)
     const next = await nextOf(
         `bun index.ts ${project.id}`,
         toPlan,

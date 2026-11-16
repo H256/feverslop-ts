@@ -398,7 +398,11 @@ export type CastView = {
     stage?: PlanStage
     // a film: a role comes or goes with its screenplay told anew (#589) - refused where the script is the user's; dropped: what goes when it is taken
     adapt?: {refused?: string; dropped: string[]}
+    // a music video: who carries something with no layer of the song while others of the band play an instrument, and was not asked yet (#1085)
+    layerQuestion?: {name: string; prop: string}[]
 }
+// who was asked, who got a layer, and the steps that go with it (the looks and the beats stay)
+export type CastLayersResult = {players: string[]; asked: string[]; given: {id: string; name: string; propStem: string}[]; dropped: string[]}
 export type CastChange = {characters: (Partial<CastMember> & {name: string})[]; locations: (Partial<CastMember> & {name: string})[]}
 // dropped: steps gone as a whole; remade: steps made again for some of their elements, "step: id, id"
 // renamed: who kept their id and got another name - the story still says the old one
@@ -675,6 +679,7 @@ export type SettingView = {
     group: 'Workflows' | 'Size' | 'Sampling' | 'Continuing clips' | 'Seed and retries' | 'Language model' | 'Final video' | 'Finish' | 'Lip-sync preview'
     /** select: one of `choices`; text: a free value (a size, a ratio, a file name); number: a number, whole unless `step` says otherwise */
     control: 'select' | 'text' | 'number'
+    multiline?: boolean
     step?: number
     /** a setting that only does something while this one is on: shown, but not to be changed while it is off */
     needs?: string

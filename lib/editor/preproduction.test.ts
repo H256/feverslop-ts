@@ -14,6 +14,7 @@ import {
     castingRedoOf,
     castView,
     lookView,
+    writeLayers,
     renameInStory,
     writeCast,
 } from './preproduction.ts'
@@ -503,5 +504,87 @@ describe('the look given back whole (bun run look --set)', () => {
     test('a role played by the library given back unchanged is no change', () => {
         const data = {...lookStage(), castingCopies: {'character:ben': {library: 'ben-v2', fingerprint: 'f'}}}
         expect(applyLook('music', data, {elements: [{kind: 'character', id: 'ben', look: 'b', description: 'b'}]}).changed).toBe(false)
+    })
+})
+
+describe('the layer of the song for a band member the cast left without one (#1085)', () => {
+    // a guitarist next to a bassist and a drummer with theirs, and a singer with a microphone
+    const band = () => ({
+        cast: {
+            characters: [
+                {id: 'lira', name: 'Lira', role: 'the singer', prop: 'microphone'},
+                {id: 'kael', name: 'Kael', role: 'the guitarist', prop: 'white flying-v electric guitar'},
+                {id: 'thorne', name: 'Thorne', role: 'the bassist', prop: 'bass guitar', propStem: 'bass' as const},
+                {id: 'veyra', name: 'Veyra', role: 'the drummer', prop: 'drum kit', propStem: 'drums' as const},
+            ],
+            locations: [{id: 'stage', name: 'Stage'}],
+        },
+        characterLooks: {kael: 'a look'},
+        beats: [],
+        propActivity: {bass: []},
+        shotMoments: {'beat-01': {shots: []}},
+    })
+
+    test('the page shows the question only while somebody was not asked', () => {
+        expect(castView('music', band() as never)!.layerQuestion).toEqual([
+            {name: 'Lira', prop: 'microphone'},
+            {name: 'Kael', prop: 'white flying-v electric guitar'},
+        ])
+        expect(castView('music', {...band(), castLayersAsked: ['Lira', 'Kael']} as never)!.layerQuestion).toBeUndefined()
+        expect(castView('music', {...band(), castLayersAsked: ['Lira']} as never)!.layerQuestion).toEqual([
+            {name: 'Kael', prop: 'white flying-v electric guitar'},
+        ])
+    })
+
+    test('a cast with no band, and a film, never show it', () => {
+        const noBand = band()
+        noBand.cast.characters = noBand.cast.characters.map(c => ({...c, propStem: undefined})) as never
+        expect(castView('music', noBand as never)!.layerQuestion).toBeUndefined()
+        expect(castView('film', {cast: {characters: [], locations: []}})!.layerQuestion).toBeUndefined()
+    })
+
+    test('writing it: the layer, what goes with it, who was asked - and then the question is gone', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'cast-layers-'))
+        try {
+            writeFileSync(join(dir, 'project.json'), JSON.stringify(band()))
+            const seen: string[] = []
+            const result = await writeLayers({id: 'demo', dir, kind: 'music'}, async (players, candidates) => {
+                seen.push(`${players.map(p => p.name).join(',')} | ${candidates.map(c => c.name).join(',')}`)
+                return [
+                    {name: 'Kael', propStem: 'guitar'},
+                    {name: 'Lira', propStem: ''},
+                ]
+            })
+            expect(seen).toEqual(['Thorne,Veyra | Lira,Kael'])
+            expect(result.given).toEqual([{id: 'kael', name: 'Kael', propStem: 'guitar'}])
+            expect(result.dropped).toEqual(['propActivity', 'shotMoments'])
+            const saved = JSON.parse(readFileSync(join(dir, 'project.json'), 'utf8'))
+            expect(saved.cast.characters.find((c: {id: string}) => c.id === 'kael').propStem).toBe('guitar')
+            // the looks and the beats stay, who was asked is kept (the "none" for the microphone too)
+            expect(saved.characterLooks).toEqual({kael: 'a look'})
+            expect(saved.beats).toEqual([])
+            expect(saved.castLayersAsked).toEqual(['Lira', 'Kael'])
+            expect(castView('music', saved)!.layerQuestion).toBeUndefined()
+        } finally {
+            rmSync(dir, {recursive: true, force: true})
+        }
+    })
+
+    test('with nobody to ask the model is not asked', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'cast-layers-'))
+        try {
+            const noBand = band()
+            noBand.cast.characters = noBand.cast.characters.map(c => ({...c, propStem: undefined})) as never
+            writeFileSync(join(dir, 'project.json'), JSON.stringify(noBand))
+            let asked = 0
+            const result = await writeLayers({id: 'demo', dir, kind: 'music'}, async () => {
+                asked++
+                return []
+            })
+            expect(asked).toBe(0)
+            expect(result).toEqual({players: [], asked: [], given: [], dropped: []})
+        } finally {
+            rmSync(dir, {recursive: true, force: true})
+        }
     })
 })
