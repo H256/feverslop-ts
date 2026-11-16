@@ -134,6 +134,18 @@ const chooseGuarded = (role: CastingRole, value: string, select: HTMLSelectEleme
 }
 
 /** A changed casting.json: the run takes it over, and plans again what was planned from the old texts. */
+/** A band member the cast left without a layer of the song (#1085): the model is asked once - only the layer is written, the looks stay. */
+const askLayers = toasts.guard(async () => {
+  const result = await api.castLayers()
+  const given = result.given.map(g => `${g.name}: ${g.propStem}`).join(', ')
+  toasts.show(
+    given
+      ? `${given}. ${result.dropped.length ? `Gone with it: ${listSteps(result.dropped, project.value.kind)}. ` : ''}Plan again to use it.`
+      : 'None of them plays an instrument of the song.',
+  )
+  await refresh()
+})
+
 const planNow = toasts.guard(async () => {
   const {changes, redo} = await api.castingRedo()
   // a plan stopped at a stage stays there: the cast is taken over, the next stage is asked for by itself
@@ -186,6 +198,13 @@ const {
       <CalloutBox v-if="changed && !editing" as="div" class="btn-row">
         <span>casting.json has changes the plan does not have yet: they take effect with the next plan run.</span>
         <button class="btn primary" :disabled="busy" @click="planNow">Plan now</button>
+      </CalloutBox>
+      <CalloutBox v-if="data.cast?.layerQuestion?.length && !editing && !film" as="div" class="btn-row" data-cast-layers>
+        <span>
+          {{ data.cast.layerQuestion.map(q => `${q.name} (${q.prop})`).join(', ') }}: no layer of the song is set for what they carry, while others of the band
+          play an instrument. The model is asked once which of them play theirs - only the layer is written, the looks stay.
+        </span>
+        <button class="btn primary" :disabled="busy" @click="askLayers">Ask which layer</button>
       </CalloutBox>
       <NoticeList :errors="data.casting.errors" :warnings="data.casting.warnings" />
       <div v-if="!data.cast" class="empty">No cast yet - plan it with the button above.</div>
