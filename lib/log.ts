@@ -70,6 +70,11 @@ export function configureOutput(options: {quiet?: boolean; json?: boolean; debug
 }
 export const jsonOutput = () => json
 
+/** From now on only warnings and errors reach the terminal - the editor says once that it runs, the work its routes do in this process goes to no console. */
+export const beQuiet = () => {
+    quiet = true
+}
+
 export function setOutput(options: {verbose?: boolean; show?: Iterable<string>}) {
     verbose = options.verbose ?? verbose
     shown = new Set(options.show ?? [])
