@@ -316,3 +316,44 @@ test('two lines that run into each other share one boundary handle: dragging it 
   await page.getByRole('button', {name: 'Save', exact: true}).click()
   await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toMatchObject({lines: [{line: 0}, {line: 1}]})
 })
+
+test('a boundary without an overlap shows its handle only on hover', async ({page}) => {
+  await stubProject(page)
+  const lines = [
+    {
+      line: 0,
+      section: 'Chorus',
+      text: 'Ich bin',
+      words: [
+        {text: 'Ich', start: 1, end: 2},
+        {text: 'bin', start: 2, end: 3},
+      ],
+      estimated: false,
+      byHand: false,
+      beats: [],
+    },
+    {
+      line: 1,
+      section: 'Chorus',
+      text: 'nicht mehr',
+      words: [
+        {text: 'nicht', start: 3.2, end: 4},
+        {text: 'mehr', start: 4, end: 5},
+      ],
+      estimated: false,
+      byHand: false,
+      beats: [],
+    },
+  ]
+  await page.route('**/api/timing', r =>
+    r.request().method() === 'POST' ? r.fallback() : r.fulfill({json: {timing: {duration: 10, lines, cuts: [], beats: [], unplanned: [], outdated: []}}}),
+  )
+  await page.goto(`${editor.base}/p/music/demo/timing`)
+  const joint = page.locator('.tjoint')
+  await expect(joint).toHaveCount(1)
+  await expect(page.locator('.toverlap')).toHaveCount(0)
+  await expect(joint).toHaveCSS('opacity', '0')
+  const box = (await joint.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await expect(joint).toHaveCSS('opacity', '1')
+})

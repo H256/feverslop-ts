@@ -306,3 +306,15 @@
   background: var(--accent);
   color: var(--surface);
 }
+
+/* a boundary without an overlap is quiet: faint while the pointer is in the editor, full on the handle itself */
+.tjoint:not(.overlapping) {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.tedit:hover .tjoint:not(.overlapping) {
+  opacity: 0.4;
+}
+.tedit:hover .tjoint:not(.overlapping):hover {
+  opacity: 1;
+}
