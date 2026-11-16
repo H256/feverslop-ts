@@ -1,7 +1,7 @@
 import {computed, reactive, ref, shallowRef, type Ref} from 'vue'
 import type {TimingChange, TimingLine, TimingView, TimingWord} from '../../../../shared/workspace'
 import {clamp} from '../../lib/format'
-import {crossingOf, movedWord, timingChanges} from './words'
+import {MIN_WORD, crossingOf, movedWord, timingChanges} from './words'
 import {translate, splitWord, joinWords, fitSelection, markWords, validateWords} from './edit'
 
 const UNDO_STEPS = 200
@@ -83,6 +83,29 @@ export function useTimingDraft(view: Ref<TimingView>) {
   }
   const moveLine = (l: TimingLine, by: number) => setWords(l, translate(wordsOf(l), 0, wordsOf(l).length - 1, by, view.value.duration))
   const moveWord = (l: TimingLine, n: number, by: number, edge?: 'start' | 'end') => setWords(l, movedWord(wordsOf(l), n, by, edge, view.value.duration))
+  /** The words of two neighbouring lines as they are, to work out a boundary drag from the start every time. */
+  const boundaryBase = (a: TimingLine, b: TimingLine) => ({a: wordsOf(a).map(w => ({...w})), b: wordsOf(b).map(w => ({...w}))})
+  /**
+   * The boundary between two lines, one point for both (#1104): the last word of the earlier line ends there, the later line starts
+   * there and its words are fitted between it and its own end - a word that sat too early moves on with the rest. Where the later
+   * line has no room left after the point, or with `push`, it moves along as a whole instead, keeping its length: the way to
+   * work through a song in order, without making room behind the line first. Worked out from `base` (the words when the drag
+   * began), so it can be called on every pointer move.
+   */
+  const moveBoundary = (a: TimingLine, b: TimingLine, t: number, base = boundaryBase(a, b), push = false) => {
+    const before = base.a.map(w => ({...w}))
+    const last = before.at(-1)!
+    if (t - last.start < MIN_WORD) throw new Error(`The last word of "${a.text}" needs at least 0.05 seconds.`)
+    const end = base.b.at(-1)!.end
+    const fits = end - t >= base.b.length * MIN_WORD
+    const after =
+      fits && !push
+        ? fitSelection(base.b, 0, base.b.length - 1, t, end, view.value.duration)
+        : translate(base.b, 0, base.b.length - 1, t - base.b[0]!.start, view.value.duration)
+    last.end = Math.round(t * 1000) / 1000
+    setWords(a, before)
+    setWords(b, after)
+  }
   const resetLine = (l: TimingLine) => {
     remember()
     setWords(l, l.words)
@@ -305,6 +328,8 @@ export function useTimingDraft(view: Ref<TimingView>) {
     redo,
     moveLine,
     moveWord,
+    boundaryBase,
+    moveBoundary,
     resetLine,
     tighten,
     discard,

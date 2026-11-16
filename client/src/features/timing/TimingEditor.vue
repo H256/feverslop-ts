@@ -210,6 +210,37 @@ const dragWord = (event: PointerEvent, line: TimingLine, n: number, edge?: 'star
     },
   )
 }
+/**
+ * Two neighbouring lines that run into each other, or nearly (the later one starts less than half a second after the earlier one
+ * ends), where one of them is chosen: one boundary to drag for both. It is what a long vowel needs - the earlier line ends later,
+ * the later one starts later - without making room line by line.
+ */
+const joints = computed(() => {
+  const lines = props.view.lines.filter(l => !l.off)
+  const out: {a: TimingLine; b: TimingLine; overlap: number}[] = []
+  for (let n = 1; n < lines.length; n++) {
+    const a = lines[n - 1]!,
+      b = lines[n]!
+    if (!own(a) && !own(b)) continue
+    const gap = props.draft.startOf(b) - props.draft.endOf(a)
+    if (gap > 0.5 || props.draft.endOf(b) < span.value.from || props.draft.startOf(a) > span.value.to) continue
+    out.push({a, b, overlap: -gap})
+  }
+  return out
+})
+const dragJoint = (event: PointerEvent, a: TimingLine, b: TimingLine) => {
+  let base: ReturnType<typeof props.draft.boundaryBase>
+  let initial = 0
+  const pps = width.value / (span.value.to - span.value.from)
+  drag(
+    event,
+    (_by, e) => props.draft.moveBoundary(a, b, snapTime(initial + (e.clientX - event.clientX) / pps, e, [initial]), base, e.shiftKey),
+    () => {
+      base = props.draft.boundaryBase(a, b)
+      initial = props.draft.startOf(b)
+    },
+  )
+}
 const selectRange = (event: PointerEvent) => {
   if (!event.shiftKey) return
   event.preventDefault()
@@ -351,6 +382,20 @@ defineExpose({focus: () => editor.value?.focus({preventScroll: true}), playLine}
             <span>{{ w.text }}</span>
           </div>
         </template>
+      </template>
+      <template v-for="j in joints" :key="`j${j.a.line}-${j.b.line}`">
+        <div
+          v-if="j.overlap > 0.001"
+          class="toverlap"
+          :style="box(draft.startOf(j.b), draft.endOf(j.a), 2)"
+          :title="`Overlap of ${j.overlap.toFixed(2)} s: drag the handle to the right place`"
+        />
+        <div
+          :class="['tjoint', {overlapping: j.overlap > 0.001}]"
+          :style="{left: `${xOf(draft.startOf(j.b)) - 6}px`}"
+          :title="`Boundary between &quot;${j.a.text}&quot; and &quot;${j.b.text}&quot;: the earlier line ends here, the later one starts here and its words are fitted after it (Shift: the later line moves along as a whole)`"
+          @pointerdown="dragJoint($event, j.a, j.b)"
+        />
       </template>
       <template v-if="proposal?.words.length">
         <div

@@ -315,6 +315,7 @@ The assignment is in `project.json` (the step `singing`). It stays until `lyrics
 - Dragging a word moves it, dragging its edges changes its start or end. When it bumps into a neighbour, the neighbour gives way.
 - The bar above the words moves the whole line. **← →** moves it by 0.05 s, with Shift by 0.5 s. **Tab** chooses a word, then the arrows move the word, **Esc** the line again.
 - **Space** plays the line or the chosen word, a double click a word, a click into the waveform plays from there. **Ctrl+mouse wheel** or **+ / −** zooms, **Ctrl+Z** undoes.
+- Where the chosen line runs into the line before or after it (or is less than half a second from it), a handle ⇔ sits on their boundary and the overlap is hatched red. Drag it: the earlier line ends there, the later one starts there, and its words are fitted between it and its own end - a word that sat too early moves on with the rest. Where the later line has no room left after the point, or with **Shift**, it moves along as a whole and keeps its length. That is how a long vowel is given its time, working through the song in order.
 - Dashed lines are the cuts between the clips. When a cut falls into a word, the word gets a red frame and the page warns.
 - **Hide the side column** folds the column on the right away for room; the browser keeps that.
 

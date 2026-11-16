@@ -272,3 +272,47 @@ test('the proposal of the refinement is drawn on the timeline and a line is take
   await expect.poll(() => applied).toEqual([{id: 'song-preview', lines: [0]}])
   await expect(page.locator('.tproposal')).toHaveCount(0)
 })
+
+test('two lines that run into each other share one boundary handle: dragging it moves the earlier end and the later start', async ({page}) => {
+  const posted = await stubProject(page)
+  const lines = [
+    {
+      line: 0,
+      section: 'Chorus',
+      text: 'Ich bin',
+      words: [
+        {text: 'Ich', start: 1, end: 2},
+        {text: 'bin', start: 2, end: 3},
+      ],
+      estimated: false,
+      byHand: false,
+      beats: [],
+    },
+    {
+      line: 1,
+      section: 'Chorus',
+      text: 'nicht mehr',
+      words: [
+        {text: 'nicht', start: 2.5, end: 3.5},
+        {text: 'mehr', start: 3.5, end: 5},
+      ],
+      estimated: false,
+      byHand: false,
+      beats: [],
+    },
+  ]
+  await page.route('**/api/timing', r =>
+    r.request().method() === 'POST' ? r.fallback() : r.fulfill({json: {timing: {duration: 10, lines, cuts: [], beats: [], unplanned: [], outdated: []}}}),
+  )
+  await page.goto(`${editor.base}/p/music/demo/timing`)
+  await expect(page.locator('.toverlap')).toHaveCount(1)
+  const joint = page.locator('.tjoint')
+  const box = (await joint.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2, {steps: 6})
+  await page.mouse.up()
+  await expect(page.locator('.toverlap')).toHaveCount(0)
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toMatchObject({lines: [{line: 0}, {line: 1}]})
+})

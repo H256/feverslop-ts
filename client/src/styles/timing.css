@@ -260,3 +260,49 @@
 .tproposal.omit::before {
   border-left-color: var(--stale);
 }
+
+/* where two lines run into each other: the overlap hatched, one handle for the boundary of both (#1104) */
+.toverlap {
+  position: absolute;
+  top: 28px;
+  height: 94px;
+  pointer-events: none;
+  z-index: 3;
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--danger) 45%, transparent) 0 4px, transparent 4px 8px);
+  border-left: 1px solid var(--danger);
+  border-right: 1px solid var(--danger);
+}
+.tjoint {
+  position: absolute;
+  top: 26px;
+  height: 100px;
+  width: 12px;
+  z-index: 4;
+  cursor: ew-resize;
+}
+.tjoint::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+}
+.tjoint.overlapping::before,
+.tjoint.overlapping::after {
+  background: var(--danger);
+}
+.tjoint::after {
+  content: '⇔';
+  position: absolute;
+  left: -4px;
+  top: 38px;
+  width: 20px;
+  line-height: 20px;
+  text-align: center;
+  font-size: var(--text-s);
+  border-radius: var(--radius-s);
+  background: var(--accent);
+  color: var(--surface);
+}
