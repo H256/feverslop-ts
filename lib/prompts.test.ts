@@ -73,7 +73,8 @@ describe('the lyrics prompt', () => {
         const input = songLyricsPrompt('a lighthouse', 'English', 210).input
         expect(input).toContain('Maximum length: 210 seconds - the song is cut off there')
         expect(input).toContain('room left for the intro, instrumental parts and the outro')
-        expect(input).not.toMatch(/sung words in all|per second/)
+        expect(input).toContain('about 233 sung words at most in all')
+        expect(input).not.toContain("per second")
         expect(songLyricsPrompt('a lighthouse', 'English').input).not.toContain('Maximum length')
     })
     test('the musical style is part of it only when there is one', () => {

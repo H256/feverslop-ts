@@ -19,7 +19,7 @@ export function songLyricsPrompt(idea: string, language: string, durationSec?: n
         input: `Write song lyrics from this idea for a music video, for the YuE2 text-to-music model.
 Idea: ${idea}
 Language: ${language}
-${musicStyle ? `Musical style - the lyrics must fit its sound, tempo and mood: ${musicStyle.trim()}\n` : ''}${seconds ? `Maximum length: ${seconds} seconds - the song is cut off there, so the lyrics must be sung well within it, with room left for the intro, instrumental parts and the outro. How many words fit depends on the tempo and the style: do not write more than that.\n` : ''}
+${musicStyle ? `Musical style - the lyrics must fit its sound, tempo and mood: ${musicStyle.trim()}\n` : ''}${seconds ? `Maximum length: ${seconds} seconds - the song is cut off there, so the lyrics must be sung well within it, with room left for the intro, instrumental parts and the outro. That is about ${Math.round(seconds / 0.9)} sung words at most in all, repeated choruses counted - fewer is fine, more is cut off.\n` : ''}
 Rules:
 - Section labels in English, in square brackets on their own line, whatever the language of the song: [Intro], [Verse 1], [Verse 2], [Pre-Chorus], [Chorus], [Bridge], [Instrumental Break], [Outro]. Number the verses. Blank line between sections.
 - [Instrumental Break] is a part without words: the tag alone, no lines under it.
