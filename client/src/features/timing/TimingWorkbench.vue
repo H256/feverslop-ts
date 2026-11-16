@@ -87,6 +87,34 @@ const outdated = computed(() => {
   for (const {clip, lines} of props.view.outdated) for (const n of lines) found.set(n, [...(found.get(n) ?? []), clip])
   return found
 })
+// the words a cut falls into, with where they would be split at it
+const lineCutSplits = computed(() => (draft.line.value ? draft.cutSplits(draft.line.value) : []))
+const allCutSplits = computed(() => props.view.lines.flatMap(l => draft.cutSplits(l)))
+const splitHere = toasts.guard(async (items: ReturnType<typeof draft.cutSplits>) => {
+  const count = draft.splitAtCuts(items)
+  saved.value = `${plural(count, 'word')} split at the cut. Both parts keep the complete audible span; Join parts puts a word together again.`
+})
+const splitEverywhere = toasts.guard(async () => {
+  const items = allCutSplits.value.filter(i => i.ok)
+  if (!items.length) return
+  await ask({
+    title: `Split ${plural(items.length, 'word')} at the clip cuts`,
+    lines: [
+      'A word that a cut falls into is sung half in one clip, half in the next. It is split at the cut: both parts keep the whole audible span and the complete text.',
+      'The text boundary is guessed from the time. Check it in the list; a split can be set again afterwards (Re-split) or put together (Join parts).',
+    ],
+    body: () =>
+      h(
+        'ul',
+        items.map(i => h('li', [h('b', `${i.before}│${i.after}`), ` at ${clock(i.time)} (cut ${i.cut.replace(/^\D+/, '')}) in "${i.line.text}"`])),
+      ),
+    confirm: `Split ${plural(items.length, 'word')}`,
+    submit: async () => {
+      draft.splitAtCuts(items)
+      saved.value = `${plural(items.length, 'word')} split at the cuts. Check the text boundaries; Re-split sets one again.`
+    },
+  })
+})
 const overlapping = computed(() => overlappingLines(props.view.lines, draft.startOf, draft.endOf))
 // the lines that want a look, in the order of the song: a clip cut in a word, an early start, an old prompt, a guessed time, a line running into the next
 const problems = computed(() =>
@@ -644,6 +672,14 @@ onMounted(() => {
             </button>
             <button
               class="btn tw-item"
+              :disabled="!allCutSplits.some(i => i.ok)"
+              title="Split every word a clip cut falls into at the cut, after a list to check"
+              @click="splitEverywhere()"
+            >
+              Split words at cuts ({{ allCutSplits.filter(i => i.ok).length }}) <small class="muted" aria-hidden="true">in the whole song, after a look</small>
+            </button>
+            <button
+              class="btn tw-item"
               :disabled="draft.edits.value.size > 0 || refining.pending.value || saving.pending.value"
               title="Confirm this lyric is sung, then preview a local alignment with its neighbour"
               @click="retryPassage()"
@@ -717,6 +753,18 @@ onMounted(() => {
               .join(', ')
           }}: the word is then sung half in one clip, half in the next. Split the word at the cut to preserve its complete audible span, or adjust its timing
           after listening.
+          <span class="btn-row">
+            <button
+              v-for="i in lineCutSplits.filter(x => x.ok)"
+              :key="i.n"
+              class="btn"
+              :title="`Split at the cut ${i.cut} (${clock(i.time)}); the text boundary is a guess from the time`"
+              @click="splitHere([i])"
+            >
+              Split {{ i.before }}│{{ i.after }} at the cut
+            </button>
+            <button v-if="lineCutSplits.filter(x => x.ok).length > 1" class="btn" @click="splitHere(lineCutSplits)">Split all in this line</button>
+          </span>
         </CalloutBox>
         <CalloutBox v-if="draft.overlaps.value.length" kind="warn" as="div">
           This line overlaps {{ draft.overlaps.value.map(l => `"${l.text}"`).join(' and ') }}. Fine for two singers at once - otherwise move one of them.

@@ -106,6 +106,48 @@ export function useTimingDraft(view: Ref<TimingView>) {
     setWords(a, before)
     setWords(b, after)
   }
+  /**
+   * Where each word that a clip cut falls into could be split at the cut (#1104): the word, the time (the cut), and the text
+   * boundary guessed from the time - the share of the word's span before the cut, as a share of its letters. A guess: the letters of
+   * a word are not spread evenly over its time, so the boundary is shown before it is taken and can be set again. `ok` is false where
+   * a part would be shorter than 0.05 s, or the word has one letter.
+   */
+  const cutSplits = (l: TimingLine) => {
+    const ws = wordsOf(l)
+    const seen = new Set<TimingWord>()
+    return crossing(l).flatMap(({word, cut}) => {
+      if (seen.has(word)) return []
+      seen.add(word)
+      const letters = Array.from(word.text)
+      const cp = clamp(Math.round((letters.length * (cut.start - word.start)) / (word.end - word.start)), 1, Math.max(1, letters.length - 1))
+      return [
+        {
+          line: l,
+          n: ws.indexOf(word),
+          word,
+          cut: cut.id,
+          time: cut.start,
+          before: letters.slice(0, cp).join(''),
+          after: letters.slice(cp).join(''),
+          ok: letters.length >= 2 && cut.start - word.start >= MIN_WORD && word.end - cut.start >= MIN_WORD,
+        },
+      ]
+    })
+  }
+  type CutSplit = ReturnType<typeof cutSplits>[number]
+  /** Split the given words at their cuts, in one undo step; the ones that cannot be split are left. Returns how many were. */
+  const splitAtCuts = (items: CutSplit[]) => {
+    const todo = items.filter(i => i.ok)
+    if (!todo.length) throw new Error('No word can be split at its cut: a part would be shorter than 0.05 seconds.')
+    action(() => {
+      for (const l of new Set(todo.map(i => i.line))) {
+        let ws = wordsOf(l)
+        for (const i of todo.filter(x => x.line === l).sort((a, b) => b.n - a.n)) ws = splitWord(ws, i.n, i.before.length, i.time)
+        setWords(l, ws)
+      }
+    })
+    return todo.length
+  }
   const resetLine = (l: TimingLine) => {
     remember()
     setWords(l, l.words)
@@ -330,6 +372,8 @@ export function useTimingDraft(view: Ref<TimingView>) {
     moveWord,
     boundaryBase,
     moveBoundary,
+    cutSplits,
+    splitAtCuts,
     resetLine,
     tighten,
     discard,

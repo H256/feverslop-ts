@@ -411,3 +411,65 @@ test('B chooses a boundary, the arrows move it, Esc leaves it', async ({page}) =
   for (let n = 0; n < 11; n++) await page.keyboard.press('Control+z')
   await expect(page.locator('.toverlap')).toHaveCount(1)
 })
+
+const crossingLine = [
+  {
+    line: 0,
+    section: 'Verse',
+    text: 'Ein Traum',
+    words: [
+      {text: 'Ein', start: 1, end: 2.5},
+      {text: 'Traum', start: 2.5, end: 4},
+    ],
+    estimated: false,
+    byHand: false,
+    beats: [],
+  },
+]
+const cuts = [
+  {id: 'clip-1', start: 0, end: 3.2},
+  {id: 'clip-2', start: 3.2, end: 10},
+]
+
+test('a word a cut falls into is split at the cut from the warning, and Re-split sets the boundary again', async ({page}) => {
+  const posted = await stubProject(page)
+  await page.route('**/api/timing', r =>
+    r.request().method() === 'POST'
+      ? r.fallback()
+      : r.fulfill({json: {timing: {duration: 10, lines: crossingLine, cuts, beats: [], unplanned: [], outdated: []}}}),
+  )
+  await page.goto(`${editor.base}/p/music/demo/timing`)
+  await expect(page.getByText('A clip cut falls into')).toBeVisible()
+  await page.getByRole('button', {name: 'Split Tr│aum at the cut', exact: true}).click()
+  await expect(page.getByText('A clip cut falls into')).toHaveCount(0)
+  // the two parts: choose both and set the boundary again
+  await page.locator('.tword', {hasText: /^Tr$/}).click()
+  await page.locator('.tword', {hasText: /^aum$/}).click({modifiers: ['Shift']})
+  await page.getByRole('button', {name: 'Re-split', exact: true}).click()
+  await expect(page.getByLabel('Split after character')).toHaveValue('2')
+  await expect(page.getByLabel('Split time')).toHaveValue('3.2')
+  await page.getByLabel('Split after character').fill('3')
+  await page.getByRole('button', {name: 'Split word', exact: true}).click()
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await expect
+    .poll(() => (posted.find(p => p.path === 'timing')?.body as {lines: {words: {text: string}[]}[]} | undefined)?.lines[0]?.words.map(w => w.text))
+    .toEqual(['Ein', 'Tra', 'um'])
+})
+
+test('Split words at cuts lists every word first and splits them in one step', async ({page}) => {
+  await stubProject(page)
+  await page.route('**/api/timing', r =>
+    r.request().method() === 'POST'
+      ? r.fallback()
+      : r.fulfill({json: {timing: {duration: 10, lines: crossingLine, cuts, beats: [], unplanned: [], outdated: []}}}),
+  )
+  await page.goto(`${editor.base}/p/music/demo/timing`)
+  await page.locator('.tw-more > summary').click()
+  await page.getByRole('button', {name: 'Split words at cuts (1)', exact: true}).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toContainText('Tr│aum')
+  await dialog.getByRole('button', {name: 'Split 1 word', exact: true}).click()
+  await expect(page.getByText('A clip cut falls into')).toHaveCount(0)
+  await page.locator('.tw-more > summary').click()
+  await expect(page.getByRole('button', {name: 'Split words at cuts (0)', exact: true})).toBeDisabled()
+})
