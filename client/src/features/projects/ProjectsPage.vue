@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import CalloutBox from '../../components/CalloutBox.vue'
+import AppIcon from '../../components/AppIcon.vue'
 import {computed, h, reactive, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {projectRoot} from '../../api/urls'
@@ -110,8 +111,8 @@ function change(next: Partial<ListFilter>, replace = false) {
       <button class="btn" :title="machine.data.value ? machineSummary(checks) : 'What this machine has of what a video needs'" @click="showMachine">
         Machine<span v-if="missing.length" class="chip bad pp-count">{{ missing.length }} missing</span>
       </button>
-      <button class="btn" @click="newFilm">New film</button>
-      <button class="btn primary" @click="newProject">New music video</button>
+      <button class="btn" @click="newFilm"><AppIcon name="add" />New film</button>
+      <button class="btn primary" @click="newProject"><AppIcon name="add" />New music video</button>
     </PageBar>
     <!-- something a run needs is not there: said before a first run fails on it -->
     <CalloutBox v-if="missing.length" kind="warn" as="div" class="pp-machine">
@@ -130,7 +131,7 @@ function change(next: Partial<ListFilter>, replace = false) {
             <li>See what this machine has: <button class="btn mini" @click="showMachine">Machine</button> - the servers are set up in the terminal with <code>bun run setup</code>.</li>
             <li>
               Start a music video or a film: <button class="btn mini primary" @click="newProject">New music video</button>
-              <button class="btn mini" @click="newFilm">New film</button> - or <code>bun run init</code>, <code>bun run film:init</code>.
+              <button class="btn mini" @click="newFilm"><AppIcon name="add" />New film</button> - or <code>bun run init</code>, <code>bun run film:init</code>.
             </li>
             <li>Plan it stage by stage on the project's pages, then render.</li>
           </ol>

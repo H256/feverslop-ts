@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import {RouterLink, type RouteLocationRaw} from 'vue-router'
 import type {DirectionEdit, DirectionRule} from '../../../../shared/direction'
 import StateTag from '../../components/StateTag.vue'
@@ -50,7 +51,7 @@ const apart = props.as === 'leftover' || props.as === 'review'
         >
           Keep for the new shot
         </button>
-        <button class="btn mini" :disabled="blocked" @click="$emit('clear', item)">Clear</button>
+        <button class="btn mini" :disabled="blocked" @click="$emit('clear', item)"><AppIcon name="close" />Clear</button>
       </template>
       <button
         v-else-if="as === 'planned'"
@@ -60,13 +61,19 @@ const apart = props.as === 'leftover' || props.as === 'review'
         aria-label="Remove instruction"
         @click="$emit('remove', item.rule!)"
       >
-        Remove
+        <AppIcon name="remove" />Remove
       </button>
       <template v-else-if="item.rule">
-        <button class="btn mini" :disabled="blocked || dirty" aria-label="Edit instruction" @click="$emit('edit', item.rule)">Edit</button>
-        <button class="btn mini" :disabled="blocked" aria-label="Remove instruction" @click="$emit('remove', item.rule)">Remove</button>
+        <button class="btn mini" :disabled="blocked || dirty" aria-label="Edit instruction" @click="$emit('edit', item.rule)">
+          <AppIcon name="edit" />Edit
+        </button>
+        <button class="btn mini" :disabled="blocked" aria-label="Remove instruction" @click="$emit('remove', item.rule)">
+          <AppIcon name="remove" />Remove
+        </button>
       </template>
-      <button v-else-if="item.edit" class="btn mini" :disabled="blocked" aria-label="Undo edit" @click="$emit('undo', item.edit)">Undo</button>
+      <button v-else-if="item.edit" class="btn mini" :disabled="blocked" aria-label="Undo edit" @click="$emit('undo', item.edit)">
+        <AppIcon name="undo" />Undo
+      </button>
     </div>
   </div>
 </template>

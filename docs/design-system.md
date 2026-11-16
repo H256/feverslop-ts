@@ -27,15 +27,32 @@ The workspace's tokens live in `:root` of `client/src/styles/tokens.css`. A styl
 
 | Token | Means | Not for |
 | --- | --- | --- |
-| `--accent` (blue) | the main action of a page (`.btn.primary`), the current tab, focus, a selected item | links, warnings |
+| `--accent` (mint in the dark theme, blue in the light one) | the main action of a page (`.btn.primary`), the current tab, focus, a selected item | links, warnings |
 | `--plan` (violet) | a button that asks the language model | |
 | `--finish` (teal) | a button that finishes the video for publishing | |
 | `--danger` (red) | something that removes or stops (`.btn.danger`: Remove, Stop), a failure | a main action |
 | `--stale` (amber) | made from an older state, needs doing again | |
-| `--ok` (green) | done, reachable | |
+| `--ok` (lime in the dark theme, green in the light one) | done, reachable | the main action: that is `--accent` |
 | `--text`, underlined | a link (`.link`, a `RouterLink` in text) | |
 
+The dark theme is a dark green: `--bg` is the page, `--surface` a card, `--raised` a button or a quiet part, `--hover` a button under the pointer, `--head` the title bar of a card (a step lighter than `--surface`, so the edges of a card read at a glance), `--line` a border. The accent is mint there and `--ok` a yellowish lime, so that a "done" mark is never read as the main action; in the light theme both keep their old colours.
+
 A disabled button is grey in every variant: `--raised` background, `--muted` text. A faded primary or danger button is never shown.
+
+### Contrast
+
+Measured with the WCAG 2.x formula on the token values (4.5 : 1 for text, 3 : 1 for large text and parts of a control). Re-measure when a colour changes.
+
+| Pair (dark theme) | Ratio |
+| --- | --- |
+| `--text` on `--bg` / `--surface` / `--raised` / `--hover` / `--head` | 16.0 / 14.5 / 12.5 / 10.3 / 12.8 |
+| `--muted` on `--bg` / `--surface` / `--raised` / `--head` | 7.8 / 7.0 / 6.0 / 6.2 |
+| `--accent-text` on `--accent` (a primary button) | 10.5 |
+| `--accent` on `--bg` / `--surface` / `--accent-soft` (a link, the current tab, a ring) | 10.7 / 9.6 / 7.2 |
+| `--ok`, `--stale`, `--danger`, `--plan`, `--finish` on `--surface` | 11.3, 9.7, 6.6, 7.4, 9.2 |
+| `--line` on `--surface` (the border of a card or a field) | 1.6 |
+
+Every text pair is above 4.5 : 1, in the light theme too (`--text` 17.4, `--muted` on `--bg` 5.5, `--accent-text` on `--accent` 6.5, `--ok` 6.7). The borders are the weak point: 1.6 : 1 is below the 3 : 1 that WCAG asks of the edge of a control. A field is told apart by its fill (`--bg` inside a `--surface` card) and by the accent ring on focus, not by its border alone.
 
 ## Buttons
 
@@ -47,7 +64,13 @@ A disabled button is grey in every variant: `--raised` background, `--muted` tex
 | `.btn.mini` | small actions inside a row or a note: Use the default, Undo |
 | `.link` | a button that reads as a link: an id that jumps somewhere |
 
+A button is a tonal fill (`--raised`, `--hover` under the pointer) without an outline; the primary one is `--accent` with a soft glow, the danger one has no fill until the pointer is on it. Focus is a ring of the accent colour, on buttons and on fields alike.
+
 The variants stay classes, not a `Button` component (#915): a component would only wrap `<button>` and turn a prop into the same class - the class says it as well, and a `RouterLink` or a `<label>` can carry it too.
+
+### Icons
+
+A button that does one clear thing carries an icon before its words: `<AppIcon name="save" />Save`. `AppIcon` draws the icons inline as SVG paths (`currentColor`, 24 × 24, a 1.7 stroke), so there is no icon font and no extra file to load. The set is taken from [Lucide](https://lucide.dev) (ISC licence); to add one, copy its paths from the Lucide source into `ICONS` in `AppIcon.vue` (turn a circle or a rect into a path, the component draws `<path>` only). A button with a long or changing text needs no icon, and an icon never stands for a button without a `title` or a visible word.
 
 ## Components
 
@@ -55,7 +78,7 @@ Shared parts live in `client/src/components/`, each with its own scoped styles a
 
 | Component | Use | Says |
 | --- | --- | --- |
-| `PanelCard` | a card of a page: Direction's groups and proposal, Look's whole-look card, Post-work's steps | `title`, `note` (two lines, the whole on hover), slots `head` and `foot`; `tone` = `accent` (to act on), `stale` (to decide), `quiet` (nothing to do); `bar` = `line`, `accent`, `ok`; `flush` for a card its content fills |
+| `PanelCard` | a card of a page: Direction's groups and proposal, Look's whole-look card, Post-work's steps. A card with a title has a title bar (`--head`), like a group of the settings | `title`, `note` (two lines, the whole on hover), slots `head` and `foot`; `tone` = `accent` (to act on), `stale` (to decide), `quiet` (nothing to do); `bar` = `line`, `accent`, `ok`; `flush` for a card its content fills |
 | `TabBar` | tabs above a panel: the Direction side, the clip inspector | `tabs` (`id`, `label`, `count`), `v-model`; `inset` in a side panel |
 | `StateTag` | a small outlined word about a thing: edit, made, a name | `state` = `plain`, `ok`, `stale`, `bad`; muted without one |
 | `CalloutBox` | a boxed word to the reader, in place of `.note`, `.warn`, `.warn.bad` | `kind` = `note` (grey, default), `warn` (amber: check this, do it again), `error` (red: failed); `as` for the element (`p` by default). Its rules stay in `monitor.css`, where `.warn` was, so that a page's margin rules still win |
@@ -79,7 +102,7 @@ A page says what a card or a tag is (its tone, its state), never how it is drawn
 | `SegmentedControl` | ![SegmentedControl](design-system/segmented-control.png) |
 | `SplitLayout` (`full`, the Library) | ![SplitLayout](design-system/split-layout.png) |
 
-The pictures are taken in the light theme; `bun run editor` shows both.
+The pictures are taken in the light theme, from before the tonal buttons and the title bar; `bun run editor` shows the current look in both themes.
 
 ## Stylesheets
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import SplitLayout from '../../components/SplitLayout.vue'
 import CalloutBox from '../../components/CalloutBox.vue'
 import {computed, h, onMounted, ref, toRef, watch} from 'vue'
@@ -575,7 +576,7 @@ onMounted(() => {
           <button class="btn mini" :disabled="!refinement.change.lines.length || draft.edits.value.size > 0 || refining.pending.value" @click="takeRefinement">
             {{ refinement.passage?.mode === 'line-window' ? 'Apply word refinement' : refinement.passage ? 'Apply passage' : 'Take all' }}
           </button>
-          <button class="btn mini" @click="refinement = undefined">Dismiss</button>
+          <button class="btn mini" @click="refinement = undefined"><AppIcon name="close" />Dismiss</button>
         </span>
       </div>
       <div class="tedit-head btn-row">
@@ -613,7 +614,7 @@ onMounted(() => {
         </template>
         <div class="spacer" />
         <span v-if="draft.line.value" class="tw-grp">
-          <button class="btn" @click="editor?.playLine(draft.line.value)">Listen</button>
+          <button class="btn" @click="editor?.playLine(draft.line.value)"><AppIcon name="listen" />Listen</button>
           <button
             v-if="draft.line.value && lead >= EARLY_FROM"
             class="btn"
@@ -719,8 +720,8 @@ onMounted(() => {
           </div>
         </details>
         <span class="tw-grp">
-          <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()">Undo</button>
-          <button class="btn" :disabled="!draft.future.length" title="Ctrl+Shift+Z" @click="draft.redo()">Redo</button>
+          <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()"><AppIcon name="undo" />Undo</button>
+          <button class="btn" :disabled="!draft.future.length" title="Ctrl+Shift+Z" @click="draft.redo()"><AppIcon name="redo" />Redo</button>
         </span>
         <span class="tw-grp">
           <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(0.8)">+</button>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import {computed, nextTick, ref, watch} from 'vue'
 import type {TimingView} from '../../../../shared/workspace'
 import {mediaUrl} from '../../api/urls'
@@ -136,7 +137,9 @@ const clipLabel = (c: (typeof clips.value)[number]) =>
               : `Render ${plural(todo.length, 'clip')} that ${todo.length === 1 ? 'is' : 'are'} missing or outdated`
           }}
         </button>
-        <button class="btn" :disabled="busy || !made.length" title="Every clip again, the old ones are put away" @click="render(true)">Render all again</button>
+        <button class="btn" :disabled="busy || !made.length" title="Every clip again, the old ones are put away" @click="render(true)">
+          <AppIcon name="render" />Render all again
+        </button>
         <button v-if="clip" class="btn" :disabled="busy" @click="render(true, [clip.id])">Render {{ clip.id }} again</button>
       </div>
       <CalloutBox v-if="outdated.length" kind="warn" as="div" class="lp-gap">

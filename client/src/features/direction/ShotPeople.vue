@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import {computed, ref} from 'vue'
 import type {DirectionShot, DirectionView} from '../../../../shared/direction'
 import {withNames} from '../../lib/format'
@@ -80,7 +81,7 @@ const into = async () => {
   </article>
   <div v-if="outs.size" class="btn-row out-bar">
     <button class="btn primary" :disabled="blocked" @click="out">Take {{ outNames.join(', ') }} out of the shot</button>
-    <button class="btn" :disabled="blocked" @click="outs = new Set()">Clear</button>
+    <button class="btn" :disabled="blocked" @click="outs = new Set()"><AppIcon name="close" />Clear</button>
     <span class="muted">By code. If the shot's words still name them, one proposal writes it without all of them.</span>
   </div>
   <p v-if="!shot.characters.length" class="muted">Nobody - the shot shows the place.</p>
@@ -108,7 +109,7 @@ const into = async () => {
       />
       <div class="btn-row out-bar">
         <button class="btn primary" :disabled="blocked" @click="into">Bring {{ inNames.join(', ') }} into the shot</button>
-        <button class="btn" :disabled="blocked" @click="ins = new Set()">Clear</button>
+        <button class="btn" :disabled="blocked" @click="ins = new Set()"><AppIcon name="close" />Clear</button>
         <span class="muted">By code; one proposal writes where they are and what they do. Nothing is rendered.</span>
       </div>
     </template>

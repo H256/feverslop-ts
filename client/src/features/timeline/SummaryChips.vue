@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import {computed} from 'vue'
 import {RouterLink} from 'vue-router'
 import {mediaUrl} from '../../api/urls'
@@ -31,7 +32,7 @@ const stalePictures = computed(() => project.value.pictures.filter(p => fresh.va
   >
   <a v-if="project.previewVideo" class="chip" :href="mediaUrl(project.previewVideo, session.roots)" target="_blank" rel="noopener">Preview video</a>
   <span v-if="run && last" :class="run[1]" :title="[last.command, ...last.failures].join('\n')">{{ run[0] }}</span>
-  <button v-if="failed && last" class="chip" :title="last.command" @click="actions.repeatLast(last)">Repeat</button>
+  <button v-if="failed && last" class="chip" :title="last.command" @click="actions.repeatLast(last)"><AppIcon name="repeat" />Repeat</button>
   <RouterLink v-if="missingPictures" class="chip bad" :to="`${session.root}/references`">{{ missingPictures }} pictures missing</RouterLink>
   <RouterLink v-if="stalePictures" class="chip stale" :to="`${session.root}/references`">{{ stalePictures }} pictures stale</RouterLink>
 </template>

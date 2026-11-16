@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import {computed} from 'vue'
 import {plural} from '../../lib/format'
 import {reviewList, stateOf} from './clips'
@@ -46,8 +47,8 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
     <!-- the marked clips: render them, or plan their beats again (#774: grouped, coloured by what they do) -->
     <div v-if="marked.size" class="grp marked-grp">
       <span class="num">{{ marked.size }} marked</span>
-      <button class="b-render strong" @click="actions.renderMarked()">Render marked</button>
-      <button @click="previewMarked">Preview marked</button>
+      <button class="b-render strong" @click="actions.renderMarked()"><AppIcon name="render" />Render marked</button>
+      <button @click="previewMarked"><AppIcon name="preview" />Preview marked</button>
       <button
         v-if="markedBeats.length"
         class="b-plan"
@@ -64,7 +65,7 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
       >
         People…
       </button>
-      <button title="Unmark them all" @click="marked.clear()">Clear</button>
+      <button title="Unmark them all" @click="marked.clear()"><AppIcon name="close" />Clear</button>
     </div>
     <div v-if="count.stale || count.missing || rendered" class="grp">
       <button
@@ -127,7 +128,7 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
       </template>
     </div>
     <div v-if="clips.length" class="grp">
-      <button class="b-finish" title="Cheap renders of all clips into previews/" @click="allClips">Preview all</button>
+      <button class="b-finish" title="Cheap renders of all clips into previews/" @click="allClips"><AppIcon name="preview" />Preview all</button>
       <button
         v-if="clips.some(c => c.preview)"
         class="b-finish"

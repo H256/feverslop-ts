@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import CalloutBox from '../../components/CalloutBox.vue'
 import {toRef} from 'vue'
 import {RouterLink} from 'vue-router'
@@ -89,7 +90,7 @@ const exportable = () => !!props.reference.picture
         >
           Use my own anchor
         </button>
-        <button v-if="exportable()" class="btn" @click="guard(actions.putIntoLibrary)()">Put into the library</button>
+        <button v-if="exportable()" class="btn" @click="guard(actions.putIntoLibrary)()"><AppIcon name="library" />Put into the library</button>
       </div>
     </SheetMedia>
     <div class="section">
@@ -109,7 +110,7 @@ const exportable = () => !!props.reference.picture
         :about="versionAbout(version)"
         @view="viewer.open(version.picture, roots, 'Older version', reference.name, version.prompt)"
       >
-        <button class="btn" :disabled="!!reference.library" @click="guard(actions.pick)(version)">Make current</button>
+        <button class="btn" :disabled="!!reference.library" @click="guard(actions.pick)(version)"><AppIcon name="check" />Make current</button>
       </VersionCard>
     </div>
   </div>

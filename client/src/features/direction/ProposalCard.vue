@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import CalloutBox from '../../components/CalloutBox.vue'
 import {RouterLink, type RouteLocationRaw} from 'vue-router'
 import type {DirectionView} from '../../../../shared/direction'
@@ -43,7 +44,7 @@ defineEmits<{take: []; drop: []}>()
     <template #foot>
       <button class="btn primary" :disabled="blocked || dirty || view.proposalStale || !!view.unresolved.length" @click="$emit('take')">
         {{ view.proposal.conflicts.length ? 'Take anyway' : 'Take changes' }}</button
-      ><button class="btn" :disabled="blocked" @click="$emit('drop')">Drop proposal</button>
+      ><button class="btn" :disabled="blocked" @click="$emit('drop')"><AppIcon name="remove" />Drop proposal</button>
     </template>
   </PanelCard>
 </template>

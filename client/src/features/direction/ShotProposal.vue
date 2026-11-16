@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import {computed} from 'vue'
 import type {DirectionChange, DirectionView} from '../../../../shared/direction'
 import {shotDiff} from './directionItems'
@@ -31,7 +32,7 @@ const diff = computed(() => shotDiff(props.change.before, props.change.after, pr
       >
         {{ view.proposal?.conflicts.length ? 'Take anyway and build the prompts' : 'Take and build the prompts' }}
       </button>
-      <button class="btn" :disabled="blocked" @click="$emit('drop')">Drop</button>
+      <button class="btn" :disabled="blocked" @click="$emit('drop')"><AppIcon name="remove" />Drop</button>
     </div>
   </section>
 </template>

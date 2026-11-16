@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import DisclosureBox from '../../components/DisclosureBox.vue'
 import CalloutBox from '../../components/CalloutBox.vue'
 import {computed, nextTick, ref, watch} from 'vue'
@@ -247,7 +248,7 @@ const clips = computed(() =>
         </button>
         <button class="btn" :disabled="!listening || marks.length >= selected.length" @click="tap()">Mark onset (M)</button>
         <button class="btn" :disabled="!listening || marks.length !== selected.length" @click="tap(true)">Final end</button>
-        <button class="btn" :disabled="!marks.length" @click="marks.pop()">Retract (Backspace)</button>
+        <button class="btn" :disabled="!marks.length" @click="marks.pop()"><AppIcon name="undo" />Retract (Backspace)</button>
         <button
           class="btn"
           :disabled="marks.length !== selected.length + 1"

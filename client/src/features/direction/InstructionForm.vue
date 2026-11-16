@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import FormField from '../../components/FormField.vue'
+import AppIcon from '../../components/AppIcon.vue'
 import {computed, ref, watch} from 'vue'
 import {useRoute} from 'vue-router'
 import type {DirectionRule, DirectionScope, DirectionView} from '../../../../shared/direction'
@@ -117,8 +118,8 @@ defineExpose({edit, clear, editing})
       <textarea v-model="text" rows="5" placeholder="Kael turns toward his own left, ending with his back to the camera." />
     </FormField>
     <div class="btn-row">
-      <button class="btn primary" :disabled="invalid || !changed" @click="save">Save instruction</button
-      ><button v-if="editing || text" class="btn" @click="clear">Cancel edit</button>
+      <button class="btn primary" :disabled="invalid || !changed" @click="save"><AppIcon name="save" />Save instruction</button
+      ><button v-if="editing || text" class="btn" @click="clear"><AppIcon name="close" />Cancel edit</button>
     </div>
     <p class="muted small">Saved, nothing changes yet: <b>Preview changes</b> asks the language model.</p>
   </fieldset>

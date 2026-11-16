@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from './AppIcon.vue'
 import CalloutBox from './CalloutBox.vue'
 /**
  * What a change on the page does when saved, and the buttons that save it: the foot of the Singers and the Timing page alike. Without
@@ -28,8 +29,8 @@ defineEmits<{discard: []; save: []; saveAndPlan: []; plan: []}>()
       </ul>
       <slot name="warning" />
       <div class="btn-row">
-        <button class="btn" @click="$emit('discard')">Discard</button>
-        <button class="btn" :disabled="!!blocked" :title="blocked" @click="$emit('save')">Save</button>
+        <button class="btn" @click="$emit('discard')"><AppIcon name="remove" />Discard</button>
+        <button class="btn" :disabled="!!blocked" :title="blocked" @click="$emit('save')"><AppIcon name="save" />Save</button>
         <button class="btn primary" :disabled="!!blocked" :title="blocked || 'Save, then plan the shots of these beats again'" @click="$emit('saveAndPlan')">
           Save and plan
         </button>
@@ -44,7 +45,7 @@ defineEmits<{discard: []; save: []; saveAndPlan: []; plan: []}>()
             : idle
         }}
       </p>
-      <button v-if="unplanned.length" class="btn primary" :disabled="busy" @click="$emit('plan')">Plan now</button>
+      <button v-if="unplanned.length" class="btn primary" :disabled="busy" @click="$emit('plan')"><AppIcon name="plan" />Plan now</button>
     </template>
     <p class="muted u-small u-mt-3">{{ keptIn }}</p>
   </div>

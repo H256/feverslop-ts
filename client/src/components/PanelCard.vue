@@ -37,6 +37,7 @@ withDefaults(
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
   background: var(--surface);
+  box-shadow: var(--shadow-card);
   padding: 12px 14px;
 }
 .ui-card-flush {
@@ -64,7 +65,18 @@ withDefaults(
   display: flex;
   align-items: baseline;
   gap: var(--space-3);
-  margin-bottom: var(--space-2);
+  /* a title bar: out to the edge of the card, its own tint and a line below */
+  margin: -12px -14px var(--space-3);
+  padding: var(--space-2) 14px;
+  background: var(--head);
+  border-bottom: 1px solid var(--line);
+  border-radius: calc(var(--radius-m) - 1px) calc(var(--radius-m) - 1px) 0 0;
+}
+.ui-card-flush > .ui-card-head {
+  margin: 0;
+}
+.ui-card-quiet > .ui-card-head {
+  background: var(--hover);
 }
 .ui-card-head h2 {
   margin: 0;

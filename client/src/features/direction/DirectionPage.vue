@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import CalloutBox from '../../components/CalloutBox.vue'
+import AppIcon from '../../components/AppIcon.vue'
 import {computed, ref} from 'vue'
 import type {DirectionEdit, DirectionRule} from '../../../../shared/direction'
 import PageBar from '../../components/PageBar.vue'
@@ -180,7 +181,7 @@ const clearLeftovers = (only?: Item) =>
             :disabled="blocked || dirty || !view.rules.length || !view.shots.length || !!view.unresolved.length || allInPlan"
             @click="preview"
           >
-            Preview changes
+            <AppIcon name="preview" />Preview changes
           </button>
         </div>
 

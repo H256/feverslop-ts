@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed, toRef, watch} from 'vue'
+import AppIcon from '../../components/AppIcon.vue'
 import type {ConfigImpact, SettingView} from '../../../../shared/workspace'
 import PageBar from '../../components/PageBar.vue'
 import {usePending} from '../../composables/usePending'
@@ -64,7 +65,7 @@ const save = toasts.guard(async () => {
     <PageBar title="Settings" class="se-header">
       <span class="muted">Rendering and preview settings. Review the effects before saving.</span>
       <div class="spacer" />
-      <button class="btn primary" :disabled="!form.dirty.value" @click="save">Save</button>
+      <button class="btn primary" :disabled="!form.dirty.value" @click="save"><AppIcon name="save" />Save</button>
     </PageBar>
     <nav class="se-nav" aria-label="Settings sections">
       <a v-for="(group, index) in groups" :key="group.name" :href="`#settings-group-${index}`" class="btn">{{ group.name }}</a>
@@ -106,6 +107,8 @@ const save = toasts.guard(async () => {
 .se-group {
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
   min-width: 0;
   scroll-margin-top: 8rem;
 }
@@ -114,7 +117,9 @@ const save = toasts.guard(async () => {
   font-weight: 600;
   padding: 16px 23px;
   margin: 0;
+  background: var(--head);
   border-bottom: 1px solid var(--line);
+  border-radius: calc(var(--radius-m) - 1px) calc(var(--radius-m) - 1px) 0 0;
 }
 .se-foot {
   margin-top: 14px;

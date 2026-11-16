@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import PanelCard from '../../components/PanelCard.vue'
 import ResourceState from '../../components/ResourceState.vue'
 import {useDraft} from '../../composables/useDraft'
@@ -87,14 +88,14 @@ const saveLooks = toasts.guard(async () => {
         >
           <textarea v-model="brief.text.value" rows="5" aria-label="The look of the whole" />
           <template #foot>
-            <button class="btn" :disabled="!brief.dirty.value" @click="saveBrief">Save the look of the whole</button>
+            <button class="btn" :disabled="!brief.dirty.value" @click="saveBrief"><AppIcon name="save" />Save the look of the whole</button>
             <span v-if="brief.dirty.value" class="muted">Saving it writes every look below again.</span>
           </template>
         </PanelCard>
 
         <!-- one save for every look changed below, always in reach -->
         <div class="lk-bar">
-          <button class="btn primary" :disabled="!edits.dirty.value" @click="saveLooks">Save the looks</button>
+          <button class="btn primary" :disabled="!edits.dirty.value" @click="saveLooks"><AppIcon name="save" />Save the looks</button>
           <span class="muted">{{
             edits.dirty.value ? edits.pending.value : 'Change a text by hand, or tick "Write anew" for the language model to write it again.'
           }}</span>

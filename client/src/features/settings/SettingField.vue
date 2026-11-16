@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import {computed} from 'vue'
 import type {SettingView} from '../../../../shared/workspace'
 import {fieldTextOf, labelOf, textOfValue, valueOfField} from './settings'
@@ -57,7 +58,7 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
       <span class="sf-default-value">{{ labelOf(setting, setting.default) }}</span>
       <span v-if="(!off && !form.isDefault(setting)) || form.isChanged(setting.key)" class="sf-actions">
         <button v-if="!off && !form.isDefault(setting)" class="btn mini" @click="form.toDefault(props.setting)">Use the default</button>
-        <button v-if="form.isChanged(setting.key)" class="btn mini" @click="form.undo(props.setting)">Undo</button>
+        <button v-if="form.isChanged(setting.key)" class="btn mini" @click="form.undo(props.setting)"><AppIcon name="undo" />Undo</button>
       </span>
     </div>
   </div>
