@@ -1,6 +1,6 @@
 import {existsSync, statSync} from 'node:fs'
 import {parseArgs} from 'node:util'
-import {languageName, type ProjectConfig} from './config.ts'
+import {languageName, type ProjectConfig, type SingerVoice} from './config.ts'
 import {projectExists, type ProjectSeed, validProjectId} from './project-setup.ts'
 
 // A music-video project made by options instead of questions (#827): for a script, and for the workspace, which starts commands
@@ -8,10 +8,10 @@ import {projectExists, type ProjectSeed, validProjectId} from './project-setup.t
 
 export const INIT_USAGE =
     'usage: bun run init [project-id]   (asks the rest)\n' +
-    '       bun run init <project-id> --song=<file> | --idea=<text|file> | --library-song=<song-id> [--lyrics=<text|file>] [--story-idea=<text|file>] [--style=<text|file>] [--music-style=<text|file>] [--singers=auto|<name>,<name>] [--language=en]   (asks nothing)'
+    '       bun run init <project-id> --song=<file> | --idea=<text|file> | --library-song=<song-id> [--lyrics=<text|file>] [--story-idea=<text|file>] [--style=<text|file>] [--music-style=<text|file>] [--singers=auto|<name>,<name>] [--voice=auto|female|male|mixed] [--song-length=<seconds>] [--language=en]   (asks nothing)'
 
 /** The options that make init ask nothing: with one of them given, every answer comes from the command line. */
-const OPTIONS = ['song', 'idea', 'library-song', 'lyrics', 'story-idea', 'style', 'music-style', 'singers', 'language'] as const
+const OPTIONS = ['song', 'idea', 'library-song', 'lyrics', 'story-idea', 'style', 'music-style', 'singers', 'voice', 'song-length', 'language'] as const
 
 // librarySong: a song of the library (lib/song-library.ts) - its audio, lyrics, stems and timing are taken over by tools/init.ts (#835)
 export type InitOptions = {id: string; seed: ProjectSeed; librarySong?: string}
@@ -42,6 +42,10 @@ export async function initOptions(argv: string[]): Promise<InitOptions | undefin
     if (!validProjectId(id)) throw new Error(`"${id}" is not a project id - lowercase letters, digits and "-" only`)
     if (projectExists(id)) throw new Error(`projects/${id}/ is there already - another id, or change that project`)
 
+    const voice = given.voice as SingerVoice | undefined
+    if (voice !== undefined && !['auto', 'female', 'male', 'mixed'].includes(voice)) throw new Error(`--voice: auto, female, male or mixed, got "${voice}"`)
+    const songLength = given['song-length'] === undefined ? undefined : Number(given['song-length'])
+    if (songLength !== undefined && !(Number.isFinite(songLength) && songLength > 0)) throw new Error(`--song-length: seconds, a positive number, got "${given['song-length']}"`)
     if (given.song !== undefined && (!existsSync(given.song) || !statSync(given.song).isFile())) throw new Error(`--song: no file ${given.song}`)
     if (given.song !== undefined && !/\.(wav|mp3|flac)$/i.test(given.song)) throw new Error(`--song: a .wav, .mp3 or .flac file, got ${given.song}`)
     const [idea, lyrics, storyIdea, style, musicStyle] = await Promise.all([
@@ -62,7 +66,11 @@ export async function initOptions(argv: string[]): Promise<InitOptions | undefin
             ?.split(',')
             .map(name => name.trim())
             .filter(Boolean)
-        const config: Partial<ProjectConfig> = {...(singers?.length ? {singers} : {}), ...(given.language ? {lyricsLanguage: given.language} : {})}
+        const config: Partial<ProjectConfig> = {
+            ...(singers?.length ? {singers} : {}),
+            ...(given.language ? {lyricsLanguage: given.language} : {}),
+            ...(voice ? {singerVoice: voice} : {}),
+        }
         return {id, seed: {storyIdea, style, config}, librarySong}
     }
     // a song needs words to plan a story from; an idea writes its own lyrics
@@ -81,6 +89,8 @@ export async function initOptions(argv: string[]): Promise<InitOptions | undefin
     const config: Partial<ProjectConfig> = {
         ...(singers?.length ? {singers} : {}),
         ...(given.language ? {lyricsLanguage: given.language} : {}),
+        ...(voice ? {singerVoice: voice} : {}),
+        ...(songLength && !given.song ? {songDuration: songLength} : {}),
     }
     return {id, seed: {songFile: given.song, idea, lyrics, storyIdea, style, musicStyle, config}}
 }

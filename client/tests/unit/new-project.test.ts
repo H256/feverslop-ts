@@ -36,6 +36,20 @@ describe('a new music video from the form', () => {
     expect(newProjectRequest({...draft, language: ' de '}).language).toBe('de')
   })
 
+  test('a song to be made: its musical style, voice and length go to init - #1089', () => {
+    const draft = {...newProjectDraft(), id: 'rain', from: 'idea' as const, idea: 'rain', musicStyle: 'synthwave', voice: 'female' as const, songLength: '90'}
+    const request = newProjectRequest(draft)
+    expect(request).toMatchObject({musicStyle: 'synthwave', voice: 'female', songLength: '90'})
+    // left open: nothing is sent; a song that is there has no style or length to make
+    expect(newProjectRequest({...draft, voice: 'auto', musicStyle: ' '}).voice).toBeUndefined()
+    expect(newProjectRequest({...draft, voice: 'auto', musicStyle: ' '}).musicStyle).toBeUndefined()
+    const have = newProjectRequest({...draft, from: 'song', song: 'a.mp3', lyrics: 'la'})
+    expect(have.musicStyle).toBeUndefined()
+    expect(have.songLength).toBeUndefined()
+    expect(newProjectProblem({...draft, songLength: 'long'})).toContain('song length')
+    expect(newProjectProblem(draft)).toBeUndefined()
+  })
+
   test('a song: chosen and sent, or a path typed - the path the server put it at is what init gets', () => {
     const draft = {...newProjectDraft(), id: 'rain', lyrics: 'la'}
     expect(newProjectProblem(draft)).toContain('The song: choose its file, or type where it is')

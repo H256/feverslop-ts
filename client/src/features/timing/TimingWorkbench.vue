@@ -656,7 +656,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* the list of refined lines scrolls inside its box */
+/* the list of refined lines (the lines the transcript matched) scrolls inside its box instead of growing the page */
 .tw-entries {
   max-height: 20rem;
   overflow: auto;

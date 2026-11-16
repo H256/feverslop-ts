@@ -1,7 +1,7 @@
 import {existsSync} from 'node:fs'
 import {join} from 'node:path'
 import {loadProjectConfig} from './config.ts'
-import {projectInputs, stepUsed} from './inputs.ts'
+import {projectInputs, songFileOf, stepUsed} from './inputs.ts'
 import {clipEstimate, pictureEstimate, type RenderState, renderState} from './render-state.ts'
 import {styles} from './log.ts'
 import {ProjectStore, STEP_NAMES, unplannedBeats} from './project.ts'
@@ -140,6 +140,11 @@ export async function nextOf(
     return {command: '', why: 'everything is done'}
 }
 
+/** A song still to be made is the first step, ahead of whatever else is next (#1089): every plan run hears the song, so none can start before. */
+export function withSongToMake(next: Next, songToMake: boolean, id: string): Next {
+    return songToMake ? {command: `bun index.ts ${id} --render=song`, why: 'no song yet - generate it first, to listen to before anything is planned'} : next
+}
+
 export async function projectStatus(id: string): Promise<Status> {
     const project = new ProjectStore(id)
     await project.load()
@@ -187,13 +192,15 @@ export async function projectStatus(id: string): Promise<Status> {
         'music',
         project.id,
     )
+    // a song still to be made: nothing is planned before it is heard, so it is the first step - one render, to listen to (#1089)
+    const songToMake = !existsSync(songFileOf(project.dir)) && (existsSync(join(project.dir, 'input', 'idea.txt')) || existsSync(join(project.dir, 'input', 'lyrics.txt')))
     return {
         id: project.id,
         dir: project.dir,
         changed,
         steps,
         render,
-        next: direction.next,
+        next: withSongToMake(direction.next, songToMake, project.id),
         preproduction,
         notes: [
             ...withPre.notes,

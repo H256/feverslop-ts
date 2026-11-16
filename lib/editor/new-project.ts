@@ -19,6 +19,8 @@ const FIELDS = {
     style: 'style',
     musicStyle: 'music-style',
     singers: 'singers',
+    voice: 'voice',
+    songLength: 'song-length',
     language: 'language',
 } as const
 

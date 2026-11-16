@@ -45,6 +45,20 @@ describe('init by options', () => {
             librarySong: 'rain',
         })
     })
+    test('who sings and how long a song to be made runs: --voice and --song-length (#1089)', async () => {
+        const wrong = (argv: string[]) =>
+            initOptions(argv).then(
+                () => 'no error',
+                (e: unknown) => (e as Error).message,
+            )
+        expect(await wrong(['p', '--idea=rain', '--voice=robot'])).toContain('--voice')
+        expect(await wrong(['p', '--idea=rain', '--song-length=0'])).toContain('--song-length')
+        const made = await initOptions(['p', '--idea=rain', '--music-style=synthwave', '--voice=female', '--song-length=90'])
+        expect(made?.seed.musicStyle).toBe('synthwave')
+        expect(made?.seed.config).toEqual({singerVoice: 'female', songDuration: 90})
+        // a song that is there has its length already
+        expect((await initOptions(['p', '--library-song=rain', '--voice=male', '--song-length=90']))?.seed.config).toEqual({singerVoice: 'male'})
+    })
     test('with no terminal and all it needs given, the project is written and the next command said', () => {
         const cwd = mkdtempSync(join(tmpdir(), 'init-options-'))
         try {
