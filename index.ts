@@ -49,6 +49,7 @@ import {applyLibraryText, castFromLibrary, copyKey} from './lib/casting.ts'
 import {type LibraryAsset, libraryDir} from './lib/library.ts'
 import {type AssetKind} from './lib/asset-import.ts'
 import {dropBeatPlans} from './lib/project.ts'
+import {castStemsPrompt, stemQuestion, withStems} from './lib/cast-stems.ts'
 import {castPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt} from './lib/prompts.ts'
 import {messageOf} from './lib/text.ts'
 import {castProps, propPictureJob} from './lib/props.ts'
@@ -418,6 +419,19 @@ const cast = await reviewed(
                 characters: (Omit<Character, 'id' | 'propCarried'> & {propStem?: string; propCarried?: boolean})[]
                 locations: Omit<Location, 'id'>[]
             }>(castPrompt(storyBase, config.singerVoice))
+            // a player of the band left without a layer of the song (#1085): where others have one, those who carry something are asked once more
+            const {players, candidates} = stemQuestion(extracted.characters)
+            if (candidates.length)
+                try {
+                    const answer = await askJson<{layers?: {name: string; propStem: string}[]}>(castStemsPrompt(players, candidates))
+                    extracted.characters = withStems(extracted.characters, answer.layers ?? [], candidates)
+                    const given = extracted.characters.filter(c => candidates.some(a => a.name === c.name) && c.propStem)
+                    if (given.length) log.step('Layers', styles.muted(given.map(c => `${c.name}: ${c.propStem}`).join(', ')))
+                } catch (error) {
+                    log.warn(
+                        `the layer of the song of ${candidates.map(c => c.name).join(', ')} could not be asked: ${error instanceof Error ? error.message : String(error)}`,
+                    )
+                }
             const stemNames = new Set(['drums', 'bass', 'other', 'guitar', 'piano'])
             const takenCharacters = new Set<string>()
             const takenLocations = new Set<string>()

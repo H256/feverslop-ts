@@ -4,20 +4,31 @@ import {extraArgument} from '../lib/command-schema.ts'
 // --json prints it in the form --set takes back: change names, roles and props, add a character or place (without an id), leave one
 // out to remove it. A film's script says who is in it: there names and texts change, nobody comes or goes. What was planned from
 // the old cast goes - for a music video the looks only of whoever is new or changed. Nothing is rendered.
-// usage: bun run cast <project-id> [--film] [--json | --set=cast.json]
+// usage: bun run cast <project-id> [--film] [--json | --set=cast.json | --stems]
+// --stems: a music video where somebody plays an instrument of the song and somebody else carries one with no layer of the song set
+// (a guitarist next to a bassist and a drummer, #1085): the language model is asked once which of them play it, and the layer is
+// written - only that: the looks, the beats and the timeline stay; the separated instruments, the activity and the shot plans go.
 import {existsSync, readFileSync} from 'node:fs'
 import {parseArgs} from 'node:util'
 import {log, styles} from '../lib/log.ts'
-import {type CastChange, commandTarget, planCommand, readCast, writeCast} from '../lib/editor/preproduction.ts'
+import {askJson, configureLlm} from '../lib/llm.ts'
+import {loadSettings} from '../lib/settings.ts'
+import {castStemsPrompt} from '../lib/cast-stems.ts'
+import {type CastChange, commandTarget, planCommand, readCast, writeCast, writeLayers} from '../lib/editor/preproduction.ts'
 cli('cast')
 
-const usage = 'usage: bun run cast <project-id> [--film] [--json | --set=cast.json]'
+const usage = 'usage: bun run cast <project-id> [--film] [--json | --set=cast.json | --stems]'
 const {values: args, positionals} = (() => {
     try {
         return parseArgs({
             args: Bun.argv.slice(2),
             allowPositionals: true,
-            options: {film: {type: 'boolean', default: false}, json: {type: 'boolean', default: false}, set: {type: 'string'}},
+            options: {
+                film: {type: 'boolean', default: false},
+                json: {type: 'boolean', default: false},
+                set: {type: 'string'},
+                stems: {type: 'boolean', default: false},
+            },
         })
     } catch (e) {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
@@ -33,7 +44,28 @@ const view = readCast(t)
 if (!view) log.usageError(`no cast yet - plan up to it: ${t.kind === 'film' ? 'bun film.ts' : 'bun index.ts'} ${t.id} --until=cast`, usage)
 const cast = view!
 
-if (args.set !== undefined) {
+if (args.stems) {
+    if (t.kind === 'film') log.usageError('--stems is for a music video: a film has no song its characters play in', usage)
+    configureLlm((await loadSettings({})).llm)
+    const result = await writeLayers(t, async (players, candidates) => {
+        log.step('Playing', styles.muted(players.map(p => `${p.name} (${p.propStem})`).join(', ')))
+        log.step('Asking', styles.muted(candidates.map(c => `${c.name}: ${c.prop}`).join(', ')))
+        return (await askJson<{layers?: {name: string; propStem: string}[]}>(castStemsPrompt(players, candidates))).layers ?? []
+    })
+    if (!result.players.length) log.success('nobody of the cast plays an instrument of the song - nothing to ask')
+    else if (!result.asked.length) log.success('everybody who carries something has a layer of the song - nothing to ask')
+    else if (!result.given.length) log.success('none of them plays an instrument of the song - nothing changed')
+    else {
+        for (const g of result.given) log.step('Layer', `${styles.name(g.id)} ${g.name}: ${g.propStem}`)
+        if (result.dropped.length)
+            log.step(
+                'Dropped',
+                `${result.dropped.join(', ')} ${styles.muted('- the next plan run makes them again; the looks, the beats and the timeline stay')}`,
+            )
+        log.next(`bun index.ts ${t.id}`)
+        log.success('the layers are saved')
+    }
+} else if (args.set !== undefined) {
     if (!existsSync(args.set)) log.usageError(`no file ${args.set}`, usage)
     let change: CastChange
     try {

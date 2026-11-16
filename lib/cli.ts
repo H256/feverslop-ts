@@ -50,9 +50,9 @@ const commands: Record<string, {args: string; description: string; json?: boolea
             'Print the story (a film: its screenplay), replace it, or have it told anew for the cast as a proposal (alias: adapt-story) - a film for a role added or taken out. What was planned from it goes.',
     },
     cast: {
-        args: '<project-id> [--film] [--json | --set=cast.json]',
+        args: '<project-id> [--film] [--json | --set=cast.json | --stems]',
         description:
-            'Print the cast, or change names, roles and props and who is in it. What was planned from it goes; a music video keeps the looks of whoever stays.',
+            'Print the cast, or change names, roles and props and who is in it. What was planned from it goes; a music video keeps the looks of whoever stays. --stems: give a band member the layer of the song for his instrument, where it is missing - the looks stay.',
         json: true,
     },
     look: {

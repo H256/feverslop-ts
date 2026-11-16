@@ -1,4 +1,5 @@
 import {existsSync} from 'node:fs'
+import {type Candidate, giveLayers, type Player, stemQuestion} from '../../cast-stems.ts'
 import {writeJsonFile} from '../../json-file.ts'
 import {join} from 'node:path'
 import {toSlug} from '../../slug.ts'
@@ -280,6 +281,28 @@ export function applyCastJoin(data: Project, join: {name: string; role: string}[
 }
 
 export const readCast = (target: EditorTarget): CastView | undefined => castView(target.kind, dataOf(target))
+
+/**
+ * The layers of the song for those of a music video's cast who carry something and have none, while others play an instrument of
+ * the song (#1085): `askLayers` is the language model's answer to lib/cast-stems.ts' question. Only the layers are written - the
+ * looks stay - and what is built on them goes (DROPPED_BY_LAYERS); nothing happens when nobody is asked or the answer gives none.
+ */
+export async function writeLayers(
+    target: EditorTarget,
+    askLayers: (players: Player[], candidates: Candidate[]) => Promise<{name: string; propStem: string}[]>,
+): Promise<{players: string[]; asked: string[]; given: {id: string; name: string; propStem: string}[]; dropped: string[]}> {
+    return withProjectLock(target.dir, target.id, async () => {
+        const data = readJson<Data>(join(target.dir, 'project.json'))
+        if (!data || target.kind !== 'music' || !(data as Project).cast) throw new Error('no cast of a music video yet - plan up to the cast first')
+        const {players, candidates} = stemQuestion((data as Project).cast!.characters)
+        const none = {players: players.map(p => p.name), asked: candidates.map(c => c.name), given: [], dropped: []}
+        if (!candidates.length) return none
+        const layers = await askLayers(players, candidates)
+        const {given, dropped} = giveLayers(data as Project as Parameters<typeof giveLayers>[0], candidates, layers)
+        if (given.length) save(target, data)
+        return {...none, given, dropped}
+    })
+}
 
 export async function writeCast(target: EditorTarget, change: CastChange): Promise<CastResult> {
     return withProjectLock(target.dir, target.id, () => {
