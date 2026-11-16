@@ -164,7 +164,7 @@ Prefer the settings file or the env var over `--llm-key` - flags end up in the s
 (CI, scripts), `bun run setup` prints these env vars instead of asking.
 
 **Which model for the lyrics.** A model that follows a brief closely is good at the story, the cast and the shots, but it can
-write flat, rhymeless lyrics - and one that thinks for long may use up its token limit before the lyrics start. If you have a
+write flat, rhymeless lyrics (the lyrics are asked for without thinking, so the model's own writing decides). If you have a
 stronger or freer writer on another server, let it write the song (step `1`, `1a`) and keep the other model for the rest.
 `--llm-url=` and `--llm-model=` belong together: the saved model (settings file or project) stays in force next to a new URL, and a
 server without that model stops the run (`The LLM server … has no model …`). Only the song step on the other server - the
@@ -183,6 +183,9 @@ bun index.ts my-project
 
 Lyrics are only written when `input/lyrics.txt` does not exist yet - write your own, or delete the file to have them
 written again. The musical direction in `input/music-style.txt` (if there is one) is part of the lyrics prompt.
+The lyrics are asked for without thinking (`reasoning: 'none'` in `songLyricsPrompt`, `lib/prompts.ts`): with thinking a model takes 1-2 minutes
+and the lyrics were no better in a test. A model that writes badly without it can be given a level there (`low`, `medium`, `high`) - it is
+not a setting yet.
 
 Answers with a fixed shape (the cast, the beats, the views, the singers, the style shortlist) are asked with a JSON
 schema on the server's Chat Completions API (`response_format`), so the server keeps the answer to that shape and to the
