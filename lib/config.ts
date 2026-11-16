@@ -22,7 +22,7 @@ export type RenderConfig = {
     videoWorkflow: string
     songAudio: boolean // final video: the original song replaces the clips' own audio
     songWorkflow: string // file name in comfy/workflows/, without .ts - used by --render=song
-    songDuration: number // seconds - an upper bound for a generated song; -1 = the workflow's own default
+    songDuration: number // seconds - the maximum length of a generated song, it is cut off there; -1 = the workflow's own default
     // every character and location gets a multi-angle reference sheet (turnaround video -> sampled frames ->
     // composited grid) instead of one flat hero image - see lib/sequenceSheet.ts. Off falls back to the plain
     // hero image (the old renderPicture path) - useful to cut render cost while iterating on a project.
