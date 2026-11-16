@@ -343,6 +343,7 @@ const open = computed(() =>
     e => e.status === 'refined' && !dropped.value.has(e.line) && refinement.value!.change.lines.some(l => l.line === e.line),
   ),
 )
+const place = computed(() => open.value.findIndex(e => e.line === draft.selected.value))
 const entry = computed(() => refinement.value?.entries.find(e => e.line === draft.selected.value))
 const listen = (span: [number, number]) => play(Math.max(0, span[0] - 0.3), Math.min(props.view.duration, span[1] + 0.3))
 const proposal = computed(() => (draft.selected.value === undefined ? undefined : proposalOf(draft.selected.value)))
@@ -504,23 +505,42 @@ onMounted(() => {
     </details>
     <LipsyncPreview :view="view" :dirty="draft.edits.value.size > 0" />
     <div class="tedit-wrap">
-      <div v-if="refinement" class="tw-proposal btn-row" role="region" aria-label="Refinement proposal">
-        <span :class="['chip', proposal?.status === 'refined' ? 'good' : proposal ? 'stale' : '']">{{
-          proposal ? (proposal.status === 'refined' ? 'proposal' : proposal.status === 'applied' ? 'taken' : 'no proposal') : 'proposal'
-        }}</span>
-        <span class="muted">{{ proposal ? proposal.reason : 'Choose a line to see what the refinement proposes for it.' }}</span>
-        <div class="spacer" />
-        <span class="muted num">{{ open.length }} to go</span>
-        <button v-if="entry" class="btn" @click="listen(entry.before)">Listen before</button>
-        <button v-if="entry?.after && proposal?.words.length" class="btn" @click="listen(entry.after)">Listen to proposal</button>
-        <button class="btn" :disabled="!proposal?.words.length || saving.pending.value" title="Enter" @click="takeProposal()">Take (Enter)</button>
-        <button class="btn" :disabled="!proposal || !open.length" title="X" @click="dropProposal">Drop (X)</button>
-        <button class="btn" :disabled="!open.length" title="[ and ]" @click="nextProposal(true)">‹</button>
-        <button class="btn" :disabled="!open.length" title="[ and ]" @click="nextProposal(false)">›</button>
-        <button class="btn" :disabled="!refinement.change.lines.length || draft.edits.value.size > 0 || refining.pending.value" @click="takeRefinement">
-          {{ refinement.passage?.mode === 'line-window' ? 'Apply word refinement' : refinement.passage ? 'Apply passage' : 'Take all remaining' }}
-        </button>
-        <button class="btn" @click="refinement = undefined">Dismiss</button>
+      <div v-if="refinement" class="tw-proposal" role="region" aria-label="Refinement proposal">
+        <div class="tw-why">
+          <span :class="['chip', proposal?.status === 'refined' ? 'good' : proposal ? 'stale' : '']">{{
+            proposal ? (proposal.status === 'refined' ? 'proposal' : proposal.status === 'applied' ? 'taken' : 'no proposal') : 'proposal'
+          }}</span>
+          <span class="tw-reason" :title="proposal?.reason">{{
+            proposal ? proposal.reason : 'Choose a line to see what the refinement proposes for it.'
+          }}</span>
+        </div>
+        <span class="tw-grp">
+          <button class="btn mini" :disabled="!open.length" title="Previous proposal ([)" @click="nextProposal(true)">‹</button>
+          <span class="muted num">{{ !open.length ? 'none left' : place < 0 ? `${open.length} to go` : `${place + 1} of ${open.length}` }}</span>
+          <button class="btn mini" :disabled="!open.length" title="Next proposal (])" @click="nextProposal(false)">›</button>
+        </span>
+        <span class="tw-grp">
+          <button v-if="entry" class="btn mini" aria-label="Listen before" title="Listen to the line as it is now" @click="listen(entry.before)">▶ Now</button>
+          <button
+            v-if="entry?.after && proposal?.words.length"
+            class="btn mini"
+            aria-label="Listen to proposal"
+            title="Listen to the line as proposed"
+            @click="listen(entry.after)"
+          >
+            ▶ Proposal
+          </button>
+        </span>
+        <span class="tw-grp">
+          <button class="btn" :disabled="!proposal || !open.length" title="X" @click="dropProposal">Keep mine (X)</button>
+          <button class="btn primary" :disabled="!proposal?.words.length || saving.pending.value" title="Enter" @click="takeProposal()">Take (Enter)</button>
+        </span>
+        <span class="tw-grp">
+          <button class="btn mini" :disabled="!refinement.change.lines.length || draft.edits.value.size > 0 || refining.pending.value" @click="takeRefinement">
+            {{ refinement.passage?.mode === 'line-window' ? 'Apply word refinement' : refinement.passage ? 'Apply passage' : 'Take all' }}
+          </button>
+          <button class="btn mini" @click="refinement = undefined">Dismiss</button>
+        </span>
       </div>
       <div class="tedit-head btn-row">
         <template v-if="draft.line.value">
@@ -720,7 +740,28 @@ onMounted(() => {
 <style scoped>
 /* the list of refined lines (the lines the transcript matched) scrolls inside its box instead of growing the page */
 .tw-proposal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
   margin-bottom: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--ok);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+}
+.tw-reason {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tw-why {
+  flex: 1 1 12rem;
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  min-width: 0;
 }
 /* the bar's buttons in groups by what they do, a line between them (#834) */
 .tw-grp {
