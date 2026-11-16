@@ -6,13 +6,10 @@ import {LOCATION_VIEWS} from './sequenceSheet.ts'
 // The LLM prompt templates for the early song/story/look pipeline steps (index.ts, steps 1-8b) - kept separate from
 // the orchestration so the prompt copy can be read and edited without the surrounding pipeline wiring.
 
-// YuE2 sings what it is given and plans the song around it, so the length is given in sung words (about 2-3 per second)
-export const SUNG_WORDS_PER_SECOND = {min: 2, max: 3}
-
 // Lyrics only - kept separate from the style prompt so lyrics.txt can be hand-corrected and kept fixed while the
 // style (music-style.txt) is redone around it, or vice versa (see songStylePrompt).
-// durationSec: an upper bound (config.json songDuration) - the model decides the actual song length, so this only
-// shapes how many sections/lines/words the lyrics get, it doesn't force an exact length
+// durationSec: the maximum length of the song (config.json songDuration) - YuE2 cuts a song off there, so lyrics that are
+// too long lose their end. The LLM is told the limit, not a number of words: what fits depends on tempo and style.
 // musicStyle: the direction from music-style.txt, when there is one - the lyrics are written to fit that sound
 export function songLyricsPrompt(idea: string, language: string, durationSec?: number, singerVoice: SingerVoice = 'auto', musicStyle = ''): AskOptions {
     const seconds = durationSec ? Math.round(durationSec) : 0
@@ -22,7 +19,7 @@ export function songLyricsPrompt(idea: string, language: string, durationSec?: n
         input: `Write song lyrics from this idea for a music video, for the YuE2 text-to-music model.
 Idea: ${idea}
 Language: ${language}
-${musicStyle ? `Musical style - the lyrics must fit its sound, tempo and mood: ${musicStyle.trim()}\n` : ''}${seconds ? `Target length: around ${seconds} seconds - about ${seconds * SUNG_WORDS_PER_SECOND.min}-${seconds * SUNG_WORDS_PER_SECOND.max} sung words in all (${SUNG_WORDS_PER_SECOND.min}-${SUNG_WORDS_PER_SECOND.max} per second); shape the number and length of sections accordingly.\n` : ''}
+${musicStyle ? `Musical style - the lyrics must fit its sound, tempo and mood: ${musicStyle.trim()}\n` : ''}${seconds ? `Maximum length: ${seconds} seconds - the song is cut off there, so the lyrics must be sung well within it, with room left for the intro, instrumental parts and the outro. How many words fit depends on the tempo and the style: do not write more than that.\n` : ''}
 Rules:
 - Section labels in English, in square brackets on their own line, whatever the language of the song: [Intro], [Verse 1], [Verse 2], [Pre-Chorus], [Chorus], [Bridge], [Instrumental Break], [Outro]. Number the verses. Blank line between sections.
 - [Instrumental Break] is a part without words: the tag alone, no lines under it.

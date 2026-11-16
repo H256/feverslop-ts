@@ -69,9 +69,12 @@ describe('the singer voice in a generated song', () => {
 })
 
 describe('the lyrics prompt', () => {
-    test('the target is given in sung words from the duration', () => {
-        expect(songLyricsPrompt('a lighthouse', 'English', 210).input).toContain('around 210 seconds - about 420-630 sung words in all')
-        expect(songLyricsPrompt('a lighthouse', 'English').input).not.toContain('sung words in all')
+    test('the duration is the limit the song is cut off at, with room left for the parts without words', () => {
+        const input = songLyricsPrompt('a lighthouse', 'English', 210).input
+        expect(input).toContain('Maximum length: 210 seconds - the song is cut off there')
+        expect(input).toContain('room left for the intro, instrumental parts and the outro')
+        expect(input).not.toMatch(/sung words in all|per second/)
+        expect(songLyricsPrompt('a lighthouse', 'English').input).not.toContain('Maximum length')
     })
     test('the musical style is part of it only when there is one', () => {
         const input = songLyricsPrompt('a lighthouse', 'German', undefined, 'auto', ' hard rock, 170 BPM\n').input
