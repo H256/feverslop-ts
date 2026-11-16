@@ -18,8 +18,9 @@ import {useToasts} from '../../services/toasts'
 import {usePlanning} from '../plan/usePlanning'
 import {useProject} from '../project/session'
 import {EARLY_FROM, leadOf} from './fit'
+import {overlappingLines} from './words'
 import LipsyncPreview from './LipsyncPreview.vue'
-import TimingEditor from './TimingEditor.vue'
+import TimingEditor, {type Proposal} from './TimingEditor.vue'
 import TimingLineList, {type LineFilter} from './TimingLineList.vue'
 import TimingSide from './TimingSide.vue'
 import TimingTools from './TimingTools.vue'
@@ -86,9 +87,41 @@ const outdated = computed(() => {
   for (const {clip, lines} of props.view.outdated) for (const n of lines) found.set(n, [...(found.get(n) ?? []), clip])
   return found
 })
-// the lines that want a look, in the order of the song: a clip cut in a word, an early start, an old prompt, a guessed time
+// the words a cut falls into, with where they would be split at it
+const lineCutSplits = computed(() => (draft.line.value ? draft.cutSplits(draft.line.value) : []))
+const allCutSplits = computed(() => props.view.lines.flatMap(l => draft.cutSplits(l)))
+const splitHere = toasts.guard(async (items: ReturnType<typeof draft.cutSplits>) => {
+  const count = draft.splitAtCuts(items)
+  saved.value = `${plural(count, 'word')} split at the cut. Both parts keep the complete audible span; Join parts puts a word together again.`
+})
+const splitEverywhere = toasts.guard(async () => {
+  const items = allCutSplits.value.filter(i => i.ok)
+  if (!items.length) return
+  await ask({
+    title: `Split ${plural(items.length, 'word')} at the clip cuts`,
+    lines: [
+      'A word that a cut falls into is sung half in one clip, half in the next. It is split at the cut: both parts keep the whole audible span and the complete text.',
+      'The text boundary is guessed from the time. Check it in the list; a split can be set again afterwards (Re-split) or put together (Join parts).',
+    ],
+    body: () =>
+      h(
+        'ul',
+        items.map(i => h('li', [h('b', `${i.before}│${i.after}`), ` at ${clock(i.time)} (cut ${i.cut.replace(/^\D+/, '')}) in "${i.line.text}"`])),
+      ),
+    confirm: `Split ${plural(items.length, 'word')}`,
+    submit: async () => {
+      draft.splitAtCuts(items)
+      saved.value = `${plural(items.length, 'word')} split at the cuts. Check the text boundaries; Re-split sets one again.`
+    },
+  })
+})
+const overlapping = computed(() => overlappingLines(props.view.lines, draft.startOf, draft.endOf))
+// the lines that want a look, in the order of the song: a clip cut in a word, an early start, an old prompt, a guessed time, a line running into the next
 const problems = computed(() =>
-  props.view.lines.filter(l => !l.off && (draft.crossing(l).length || earlyLines.value.has(l.line) || outdated.value.has(l.line) || draft.unchecked(l))),
+  props.view.lines.filter(
+    l =>
+      !l.off && (draft.crossing(l).length || earlyLines.value.has(l.line) || outdated.value.has(l.line) || draft.unchecked(l) || overlapping.value.has(l.line)),
+  ),
 )
 const nextProblem = (back = false) => {
   const all = problems.value
@@ -157,6 +190,7 @@ const FILTERS = computed(
       {value: 'estimated', label: `Estimated (${props.view.lines.filter(l => l.estimated).length})`},
       {value: 'changed', label: 'Moved'},
       {value: 'adlibs', label: `Ad-libs (${props.view.lines.filter(l => l.adlib).length})`},
+      ...(overlapping.value.size ? [{value: 'overlap', label: `Overlap (${overlapping.value.size})`}] : []),
       ...(earlyLines.value.size ? [{value: 'early', label: `Early starts (${earlyLines.value.size})`}] : []),
       ...(outdated.value.size ? [{value: 'old', label: `Prompt old (${outdated.value.size})`}] : []),
     ] as const,
@@ -321,6 +355,63 @@ const prepareRefinement = toasts.guard(() =>
     refinement.value = await api.refineTiming(refinementLanguage.value)
   }),
 )
+// the proposal line by line: the ghost on the timeline, Enter takes it, X drops it, ] and [ go on (#1104)
+const dropped = ref(new Set<number>())
+watch(refinement, (now, before) => {
+  if (now?.id !== before?.id) dropped.value = new Set()
+})
+const proposalOf = (n: number): Proposal | undefined => {
+  const entry = refinement.value?.entries.find(e => e.line === n)
+  if (!entry) return undefined
+  const words = refinement.value!.change.lines.find(l => l.line === n)?.words
+  const textOf = props.view.lines.find(l => l.line === n)?.words
+  return {
+    status: dropped.value.has(n) && entry.status === 'refined' ? 'review' : entry.status,
+    reason: dropped.value.has(n) && entry.status === 'refined' ? 'Dropped: this line keeps its times.' : entry.reason,
+    words: words && !dropped.value.has(n) ? words.map((w, i) => ({text: w.text ?? textOf?.[i]?.text ?? '', start: w.start, end: w.end})) : [],
+  }
+}
+/** The lines with a proposal still to take, in song order. */
+const open = computed(() =>
+  (refinement.value?.entries ?? []).filter(
+    e => e.status === 'refined' && !dropped.value.has(e.line) && refinement.value!.change.lines.some(l => l.line === e.line),
+  ),
+)
+const place = computed(() => open.value.findIndex(e => e.line === draft.selected.value))
+/** The lines the refinement has something to take for, for the line list. */
+const proposed = computed(() => new Set(open.value.map(e => e.line)))
+const entry = computed(() => refinement.value?.entries.find(e => e.line === draft.selected.value))
+const listen = (span: [number, number]) => play(Math.max(0, span[0] - 0.3), Math.min(props.view.duration, span[1] + 0.3))
+const proposal = computed(() => (draft.selected.value === undefined ? undefined : proposalOf(draft.selected.value)))
+const nextProposal = (back = false, from = draft.selected.value ?? -1) => {
+  const lines = open.value.map(e => e.line)
+  const next = back ? [...lines].reverse().find(n => n < from) : lines.find(n => n > from)
+  const target = next ?? (back ? lines.at(-1) : lines[0])
+  if (target === undefined) return toasts.show('No proposal left to look at.')
+  choose(target)
+}
+const dropProposal = () => {
+  const n = draft.selected.value
+  if (n === undefined || !proposal.value) return
+  const after = open.value.find(e => e.line > n)?.line ?? open.value.find(e => e.line !== n)?.line
+  dropped.value = new Set([...dropped.value, n])
+  if (after !== undefined) choose(after)
+}
+const takeProposal = toasts.guard(() =>
+  saving.during(async () => {
+    const n = draft.selected.value
+    const current = refinement.value
+    if (n === undefined || !current) return
+    if (draft.edits.value.size) throw new Error('Save or discard your moved words first: the proposal is taken from the saved timing.')
+    if (current.passage) return takeRefinement()
+    const after = open.value.find(e => e.line > n)?.line ?? open.value.find(e => e.line !== n)?.line
+    const result = await api.applyTimingRefinement(current.id, [n])
+    refinement.value = result.refinement
+    await props.refresh()
+    if (after !== undefined) choose(after)
+    saved.value = `Line ${n + 1} taken; its words are unchecked. ${result.replanned.length} affected beats need planning again.`
+  }),
+)
 const takeRefinement = toasts.guard(() =>
   saving.during(async () => {
     if (!refinement.value || draft.edits.value.size) return
@@ -445,25 +536,48 @@ onMounted(() => {
           <template v-if="!refinement.passage">Refinement keeps lines sung or left out as they are.</template>
           A missing transcript match does not mean a line was not sung.
         </p>
-        <div class="tw-entries">
-          <p v-for="entry in refinement.entries" :key="entry.line">
-            <button class="btn mini" @click="choose(entry.line)">{{ entry.line + 1 }}</button>
-            <b>{{ entry.text }}</b> [{{ entry.status }}] {{ entry.before.map(n => n.toFixed(2)).join('–')
-            }}<span v-if="entry.after"> → {{ entry.after.map(n => n.toFixed(2)).join('–') }}</span> — {{ entry.reason }}
-            <button class="btn mini" @click="play(Math.max(0, entry.before[0] - 0.3), Math.min(view.duration, entry.before[1] + 0.3))">Listen before</button>
-            <button v-if="entry.after" class="btn mini" @click="play(Math.max(0, entry.after[0] - 0.3), Math.min(view.duration, entry.after[1] + 0.3))">
-              Listen to proposal
-            </button>
-          </p>
-        </div>
-        <button class="btn" :disabled="!refinement.change.lines.length || draft.edits.value.size > 0 || refining.pending.value" @click="takeRefinement">
-          {{ refinement.passage?.mode === 'line-window' ? 'Apply word refinement' : refinement.passage ? 'Apply passage' : 'Apply proposal' }}
-        </button>
-        <button class="btn" @click="refinement = undefined">Dismiss</button>
+        <p class="muted">The proposal is on the timeline: each line shows it under its words. Take or drop it there, line by line.</p>
       </template>
     </details>
     <LipsyncPreview :view="view" :dirty="draft.edits.value.size > 0" />
     <div class="tedit-wrap">
+      <div v-if="refinement" class="tw-proposal" role="region" aria-label="Refinement proposal">
+        <div class="tw-why">
+          <span :class="['chip', proposal?.status === 'refined' ? 'good' : proposal ? 'stale' : '']">{{
+            proposal ? (proposal.status === 'refined' ? 'proposal' : proposal.status === 'applied' ? 'taken' : 'no proposal') : 'proposal'
+          }}</span>
+          <span class="tw-reason" :title="proposal?.reason">{{
+            proposal ? proposal.reason : 'Choose a line to see what the refinement proposes for it.'
+          }}</span>
+        </div>
+        <span class="tw-grp">
+          <button class="btn mini" :disabled="!open.length" title="Previous proposal ([)" @click="nextProposal(true)">‹</button>
+          <span class="muted num">{{ !open.length ? 'none left' : place < 0 ? `${open.length} to go` : `${place + 1} of ${open.length}` }}</span>
+          <button class="btn mini" :disabled="!open.length" title="Next proposal (])" @click="nextProposal(false)">›</button>
+        </span>
+        <span class="tw-grp">
+          <button v-if="entry" class="btn mini" aria-label="Listen before" title="Listen to the line as it is now" @click="listen(entry.before)">▶ Now</button>
+          <button
+            v-if="entry?.after && proposal?.words.length"
+            class="btn mini"
+            aria-label="Listen to proposal"
+            title="Listen to the line as proposed"
+            @click="listen(entry.after)"
+          >
+            ▶ Proposal
+          </button>
+        </span>
+        <span class="tw-grp">
+          <button class="btn" :disabled="!proposal || !open.length" title="X" @click="dropProposal">Keep mine (X)</button>
+          <button class="btn primary" :disabled="!proposal?.words.length || saving.pending.value" title="Enter" @click="takeProposal()">Take (Enter)</button>
+        </span>
+        <span class="tw-grp">
+          <button class="btn mini" :disabled="!refinement.change.lines.length || draft.edits.value.size > 0 || refining.pending.value" @click="takeRefinement">
+            {{ refinement.passage?.mode === 'line-window' ? 'Apply word refinement' : refinement.passage ? 'Apply passage' : 'Take all' }}
+          </button>
+          <button class="btn mini" @click="refinement = undefined">Dismiss</button>
+        </span>
+      </div>
       <div class="tedit-head btn-row">
         <template v-if="draft.line.value">
           <b>{{ draft.line.value.text }}</b>
@@ -509,43 +623,12 @@ onMounted(() => {
             Tighten the start
           </button>
           <button
-            v-if="draft.line.value"
-            class="btn"
-            :title="
-              draft.edits.value.size
-                ? 'Save your pending timing changes and change whether this line is sung'
-                : draft.line.value.off
-                  ? 'The line is sung again: the clips it falls into sing it'
-                  : 'Heard, but not sung (a misheard ad-lib, a line on top of another): no clip sings it. It stays here, to be sung again'
-            "
-            @click="setOff(draft.line.value, !draft.line.value.off)"
-          >
-            {{ draft.edits.value.size ? 'Save changes & ' : ''
-            }}{{ draft.line.value.off ? (draft.line.value.adlib ? 'Sing it' : 'Sing it again') : 'Leave the line out' }}
-          </button>
-          <button
             class="btn"
             :disabled="refining.pending.value || saving.pending.value"
             title="Use this block as the audio window; replace only its word boundaries after preview, even after moving it by hand"
             @click="retryPassage('line-window')"
           >
             {{ draft.edits.value.size ? 'Save changes & refine words' : 'Refine words in block' }}
-          </button>
-          <button
-            class="btn"
-            :disabled="draft.edits.value.size > 0"
-            :title="draft.edits.value.size ? 'Save your moved words before adding new words' : 'Insert missing sung words and extend the lyrics'"
-            @click="addWords"
-          >
-            Add words
-          </button>
-          <button
-            class="btn"
-            :disabled="!draft.line.value || draft.edits.value.size > 0 || refining.pending.value || saving.pending.value"
-            title="Confirm this lyric is sung, then preview a local alignment with its neighbour"
-            @click="retryPassage()"
-          >
-            Retry sung passage
           </button>
         </span>
         <span class="tw-grp">
@@ -561,14 +644,48 @@ onMounted(() => {
           <button class="btn" @click="nextKind('cut')">Next cut</button>
         </span>
         <!-- back to the saved or the automatic times: less often, in a menu (#834) -->
-        <details
-          v-if="draft.line.value?.byHand || byHand.length > 1 || (draft.line.value && draft.isChanged(draft.line.value))"
-          ref="more"
-          class="tw-more"
-          @click="closeMore"
-        >
-          <summary class="btn">Reset ▾</summary>
+        <details v-if="draft.line.value" ref="more" class="tw-more" @click="closeMore">
+          <summary class="btn">More ▾</summary>
           <div class="tw-menu" role="menu">
+            <button
+              class="btn tw-item"
+              :title="
+                draft.edits.value.size
+                  ? 'Save your pending timing changes and change whether this line is sung'
+                  : draft.line.value.off
+                    ? 'The line is sung again: the clips it falls into sing it'
+                    : 'Heard, but not sung (a misheard ad-lib, a line on top of another): no clip sings it. It stays here, to be sung again'
+              "
+              @click="setOff(draft.line.value, !draft.line.value.off)"
+            >
+              {{ draft.edits.value.size ? 'Save changes & ' : ''
+              }}{{ draft.line.value.off ? (draft.line.value.adlib ? 'Sing it' : 'Sing it again') : 'Leave the line out' }}
+              <small class="muted" aria-hidden="true">{{ draft.line.value.off ? 'clips sing it again' : 'heard, but not sung' }}</small>
+            </button>
+            <button
+              class="btn tw-item"
+              :disabled="draft.edits.value.size > 0"
+              :title="draft.edits.value.size ? 'Save your moved words before adding new words' : 'Insert missing sung words and extend the lyrics'"
+              @click="addWords"
+            >
+              Add words <small class="muted" aria-hidden="true">a word Whisper missed</small>
+            </button>
+            <button
+              class="btn tw-item"
+              :disabled="!allCutSplits.some(i => i.ok)"
+              title="Split every word a clip cut falls into at the cut, after a list to check"
+              @click="splitEverywhere()"
+            >
+              Split words at cuts ({{ allCutSplits.filter(i => i.ok).length }}) <small class="muted" aria-hidden="true">in the whole song, after a look</small>
+            </button>
+            <button
+              class="btn tw-item"
+              :disabled="draft.edits.value.size > 0 || refining.pending.value || saving.pending.value"
+              title="Confirm this lyric is sung, then preview a local alignment with its neighbour"
+              @click="retryPassage()"
+            >
+              Retry sung passage <small class="muted" aria-hidden="true">align it with its neighbour</small>
+            </button>
             <button
               v-if="draft.line.value?.byHand"
               class="btn tw-item"
@@ -619,7 +736,11 @@ onMounted(() => {
         :playing="!!player.playing.value"
         @play="play"
         @stop="player.stop()"
+        :proposal="proposal"
         @next="nextProblem"
+        @take="takeProposal()"
+        @drop="dropProposal"
+        @proposal="nextProposal"
       />
       <TimingTools ref="timingTools" :draft="draft" :view="view" :player="player" />
       <div>
@@ -632,13 +753,34 @@ onMounted(() => {
               .join(', ')
           }}: the word is then sung half in one clip, half in the next. Split the word at the cut to preserve its complete audible span, or adjust its timing
           after listening.
+          <span class="btn-row">
+            <button
+              v-for="i in lineCutSplits.filter(x => x.ok)"
+              :key="i.n"
+              class="btn"
+              :title="`Split at the cut ${i.cut} (${clock(i.time)}); the text boundary is a guess from the time`"
+              @click="splitHere([i])"
+            >
+              Split {{ i.before }}│{{ i.after }} at the cut
+            </button>
+            <button v-if="lineCutSplits.filter(x => x.ok).length > 1" class="btn" @click="splitHere(lineCutSplits)">Split all in this line</button>
+          </span>
         </CalloutBox>
         <CalloutBox v-if="draft.overlaps.value.length" kind="warn" as="div">
           This line overlaps {{ draft.overlaps.value.map(l => `"${l.text}"`).join(' and ') }}. Fine for two singers at once - otherwise move one of them.
         </CalloutBox>
       </div>
     </div>
-    <TimingLineList :view="view" :draft="draft" :filter="filter" :leads="leads" :outdated="outdated" @choose="choose" />
+    <TimingLineList
+      :view="view"
+      :draft="draft"
+      :filter="filter"
+      :leads="leads"
+      :outdated="outdated"
+      :overlapping="overlapping"
+      :proposed="proposed"
+      @choose="choose"
+    />
     <template #side>
       <TimingSide
         :view="view"
@@ -657,9 +799,29 @@ onMounted(() => {
 
 <style scoped>
 /* the list of refined lines (the lines the transcript matched) scrolls inside its box instead of growing the page */
-.tw-entries {
-  max-height: 20rem;
-  overflow: auto;
+.tw-proposal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--ok);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+}
+.tw-reason {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tw-why {
+  flex: 1 1 12rem;
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  min-width: 0;
 }
 /* the bar's buttons in groups by what they do, a line between them (#834) */
 .tw-grp {
@@ -696,5 +858,12 @@ onMounted(() => {
 }
 .tw-menu .btn {
   text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+.tw-menu .btn small {
+  font-size: var(--text-xs);
 }
 </style>

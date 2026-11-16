@@ -88,3 +88,53 @@ export function voiceLead(words: {start: number; end: number}[], peaks: number[]
     }
     return (start - at) / RATE
 }
+
+/** A new attack must come out of a level this much lower than itself (a held vowel that goes on is none)... */
+const ATTACK_FROM_LOW = 1.8
+/** ...and rise by this much of what is sung around: a dip and a new syllable, or the sound after a pause. */
+const ATTACK_RISE = 0.18
+/** A new sound must itself be at least this much of what is sung around: the little bumps between words are noise, not syllables. */
+const ATTACK_LEVEL = 0.22
+/** The level is looked at this many values before, and this many after (0.08 s back, 0.03 s on). */
+const BEFORE_BINS = 8
+const AHEAD_BINS = 3
+/** After an attack the next one is not looked for within this many values (0.12 s): one syllable has one. */
+const REFRACTORY_BINS = 12
+
+/**
+ * Where a new sound starts between two times of the song, in seconds: after a pause, or after a dip in a held vowel (the next
+ * word taking up the note). Where a word of the timing can start - the stops for dragging a boundary between two lines, so it
+ * lands on what is heard and not on a guess. A hint to snap to, not a measurement of any word: a held note has none inside it.
+ */
+export function onsetsIn(peaks: number[], from: number, to: number): number[] {
+    if (!peaks.length) return []
+    const bin = (t: number) => Math.max(0, Math.min(peaks.length, Math.round(t * RATE)))
+    const a = Math.max(0, bin(from) - BEFORE_BINS),
+        b = bin(to)
+    const window = peaks.slice(a, b)
+    if (window.length < BEFORE_BINS + AHEAD_BINS + 1) return []
+    const sorted = [...window].sort((x, y) => x - y)
+    const around = Math.max(FLOOR, sorted[Math.floor(sorted.length * 0.9)] ?? 0)
+    const env = window.map((_, i) => {
+        const part = window.slice(Math.max(0, i - 1), i + 2)
+        return part.reduce((sum, v) => sum + v, 0) / part.length
+    })
+    const out: number[] = []
+    let skip = 0
+    for (let i = BEFORE_BINS; i < env.length - AHEAD_BINS; i++) {
+        if (skip > 0) {
+            skip--
+            continue
+        }
+        const low = Math.min(...env.slice(i - BEFORE_BINS, i))
+        const high = env[i + AHEAD_BINS]!
+        if (high < ATTACK_LEVEL * around || high - low < ATTACK_RISE * around || high < ATTACK_FROM_LOW * low) continue
+        // the start of the rise, not its top: back to where the level was still the low one
+        let start = i
+        while (start > BEFORE_BINS && env[start - 1]! > low + (high - low) * 0.25) start--
+        const t = (a + start) / RATE
+        if (t >= from && t <= to) out.push(t)
+        skip = REFRACTORY_BINS
+    }
+    return out
+}

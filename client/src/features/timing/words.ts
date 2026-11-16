@@ -68,3 +68,22 @@ export function timingChanges(view: TimingView, moved: TimingLine[], wordsOf: (l
     crossing: moved.flatMap(line => crossingOf(view, wordsOf(line))),
   }
 }
+
+/**
+ * How far one line may run into the next before it counts. The lines the alignment barely found have their times spread over the line,
+ * and next to a neighbour they overlap by about a tenth of a second (seen on 5 of 6 such pairs on schwarzer-flur-live): that is the
+ * guess, not a line to look at. A held vowel runs on for more.
+ */
+export const OVERLAP_FROM = 0.15
+
+/** The lines that run into the line after them (or before): the later one starts before the earlier one ends. Lines left out are not sung. */
+export function overlappingLines(lines: TimingLine[], startOf: (l: TimingLine) => number, endOf: (l: TimingLine) => number): Set<number> {
+  const sung = lines.filter(l => !l.off)
+  const found = new Set<number>()
+  for (let n = 1; n < sung.length; n++)
+    if (endOf(sung[n - 1]!) > startOf(sung[n]!) + OVERLAP_FROM) {
+      found.add(sung[n - 1]!.line)
+      found.add(sung[n]!.line)
+    }
+  return found
+}

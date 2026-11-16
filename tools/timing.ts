@@ -24,7 +24,7 @@ import type {RefinementLanguage} from '../shared/timing-refinement.ts'
 cli('timing')
 
 const usage =
-    'usage: bun run timing <project-id> [--json | --set=timing.json | --tighten | --off=12,40 | --on=12 | --reset=12,40|all | --refine=de|en|fr [--refine-line=N --confirm-sung [--within-block]] | --apply-refinement=<proposal-id>]'
+    'usage: bun run timing <project-id> [--json | --set=timing.json | --tighten | --off=12,40 | --on=12 | --reset=12,40|all | --refine=de|en|fr [--refine-line=N --confirm-sung [--within-block]] | --apply-refinement=<proposal-id> [--lines=3,5]]'
 const {values: args, positionals} = (() => {
     try {
         return parseArgs({
@@ -42,6 +42,7 @@ const {values: args, positionals} = (() => {
                 'within-block': {type: 'boolean'},
                 'confirm-sung': {type: 'boolean'},
                 'apply-refinement': {type: 'string'},
+                lines: {type: 'string'},
             },
         })
     } catch (e) {
@@ -107,8 +108,18 @@ if (args.refine !== undefined) {
     process.exit(0)
 }
 if (args['apply-refinement'] !== undefined) {
-    const result = await applyTimingRefinement(t, args['apply-refinement'])
+    // --lines=3,5: take only those lines (as listed, from 1) and keep the rest of the proposal for later
+    const only =
+        args.lines === undefined
+            ? undefined
+            : args.lines
+                  .split(',')
+                  .filter(Boolean)
+                  .map(n => Number(n.trim()) - 1)
+    if (only?.some(n => !Number.isInteger(n) || n < 0)) log.usageError('--lines: line numbers as listed, from 1', usage)
+    const {refinement, ...result} = await applyTimingRefinement(t, args['apply-refinement'], only)
     console.log(JSON.stringify(result, null, 2))
+    if (refinement) log.next(`bun run timing ${t.id} --apply-refinement=${refinement.id} --lines=<more lines>`)
     process.exit(0)
 }
 let change: TimingChange | undefined

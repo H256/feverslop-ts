@@ -151,3 +151,22 @@ test('service prepares without mutation, backs up before applying, and refuses c
         rmSync(dir, {recursive: true, force: true})
     }
 })
+
+test('taking only some lines of a proposal: the others stay, and the rest of the proposal still fits', () => {
+    const data = project([line(0, 'One', 1, 2), line(1, 'Two', 10, 11), line(2, 'Three', 20, 21)])
+    const report = buildRefinement(data, [candidate(0, 'One', 1.4, 2.4), candidate(1, 'Two', 10.4, 11.4), candidate(2, 'Three', 20.4, 21.4)], 'de')
+    expect(report.change.lines.length).toBe(3)
+    applyRefinement(data, report, [], [1])
+    expect(data.lyricsTiming!.lines.map(l => l.start)).toEqual([1, 10.4, 20])
+    expect(() => applyRefinement(data, report, [], [1])).toThrow('Timing or singers changed')
+})
+test('a line is not taken alone when it would run into a neighbour that keeps its times', () => {
+    const data = project([line(0, 'One', 1, 5), line(1, 'Two', 5.1, 9)])
+    const report = buildRefinement(data, [candidate(0, 'One', 1.5, 4.9), candidate(1, 'Two', 5.4, 9.4)], 'de')
+    expect(report.change.lines.length).toBe(2)
+    report.change.lines[0]!.words![0]!.end = 5.3
+    expect(() => applyRefinement(data, report, [], [0])).toThrow('keeps its times')
+    expect(data.lyricsTiming!.lines[0]!.end).toBe(5)
+    applyRefinement(data, report, [], [1])
+    expect(data.lyricsTiming!.lines[1]!.start).toBe(5.4)
+})

@@ -1,7 +1,7 @@
 import {computed, reactive, ref, shallowRef, type Ref} from 'vue'
 import type {TimingChange, TimingLine, TimingView, TimingWord} from '../../../../shared/workspace'
 import {clamp} from '../../lib/format'
-import {crossingOf, movedWord, timingChanges} from './words'
+import {MIN_WORD, crossingOf, movedWord, timingChanges} from './words'
 import {translate, splitWord, joinWords, fitSelection, markWords, validateWords} from './edit'
 
 const UNDO_STEPS = 200
@@ -83,6 +83,71 @@ export function useTimingDraft(view: Ref<TimingView>) {
   }
   const moveLine = (l: TimingLine, by: number) => setWords(l, translate(wordsOf(l), 0, wordsOf(l).length - 1, by, view.value.duration))
   const moveWord = (l: TimingLine, n: number, by: number, edge?: 'start' | 'end') => setWords(l, movedWord(wordsOf(l), n, by, edge, view.value.duration))
+  /** The words of two neighbouring lines as they are, to work out a boundary drag from the start every time. */
+  const boundaryBase = (a: TimingLine, b: TimingLine) => ({a: wordsOf(a).map(w => ({...w})), b: wordsOf(b).map(w => ({...w}))})
+  /**
+   * The boundary between two lines, one point for both (#1104): the last word of the earlier line ends there, the later line starts
+   * there and its words are fitted between it and its own end - a word that sat too early moves on with the rest. Where the later
+   * line has no room left after the point, or with `push`, it moves along as a whole instead, keeping its length: the way to
+   * work through a song in order, without making room behind the line first. Worked out from `base` (the words when the drag
+   * began), so it can be called on every pointer move.
+   */
+  const moveBoundary = (a: TimingLine, b: TimingLine, t: number, base = boundaryBase(a, b), push = false) => {
+    const before = base.a.map(w => ({...w}))
+    const last = before.at(-1)!
+    if (t - last.start < MIN_WORD) throw new Error(`The last word of "${a.text}" needs at least 0.05 seconds.`)
+    const end = base.b.at(-1)!.end
+    const fits = end - t >= base.b.length * MIN_WORD
+    const after =
+      fits && !push
+        ? fitSelection(base.b, 0, base.b.length - 1, t, end, view.value.duration)
+        : translate(base.b, 0, base.b.length - 1, t - base.b[0]!.start, view.value.duration)
+    last.end = Math.round(t * 1000) / 1000
+    setWords(a, before)
+    setWords(b, after)
+  }
+  /**
+   * Where each word that a clip cut falls into could be split at the cut (#1104): the word, the time (the cut), and the text
+   * boundary guessed from the time - the share of the word's span before the cut, as a share of its letters. A guess: the letters of
+   * a word are not spread evenly over its time, so the boundary is shown before it is taken and can be set again. `ok` is false where
+   * a part would be shorter than 0.05 s, or the word has one letter.
+   */
+  const cutSplits = (l: TimingLine) => {
+    const ws = wordsOf(l)
+    const seen = new Set<TimingWord>()
+    return crossing(l).flatMap(({word, cut}) => {
+      if (seen.has(word)) return []
+      seen.add(word)
+      const letters = Array.from(word.text)
+      const cp = clamp(Math.round((letters.length * (cut.start - word.start)) / (word.end - word.start)), 1, Math.max(1, letters.length - 1))
+      return [
+        {
+          line: l,
+          n: ws.indexOf(word),
+          word,
+          cut: cut.id,
+          time: cut.start,
+          before: letters.slice(0, cp).join(''),
+          after: letters.slice(cp).join(''),
+          ok: letters.length >= 2 && cut.start - word.start >= MIN_WORD && word.end - cut.start >= MIN_WORD,
+        },
+      ]
+    })
+  }
+  type CutSplit = ReturnType<typeof cutSplits>[number]
+  /** Split the given words at their cuts, in one undo step; the ones that cannot be split are left. Returns how many were. */
+  const splitAtCuts = (items: CutSplit[]) => {
+    const todo = items.filter(i => i.ok)
+    if (!todo.length) throw new Error('No word can be split at its cut: a part would be shorter than 0.05 seconds.')
+    action(() => {
+      for (const l of new Set(todo.map(i => i.line))) {
+        let ws = wordsOf(l)
+        for (const i of todo.filter(x => x.line === l).sort((a, b) => b.n - a.n)) ws = splitWord(ws, i.n, i.before.length, i.time)
+        setWords(l, ws)
+      }
+    })
+    return todo.length
+  }
   const resetLine = (l: TimingLine) => {
     remember()
     setWords(l, l.words)
@@ -305,6 +370,10 @@ export function useTimingDraft(view: Ref<TimingView>) {
     redo,
     moveLine,
     moveWord,
+    boundaryBase,
+    moveBoundary,
+    cutSplits,
+    splitAtCuts,
     resetLine,
     tighten,
     discard,

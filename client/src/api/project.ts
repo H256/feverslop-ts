@@ -39,7 +39,7 @@ import type {
 } from '../../../shared/workspace'
 import {errorOfAnswer, getJson, postForm, postJson} from './http'
 import type {DirectionEdit, DirectionRule, DirectionView} from '../../../shared/direction'
-import type {TimingRefinement, RefinementLanguage, ConfirmedPassage} from '../../../shared/timing-refinement'
+import type {TimingRefinement, RefinementLanguage, ConfirmedPassage, AppliedRefinement} from '../../../shared/timing-refinement'
 
 const id = (value: string) => encodeURIComponent(value)
 
@@ -144,7 +144,7 @@ export function projectApi(root: string) {
     saveTiming: (change: TimingChange) => post<TimingResult>('timing', change),
     refineTiming: (language: RefinementLanguage, passage?: ConfirmedPassage) =>
       post<TimingRefinement>('timing-refine', {language, ...(passage ? {passage} : {})}),
-    applyTimingRefinement: (id: string) => post<TimingResult>('timing-refine-apply', {id}),
+    applyTimingRefinement: (id: string, lines?: number[]) => post<AppliedRefinement>('timing-refine-apply', {id, ...(lines ? {lines} : {})}),
     override: (clip: string, override: EditorOverride | null) => post<{written: true}>(`override/${id(clip)}`, override),
   }
 }
