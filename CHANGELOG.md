@@ -2,6 +2,68 @@
 
 One section per release. The section of a tag becomes its GitHub release (`.github/workflows/release.yml`).
 
+## v0.11.0 – props as things of their own, a band that plays in its gaps, finer lyric timing, and a hardened pipeline
+
+_2026-11-16_
+
+Props - a guitar, a torch, a letter - are now things of their own: they get their own picture, travel with the people who carry them into the clip request, and live in the library. A band plays the way a band plays: one calm action per shot, single hits with silence between, a break in the music is a shot of its own, and the planner knows who leads. Lyric timing can be refined down to phonemes, a whole song can be checked with a cheap lip-sync preview first, and Japanese, Chinese and Thai lyrics are split into real words. The workspace says more when something goes wrong and no longer loses what you did. A code review of the whole code base was worked through: around fifty findings fixed, from stale saves to half-written files.
+
+### Highlights
+
+- **Props with their own pictures.** A music video's props are things of their own, drawn as one plain picture (no sheet), and the characters and places are drawn without them. A clip's request carries the prop picture of everybody in it, so the guitar in the clip is the guitar you chose. Props are in the library (`export-asset`, `import-asset prop --for=<character>`, `bun run library`) and on the Casting page, where one from the library can be taken for a character. `propPictures` turns it on and off (#944, #954-#959).
+- **A band that plays.** The shot planner knows how an instrument is heard in each shot - single hits with silence between, or a flowing part - and who leads. A band plays one calm action per shot, a hit has its form, and a clip opens on the place. A break of the band is a shot of its own, so cuts do the work a prompt cannot. A song's vocal gaps are split into parts with how each instrument plays in them (#969, #1021, #1024, #1056, #1090).
+- **Lyric timing, finer and checkable.** Optional phoneme refinement with editing of missing words, composite IPA phones recovered, sung passages you confirm retried with a scoped preview, unmatched sung lines kept visible, and words refined inside blocks you placed by hand (#952, #953, #1014, #1015, #1017, #1064). The Timing page has a cheap lip-sync preview of the whole song that builds a clip as the real run does - shots, heard lead, drums without singing - so a bad alignment shows before an expensive render (#1016, #1018, #1020).
+- **A workspace that says what happened.** A failed read of an open project is said above the page, which stays. A failure toast stays until you close it or the same action works. A lost line to the workspace is said apart from the run. The top bar wraps and the project status chips wrap on narrow windows instead of disappearing or scrolling sideways. Tabs are named by phase, with the state of each in words (#945-#947, #950, #1046, #1052).
+- **Review the timeline by playing it.** Play the clips through and press `R` to mark the playing clip; a step from behind the last clip goes to the last clip (#965, #1012).
+- **A code review, worked through.** Issues #971-#1009 were fixed: a run held by another process stops on time, a retake never leaves guide files or a half-replaced clip, the plans of kept beats survive a stopped run, a failed finish removes its partial file, a save made from an older read is refused instead of replacing what another tab saved, and the library id and linked media files are checked where the path is built (#1010-#1013, #1019, #1029-#1031, #1040, #1060, #1070).
+
+### Cast, shots and planner
+
+- A clip has the references of the people its shots show; a rule the shots were planned with counts as taken in Direction (#961, #963).
+- A singer heard off screen is a note, not a reason to ask the model again; the "no sound, no music" rule of the state after a beat is only for a band (#972, #1023).
+- The planner is told the heard times from the cuts compose makes; a sung word no longer moves the cut of a band break or leaves a shot under 1.2 s (#1039, #1063).
+- Rewriting flagged moments maps names, and a moment that lost a name keeps its text (#1032).
+- The shot planner's output limit starts at 24576; the default stays medium (#1042).
+- LLM calls can set a temperature; the song-lyrics prompt no longer contradicts itself (#1044).
+- Look edits are dropped after the refresh worked; the cast prompt's 400-word prop rule is split into sub-points with the same words (#1026, #1049).
+
+### Songs, lyrics and rendering
+
+- A waltz is found and its bars are three beats; fewer than two bars of beats stop with a clear message (#1028, #1062).
+- Lyrics in Japanese, Chinese or Thai are split into words by the language's boundaries; a lyrics text over the Whisper hint's token limit is sent as every word once (#1034, #1041).
+- Vocal activity has an absolute floor, so bleed in a stem is not singing (#1030).
+- The song and its stems are sent to a server once per run, not for every clip; the uploads and inputs of a clip's job come from one function (#1043, #1080).
+- The final assembly passes its filter graph through a file, so very long videos fit the command line (#1033).
+- Finish: a held target is retried and explained; refine and upscale share the remote path and the complete record (#1029, #1054).
+- Retake: the old clip is copied into the archive and replaced in one rename (#1060).
+
+### Workspace and CLI
+
+- The render buttons on the References page queue, and new sheets are made for all stale pictures (#966, #967).
+- The start page makes a new music video without the command's special values (#951).
+- Direction: a save made from an older read is refused instead of replacing what another tab saved (#1040).
+- Settings has readable sections, wrapping defaults and multiline descriptions (#1083).
+- Blocked browser storage and an http page without a clipboard no longer break the workspace (#1025).
+- Accessibility: the version picture is a button, new-person and bring-in fields have labels, the timeline height has keys (#1001, #1035).
+- Performance: lyric alignment, timeline snapping and timing statistics are faster (#1038).
+- The Post-work page says why its drafts are read once (#1051).
+- CLI: one word for what is rendered and what "all" leaves out; a refused preview names two commands; a word more than a command takes is refused before any work (#948, #949).
+- Setup tools take keys from a file or the environment, quote audio paths, and leave no half-made project after a failed import (#1036).
+- A request with `Origin: null` is refused with 403, not 500; the clock never shows 60 seconds; the basic auth header is UTF-8 safe; the run dock's stop wait ends with the stop timeout (#1010, #1011, #1013).
+- The editor starts again - a doubled `screenplaySchema` declaration is gone (#1087).
+
+### Film
+
+- Every film prompt that returns JSON has a schema: brief, script notes, props, style choice, location views, outline, cast, screenplay (write, parse, adapt), annotation and the coverage answer (#995, #1045, #1069, #1075, #1076, #1078, #1081).
+
+### Structure and tests
+
+- Half-written sidecars no longer throw, there is one sidecar format and one name per `shotCuts` (#1048).
+- `lib/` may not get an import cycle that is not on the list; `lib/frames.ts` no longer imports `lib/project.ts`, which had broken the client build (#1072, #1082).
+- Unused exports, dead styles and dead settings removed; doc comments back above the code they describe; the Casting page's hand editing moved into `useCastEditing`; the timeline's lanes are a service of the page (#1037, #1047, #1053, #1055, #1059, #1065).
+- Tests wait for answers instead of sleeping, the test clips, temp folders and clip workflow options come from shared helpers, and the golden test reads the final filter graph from its file (#1057, #1061, #1066, #1073, #1074, #1077, #1079).
+- OpenAI, Clack and Bun types dependencies updated (#1088).
+
 ## v0.10.0 – a guided start, every workspace action through its command, a design system, and the pipelines in stages
 
 _2026-11-13_
