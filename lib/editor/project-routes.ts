@@ -525,7 +525,10 @@ export const PROJECT_ROUTES: readonly Route[] = [
         method: 'POST',
         path: 'timing-refine-apply',
         changes: [applyTimingRefinement],
-        handle: async c => json(await applyTimingRefinement(c.target, (await c.body<{id: string}>()).id)),
+        handle: async c => {
+            const {id, lines} = await c.body<{id: string; lines?: number[]}>()
+            return json(await applyTimingRefinement(c.target, id, lines))
+        },
     },
     {
         method: 'POST',

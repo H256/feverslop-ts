@@ -2,7 +2,7 @@
 import AppIcon from '../../components/AppIcon.vue'
 import DisclosureBox from '../../components/DisclosureBox.vue'
 import CalloutBox from '../../components/CalloutBox.vue'
-import {computed, ref, watch} from 'vue'
+import {computed, nextTick, ref, watch} from 'vue'
 import type {TimingView, TimingWord} from '../../../../shared/workspace'
 import type {useSnippetPlayer} from '../../composables/useSnippetPlayer'
 import type {TimingDraft} from './useTimingDraft'
@@ -22,6 +22,19 @@ const selected = computed(() => props.draft.selectedWords.value)
 const group = computed(() => selected.value[0]?.group)
 const unplaced = computed(() => props.draft.selection.value.some(s => s.line.unplaced && !props.draft.isChanged(s.line)))
 const joinable = computed(() => props.draft.selection.value.length === 1 && selected.value.length > 1 && selected.value.slice(1).every(w => w.joined))
+const splitOpen = ref(false)
+/** A split in the wrong place: the parts are put together again and the split tool is ready at the old place, to set the boundary again. */
+const resplit = () =>
+  run(() => {
+    const chars = selected.value[0]!.text.length
+    const at = selected.value[1]!.start
+    props.draft.join()
+    void nextTick(() => {
+      character.value = chars
+      splitAt.value = at
+      splitOpen.value = true
+    })
+  })
 const run = (action: () => void) => {
   error.value = ''
   try {
@@ -142,8 +155,9 @@ const clips = computed(() =>
       <button v-if="group" class="btn" @click="collapse">{{ draft.collapsed.value.has(group) ? 'Expand group' : 'Collapse group' }}</button>
       <button v-if="group" class="btn" @click="run(() => draft.patchSelection({group: undefined}))">Ungroup</button>
       <button class="btn" :disabled="!joinable" @click="run(draft.join)">Join parts</button>
+      <button class="btn" :disabled="!joinable" title="Put the parts together and set the text boundary of the split again" @click="resplit">Re-split</button>
     </div>
-    <DisclosureBox title="Fit, split and shared boundary">
+    <DisclosureBox v-model:open="splitOpen" title="Fit, split and shared boundary">
       <div class="btn-row">
         <label>Fit start <input v-model.number="from" aria-label="Fit start" type="number" step="0.01" /></label>
         <label>Fit end <input v-model.number="to" aria-label="Fit end" type="number" step="0.01" /></label>

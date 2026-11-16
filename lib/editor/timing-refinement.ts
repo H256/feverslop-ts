@@ -1,9 +1,9 @@
 import {createHash, randomUUID} from 'node:crypto'
-import {mkdirSync, readFileSync, statSync, appendFileSync} from 'node:fs'
+import {existsSync, mkdirSync, readFileSync, statSync, appendFileSync} from 'node:fs'
 import {join, resolve} from 'node:path'
 import type {Project, TimedWord} from '../project.ts'
 import type {ClipRequest} from '../compose.ts'
-import type {TimingRefinement, RefinementLanguage, ConfirmedPassage} from '../../shared/timing-refinement.ts'
+import type {TimingRefinement, RefinementLanguage, ConfirmedPassage, AppliedRefinement} from '../../shared/timing-refinement.ts'
 import {passageInput, timingLocked} from './timing-passage.ts'
 import {MIN_WORD_SEC} from '../lyrics.ts'
 import {applyTiming, insideProject} from './timing.ts'
@@ -19,6 +19,17 @@ export const refinementFingerprint = (data: Project) =>
     createHash('sha256')
         .update(JSON.stringify([data.lyricsTiming, data.singing, data.music?.durationSec, data.stems]))
         .digest('hex')
+/** Two lines sung by the same single singer, neither with parts: they come one after the other. */
+const voiceMatcher = (data: Project) => {
+    const singers = (id: number) => data.singing?.lines.find(l => l.line === id)?.singers ?? data.singing?.singers ?? []
+    return (a: number, b: number) => {
+        const left = singers(a),
+            right = singers(b)
+        return (
+            left.length === 1 && right.length === 1 && left[0] === right[0] && !data.singing?.lines.some(l => (l.line === a || l.line === b) && l.parts?.length)
+        )
+    }
+}
 const protectedLine = (l: NonNullable<Project['lyricsTiming']>['lines'][number]) => !!(l.off || l.adlib || timingLocked(l))
 
 /** Scores from forced alignment are not probabilities that a lyric was sung. Whisper supplies presence evidence. */
@@ -32,14 +43,7 @@ export function buildRefinement(data: Project, candidates: Candidate[], language
         entries: [],
     }
     const lines = data.lyricsTiming?.lines ?? []
-    const singers = (id: number) => data.singing?.lines.find(l => l.line === id)?.singers ?? data.singing?.singers ?? []
-    const sameVoice = (a: number, b: number) => {
-        const left = singers(a),
-            right = singers(b)
-        return (
-            left.length === 1 && right.length === 1 && left[0] === right[0] && !data.singing?.lines.some(l => (l.line === a || l.line === b) && l.parts?.length)
-        )
-    }
+    const sameVoice = voiceMatcher(data)
     for (const [index, line] of lines.entries()) {
         const entry: TimingRefinement['entries'][number] = {line: line.line, text: line.text, before: [line.start, line.end], status: 'review', reason: ''}
         report.entries.push(entry)
@@ -170,7 +174,38 @@ export function buildPassageRefinement(data: Project, candidates: Candidate[], l
     return report
 }
 
-export function applyRefinement(data: Project, report: TimingRefinement, requests: Pick<ClipRequest, 'id' | 'beatId'>[]) {
+/**
+ * Taking only some lines of a whole-song proposal: a line is refused when its new span would run into a neighbour of the same
+ * voice that keeps its times, more than the two overlap now (the proposal checked the lines as a set, not one by one).
+ */
+function subsetOf(data: Project, report: TimingRefinement, only: number[]): TimingRefinement {
+    if (report.passage) throw new Error('A passage proposal is taken as a whole.')
+    const chosen = report.change.lines.filter(l => l.words && only.includes(l.line))
+    for (const n of only) if (!chosen.some(l => l.line === n)) throw new Error(`Line ${n + 1} has no proposal to take.`)
+    const sameVoice = voiceMatcher(data)
+    const lines = data.lyricsTiming!.lines.filter(l => !l.off)
+    const span = (n: number): [number, number] => {
+        const l = lines.find(x => x.line === n)!
+        const c = chosen.find(x => x.line === n)
+        return c ? [c.words![0]!.start, c.words!.at(-1)!.end] : [l.start, l.end]
+    }
+    for (const c of chosen) {
+        const at = lines.findIndex(l => l.line === c.line)
+        for (const other of [lines[at - 1], lines[at + 1]]) {
+            if (!other || chosen.some(x => x.line === other.line) || !sameVoice(c.line, other.line)) continue
+            const [first, second] = at > lines.indexOf(other) ? [other.line, c.line] : [c.line, other.line]
+            const was = (n: number) => lines.find(x => x.line === n)!
+            const now = Math.max(0, was(first).end - was(second).start)
+            const after = Math.max(0, span(first)[1] - span(second)[0])
+            if (after > now + 0.001)
+                throw new Error(`Line ${c.line + 1} would run into line ${other.line + 1}, which keeps its times. Take both, or move one by hand.`)
+        }
+    }
+    return {...report, change: {lines: chosen}}
+}
+
+export function applyRefinement(data: Project, report: TimingRefinement, requests: Pick<ClipRequest, 'id' | 'beatId'>[], only?: number[]) {
+    if (only) report = subsetOf(data, report, only)
     if (report.change.lines.some(line => line.off !== undefined))
         throw new Error('This older proposal changes lyric presence. Prepare refinement again; leave lines out manually after listening.')
     if (refinementFingerprint(data) !== report.fingerprint) throw new Error('Timing or singers changed. Prepare the refinement again.')
@@ -290,7 +325,7 @@ export async function prepareTimingRefinement(target: EditorTarget, language: Re
     }
 }
 
-export async function applyTimingRefinement(target: EditorTarget, id: string) {
+export async function applyTimingRefinement(target: EditorTarget, id: string, only?: number[]): Promise<AppliedRefinement> {
     if (target.kind !== 'music') throw new Error('Lyrics timing is for music videos')
     const requests = await readClipRequests<ClipRequest>(target.dir)
     return withProjectLock(target.dir, target.id, () => {
@@ -300,11 +335,23 @@ export async function applyTimingRefinement(target: EditorTarget, id: string) {
         const data = readProject(target)
         const backup = join(folderOf(target), `before-${report.id}.json`)
         const before = structuredClone(data.lyricsTiming)
-        const result = applyRefinement(data, report, requests)
+        const result = applyRefinement(data, report, requests, only)
         if (result.changed.length) {
-            writeJsonFile(backup, before)
+            // one backup per proposal: the first taking keeps the timing from before the proposal, whatever lines follow
+            if (!existsSync(backup)) writeJsonFile(backup, before)
             writeJsonFile(join(target.dir, 'project.json'), data)
         }
-        return result
+        if (!only) return result
+        // the rest of the proposal stays: the lines taken are done, and it fits the project as it is now
+        const taken = new Set(result.changed)
+        const rest: TimingRefinement & {audioFile: string; audioStamp: string} = {
+            ...report,
+            fingerprint: refinementFingerprint(data),
+            change: {lines: report.change.lines.filter(l => !taken.has(l.line))},
+            entries: report.entries.map(e => (taken.has(e.line) ? {...e, status: 'applied' as const, reason: 'Taken.'} : e)),
+        }
+        writeJsonFile(join(folderOf(target), 'proposal.json'), rest)
+        const {audioFile: _file, audioStamp: _stamp, ...refinement} = rest
+        return {...result, refinement}
     })
 }

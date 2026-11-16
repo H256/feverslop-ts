@@ -1,19 +1,22 @@
 <script setup lang="ts">
-import {computed, onMounted, onScopeDispose, ref, watchEffect} from 'vue'
+import {computed, onMounted, onScopeDispose, ref, watch, watchEffect} from 'vue'
 import type {TimingLine, TimingView} from '../../../../shared/workspace'
 import {usePointerDrag} from '../../composables/usePointerDrag'
 import {cssColor, cssVar, prepareCanvas} from '../../lib/canvas'
 import {clock} from '../../lib/format'
 import {ChromeService} from '../../services/chrome'
 import type {TimingDraft} from './useTimingDraft'
+import {onsetsIn} from './fit'
 import {cutsIn} from './words'
 
 /**
  * The waveform of the vocals around the chosen line, its words to drag, the lines next to it faded, the cuts of the clips. Drag: a
  * word, its edges, or the bar above the words (the whole line). Keys on it: see the help on the side.
  */
-const props = defineProps<{view: TimingView; draft: TimingDraft; peaks?: number[]; head?: number; playing: boolean}>()
-const emit = defineEmits<{play: [from: number, to: number]; stop: []; next: [back: boolean]}>()
+/** What the refinement proposes for the chosen line: its words as ghosts under the real ones, same time axis (#1104). */
+export type Proposal = {status: 'refined' | 'review' | 'protected' | 'omit' | 'applied'; reason: string; words: {text: string; start: number; end: number}[]}
+const props = defineProps<{view: TimingView; draft: TimingDraft; peaks?: number[]; head?: number; playing: boolean; proposal?: Proposal}>()
+const emit = defineEmits<{play: [from: number, to: number]; stop: []; next: [back: boolean]; take: []; drop: []; proposal: [back: boolean]}>()
 const WAVE_RATE = 100
 const WAVE_HEIGHT = 120
 const editor = ref<HTMLElement>()
@@ -34,7 +37,14 @@ onMounted(() => {
 })
 onScopeDispose(() => observer.disconnect())
 
-const span = computed(() => frozen.value ?? props.draft.window.value)
+// the proposal may lie some seconds off the words: the view takes it in, so the two can be compared
+const span = computed(() => {
+  if (frozen.value) return frozen.value
+  const base = props.draft.window.value
+  const words = props.proposal?.words
+  if (!words?.length) return base
+  return {from: Math.max(0, Math.min(base.from, words[0]!.start - 0.3)), to: Math.min(props.view.duration, Math.max(base.to, words.at(-1)!.end + 0.3))}
+})
 const xOf = (t: number) => ((t - span.value.from) / (span.value.to - span.value.from)) * width.value
 const tOf = (x: number) => span.value.from + (x / Math.max(1, width.value)) * (span.value.to - span.value.from)
 const box = (from: number, to: number, least: number) => ({left: `${xOf(from)}px`, width: `${Math.max(least, xOf(to) - xOf(from))}px`})
@@ -108,7 +118,7 @@ const headShown = computed(() => props.head !== undefined && props.head >= span.
 
 const follow = usePointerDrag()
 /** Dragging in seconds: one undo step per drag, on the window - the boxes are drawn anew while dragging. */
-function drag(event: PointerEvent, move: (by: number, event: PointerEvent) => void, pick?: () => void) {
+function drag(event: PointerEvent, move: (by: number, event: PointerEvent) => void, pick?: () => void, done?: () => void) {
   if (event.button !== 0) return
   event.stopPropagation()
   event.preventDefault()
@@ -134,13 +144,21 @@ function drag(event: PointerEvent, move: (by: number, event: PointerEvent) => vo
       props.draft.settle()
       frozen.value = undefined
       snapped.value = undefined
+      done?.()
     },
   )
 }
-const snapTime = (time: number, event: PointerEvent, exclude: number[] = []) => {
+const snapTime = (time: number, event: PointerEvent, exclude: number[] = [], onsets: number[] = []) => {
   snapped.value = undefined
   if (!snap.value || event.altKey) return time
-  const threshold = ((span.value.to - span.value.from) / Math.max(1, width.value)) * 7
+  const perPixel = (span.value.to - span.value.from) / Math.max(1, width.value)
+  // a new sound is what a boundary is dragged to: it pulls from further away than the edges of words do
+  const heard = onsets.reduce<number | undefined>((best, t) => (best === undefined || Math.abs(t - time) < Math.abs(best - time) ? t : best), undefined)
+  if (heard !== undefined && Math.abs(heard - time) < perPixel * 14) {
+    snapped.value = heard
+    return heard
+  }
+  const threshold = perPixel * 7
   const candidates = [
     ...props.view.cuts.flatMap(c => [c.start, c.end]),
     ...props.view.lines.filter(l => !ghost(l)).flatMap(l => props.draft.wordsOf(l).flatMap(w => [w.start, w.end])),
@@ -198,6 +216,84 @@ const dragWord = (event: PointerEvent, line: TimingLine, n: number, edge?: 'star
         props.draft.pickWord(line, last, true)
       }
       initial = edge ? props.draft.wordsOf(line)[n]![edge] : props.draft.selectedWords.value[0]!.start
+    },
+  )
+}
+/**
+ * Two neighbouring lines that run into each other, or nearly (the later one starts less than half a second after the earlier one
+ * ends), where one of them is chosen: one boundary to drag for both. It is what a long vowel needs - the earlier line ends later,
+ * the later one starts later - without making room line by line.
+ */
+const joints = computed(() => {
+  const lines = props.view.lines.filter(l => !l.off)
+  const out: {a: TimingLine; b: TimingLine; overlap: number}[] = []
+  for (let n = 1; n < lines.length; n++) {
+    const a = lines[n - 1]!,
+      b = lines[n]!
+    if (!own(a) && !own(b)) continue
+    const gap = props.draft.startOf(b) - props.draft.endOf(a)
+    if (gap > 0.5 || props.draft.endOf(b) < span.value.from || props.draft.startOf(a) > span.value.to) continue
+    out.push({a, b, overlap: -gap})
+  }
+  return out
+})
+// the boundary the keys work on: B chooses one (Shift+B the one before), then ← → move it, . and , go to the next or the last new sound
+const activeJoint = ref<string>()
+const jointKey = (j: {a: TimingLine; b: TimingLine}) => `${j.a.line}-${j.b.line}`
+const active = computed(() => joints.value.find(j => jointKey(j) === activeJoint.value))
+watch(joints, () => {
+  if (activeJoint.value && !active.value) activeJoint.value = undefined
+})
+function joinKey(event: KeyboardEvent): boolean {
+  const list = joints.value
+  if ((event.key === 'b' || event.key === 'B') && list.length) {
+    const at = list.findIndex(j => jointKey(j) === activeJoint.value)
+    activeJoint.value = jointKey(list[(at + (event.key === 'B' ? -1 : 1) + list.length) % list.length]!)
+    return true
+  }
+  const j = active.value
+  if (!j) return false
+  if (event.key === 'Escape') {
+    activeJoint.value = undefined
+    return true
+  }
+  const t = props.draft.startOf(j.b)
+  const target =
+    event.key === 'ArrowLeft' || event.key === 'ArrowRight'
+      ? t + (event.key === 'ArrowLeft' ? -1 : 1) * (event.shiftKey ? 0.5 : 0.05)
+      : event.key === '.' && props.peaks
+        ? onsetsIn(props.peaks, t + 0.03, t + 6)[0]
+        : event.key === ',' && props.peaks
+          ? onsetsIn(props.peaks, Math.max(0, t - 6), t - 0.03).at(-1)
+          : undefined
+  if (target === undefined) return event.key === '.' || event.key === ','
+  props.draft.remember()
+  try {
+    props.draft.moveBoundary(j.a, j.b, target)
+    error.value = ''
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : String(cause)
+  }
+  props.draft.settle()
+  return true
+}
+/** Where a new sound starts around the lines, shown and snapped to while a boundary is dragged. */
+const joining = ref(false)
+const onsets = computed(() => (joining.value && props.peaks ? onsetsIn(props.peaks, span.value.from, span.value.to) : []))
+const dragJoint = (event: PointerEvent, a: TimingLine, b: TimingLine) => {
+  let base: ReturnType<typeof props.draft.boundaryBase>
+  let initial = 0
+  const pps = width.value / (span.value.to - span.value.from)
+  drag(
+    event,
+    (_by, e) => props.draft.moveBoundary(a, b, snapTime(initial + (e.clientX - event.clientX) / pps, e, [initial], onsets.value), base, e.shiftKey),
+    () => {
+      base = props.draft.boundaryBase(a, b)
+      initial = props.draft.startOf(b)
+      joining.value = true
+    },
+    () => {
+      joining.value = false
     },
   )
 }
@@ -259,6 +355,7 @@ function key(event: KeyboardEvent) {
     return draft.redo()
   }
   if (event.ctrlKey || event.metaKey || event.altKey) return
+  if (joinKey(event)) return event.preventDefault()
   const line = draft.line.value
   if (!line) return
   const at = props.view.lines.indexOf(line)
@@ -269,6 +366,9 @@ function key(event: KeyboardEvent) {
     draft.settle()
   } else if (event.key === 'Tab') draft.nextWord(event.shiftKey)
   else if (event.key === 'n' || event.key === 'N') emit('next', event.key === 'N')
+  else if (event.key === 'Enter' && props.proposal?.words.length) emit('take')
+  else if ((event.key === 'x' || event.key === 'X') && props.proposal) emit('drop')
+  else if (event.key === ']' || event.key === '[') emit('proposal', event.key === '[')
   else if (event.key === 'Escape') draft.choose(line.line)
   else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
     const next = props.view.lines[at + (event.key === 'ArrowDown' ? 1 : -1)]
@@ -339,6 +439,39 @@ defineExpose({focus: () => editor.value?.focus({preventScroll: true}), playLine}
             <span>{{ w.text }}</span>
           </div>
         </template>
+      </template>
+      <div
+        v-for="t in onsets"
+        :key="`o${t}`"
+        class="tonset"
+        :style="{left: `${xOf(t)}px`}"
+        title="A new sound starts here: the boundary snaps to it (Alt: free)"
+      />
+      <template v-for="j in joints" :key="`j${j.a.line}-${j.b.line}`">
+        <div
+          v-if="j.overlap > 0.001"
+          class="toverlap"
+          :style="box(draft.startOf(j.b), draft.endOf(j.a), 2)"
+          :title="`Overlap of ${j.overlap.toFixed(2)} s: drag the handle to the right place`"
+        />
+        <div
+          :class="['tjoint', {overlapping: j.overlap > 0.001, active: jointKey(j) === activeJoint}]"
+          :style="{left: `${xOf(draft.startOf(j.b)) - 6}px`}"
+          :title="`Boundary between &quot;${j.a.text}&quot; and &quot;${j.b.text}&quot;: the earlier line ends here, the later one starts here and its words are fitted after it (Shift: the later line moves along as a whole)`"
+          @pointerdown="dragJoint($event, j.a, j.b)"
+        />
+      </template>
+      <template v-if="proposal?.words.length">
+        <div
+          v-for="(w, n) in proposal.words"
+          :key="`p${n}`"
+          :class="['tproposal', proposal.status]"
+          :style="box(w.start, w.end, 3)"
+          :title="`Proposal: ${w.text} · ${clock(w.start)}–${clock(w.end)} · click to listen`"
+          @click="emit('play', w.start - 0.05, w.end + 0.1)"
+        >
+          <span>{{ w.text }}</span>
+        </div>
       </template>
       <div
         v-if="selectedSpan && draft.selectedWords.value.length > 1"

@@ -6,8 +6,16 @@ import {EARLY_FROM} from './fit'
 import type {TimingDraft} from './useTimingDraft'
 
 /** The lines of the song to pick one: when it starts, its section, and whether it is estimated, moved or cut through. */
-export type LineFilter = 'all' | 'estimated' | 'changed' | 'early' | 'old' | 'adlibs'
-const props = defineProps<{view: TimingView; draft: TimingDraft; filter: LineFilter; leads: Map<number, number>; outdated: Map<number, string[]>}>()
+export type LineFilter = 'all' | 'estimated' | 'changed' | 'early' | 'old' | 'adlibs' | 'overlap'
+const props = defineProps<{
+  view: TimingView
+  draft: TimingDraft
+  filter: LineFilter
+  leads: Map<number, number>
+  outdated: Map<number, string[]>
+  overlapping: Set<number>
+  proposed: Set<number>
+}>()
 const emit = defineEmits<{choose: [line: number, extend: boolean]}>()
 const early = (line: TimingLine) => (props.leads.get(line.line) ?? 0) >= EARLY_FROM
 const keep: Record<LineFilter, (line: TimingLine) => boolean> = {
@@ -17,7 +25,21 @@ const keep: Record<LineFilter, (line: TimingLine) => boolean> = {
   early,
   old: line => props.outdated.has(line.line),
   adlibs: line => !!line.adlib,
+  overlap: line => props.overlapping.has(line.line),
 }
+/** The colour at the edge of a row says what it wants: red a cut or an overlap, yellow a guess or an old prompt, green a proposal to take, blue moved. */
+const tone = (line: TimingLine) =>
+  line.off
+    ? 'off'
+    : props.draft.crossing(line).length || props.overlapping.has(line.line) || line.problem
+      ? 'bad'
+      : line.estimated || props.draft.unchecked(line) || early(line) || props.outdated.has(line.line)
+        ? 'stale'
+        : props.proposed.has(line.line)
+          ? 'ok'
+          : props.draft.isChanged(line)
+            ? 'moved'
+            : ''
 // the early starts with the worst first: that is where to look
 const shown = computed(() => {
   const lines = props.view.lines.filter(keep[props.filter])
@@ -32,6 +54,7 @@ const EMPTY: Record<LineFilter, string> = {
   changed: 'Nothing moved yet.',
   early: 'No first word starts before its singing.',
   old: 'Every clip has the times of the lines it sings.',
+  overlap: 'No line runs into the next one.',
   adlibs: 'No ad-libs were found.',
 }
 const stateOf = (line: TimingLine) =>
@@ -59,7 +82,7 @@ const stateOf = (line: TimingLine) =>
     <button
       v-for="line in shown"
       :key="line.line"
-      :class="['tline-row', {selected: draft.selection.value.some(s => s.line.line === line.line), changed: draft.isChanged(line)}]"
+      :class="['tline-row', `tone-${tone(line)}`, {selected: draft.selection.value.some(s => s.line.line === line.line), changed: draft.isChanged(line)}]"
       :data-line="line.line"
       @click="emit('choose', line.line, $event.shiftKey)"
     >
@@ -93,6 +116,10 @@ const stateOf = (line: TimingLine) =>
           >prompt old</span
         >
         <span v-if="draft.crossing(line).length" class="chip bad" title="A clip cut falls into a word">cut</span>
+        <span v-if="overlapping.has(line.line)" class="chip bad" title="This line runs into the one before or after it: drag the handle between them"
+          >overlap</span
+        >
+        <span v-if="proposed.has(line.line)" class="chip good" title="The refinement proposes new word times for this line">proposal</span>
       </span>
     </button>
     <div v-if="!shown.length" class="empty">{{ EMPTY[filter] }}</div>

@@ -217,3 +217,153 @@
   text-overflow: ellipsis;
   font-size: var(--text-s);
 }
+
+/* the proposal of the refinement, a lane under the words with a dashed line up to where its words start (#1104) */
+.tproposal {
+  position: absolute;
+  top: 124px;
+  height: 20px;
+  min-width: 3px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--ok);
+  background: color-mix(in srgb, var(--ok) 22%, transparent);
+  color: var(--ok);
+  font-size: var(--text-xs);
+  line-height: 18px;
+  cursor: pointer;
+  z-index: 2;
+}
+.tproposal span {
+  display: block;
+  padding: 0 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tproposal::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  bottom: 100%;
+  height: 96px;
+  border-left: 1px dashed var(--ok);
+  opacity: 0.7;
+  pointer-events: none;
+}
+.tproposal.review,
+.tproposal.omit {
+  border-color: var(--stale);
+  background: color-mix(in srgb, var(--stale) 22%, transparent);
+  color: var(--stale);
+}
+.tproposal.review::before,
+.tproposal.omit::before {
+  border-left-color: var(--stale);
+}
+
+/* where two lines run into each other: the overlap hatched, one handle for the boundary of both (#1104) */
+.toverlap {
+  position: absolute;
+  top: 28px;
+  height: 94px;
+  pointer-events: none;
+  z-index: 3;
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--danger) 45%, transparent) 0 4px, transparent 4px 8px);
+  border-left: 1px solid var(--danger);
+  border-right: 1px solid var(--danger);
+}
+.tjoint {
+  position: absolute;
+  top: 26px;
+  height: 100px;
+  width: 12px;
+  z-index: 4;
+  cursor: ew-resize;
+}
+.tjoint::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+}
+.tjoint.overlapping::before,
+.tjoint.overlapping::after {
+  background: var(--danger);
+}
+.tjoint::after {
+  content: '⇔';
+  position: absolute;
+  left: -4px;
+  top: 38px;
+  width: 20px;
+  line-height: 20px;
+  text-align: center;
+  font-size: var(--text-s);
+  border-radius: var(--radius-s);
+  background: var(--accent);
+  color: var(--surface);
+}
+
+/* a boundary without an overlap is quiet: faint while the pointer is in the editor, full on the handle itself */
+.tjoint:not(.overlapping) {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.tedit:hover .tjoint:not(.overlapping) {
+  opacity: 0.4;
+}
+.tedit:hover .tjoint:not(.overlapping):hover {
+  opacity: 1;
+}
+
+/* where a new sound starts, while a boundary is dragged: the stops it snaps to (#1104) */
+.tonset {
+  position: absolute;
+  top: 28px;
+  height: 94px;
+  width: 0;
+  border-left: 1px dotted var(--accent);
+  pointer-events: none;
+  z-index: 3;
+}
+.tonset::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  bottom: -6px;
+  border: 4px solid transparent;
+  border-bottom-color: var(--accent);
+}
+
+/* the boundary the keys work on */
+.tedit .tjoint.active {
+  opacity: 1;
+}
+.tjoint.active::before {
+  width: 4px;
+  left: 4px;
+}
+.tjoint.active::after {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* the edge of a row says what it wants (#1104) */
+.tline-row.tone-bad {
+  border-left-color: var(--danger);
+}
+.tline-row.tone-stale {
+  border-left-color: var(--stale);
+}
+.tline-row.tone-ok {
+  border-left-color: var(--ok);
+}
+.tline-row.tone-moved {
+  border-left-color: var(--accent);
+}
+.tline-row.tone-off {
+  border-left-color: var(--line);
+}

@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {test, expect, type Page} from '@playwright/test'
 import {startEditor} from './editor'
 import {stubProject} from './fixtures'
 
@@ -9,6 +9,9 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await editor?.stop()
 })
+
+// the line actions that are rarely needed sit in the "More" menu of the bar
+const more = (page: Page) => page.locator('.tw-more > summary').click()
 
 test('a roughly moved block can save and refine its words without resetting manual placement', async ({page}) => {
   const posted = await stubProject(page)
@@ -92,9 +95,11 @@ test('confirmed passage prepares without saving and applies only its reviewed pr
   })
   await page.goto(`${editor.base}/p/music/demo/timing`)
   const retry = page.getByRole('button', {name: 'Retry sung passage', exact: true})
+  await more(page)
   await retry.click()
   await page.getByRole('dialog').getByRole('button', {name: 'Cancel', exact: true}).click()
   expect(prepared).toEqual([])
+  await more(page)
   await retry.click()
   await page.getByRole('dialog').getByRole('button', {name: 'This line is sung — prepare', exact: true}).click()
   await expect(page.getByRole('button', {name: 'Listen before', exact: true})).toBeVisible()
@@ -105,6 +110,7 @@ test('confirmed passage prepares without saving and applies only its reviewed pr
   await page.getByRole('button', {name: 'Apply passage', exact: true}).click()
   await expect.poll(() => applied).toEqual([{id: 'passage-preview'}])
   await page.getByRole('button', {name: 'Mark reviewed', exact: true}).click()
+  await more(page)
   await expect(retry).toBeDisabled()
 })
 
@@ -136,6 +142,7 @@ test('omitted overlapping words do not intercept dragging; deliberate list selec
 test('missing words can be inserted with explicit timing', async ({page}) => {
   const posted = await stubProject(page)
   await page.goto(`${editor.base}/p/music/demo/timing`)
+  await more(page)
   await page.getByRole('button', {name: 'Add words', exact: true}).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Missing words').fill('oh yeah')
@@ -196,6 +203,7 @@ test('an ad-lib can be enabled while saving its pending review', async ({page}) 
   )
   await page.goto(`${editor.base}/p/music/demo/timing`)
   await page.getByRole('button', {name: 'Mark reviewed', exact: true}).click()
+  await more(page)
   const enable = page.getByRole('button', {name: 'Save changes & Sing it', exact: true})
   await expect(enable).toBeEnabled()
   await enable.click()
@@ -217,6 +225,7 @@ test('an ad-lib can be enabled while saving its pending review', async ({page}) 
 test('a new separate lyric segment can be added', async ({page}) => {
   const posted = await stubProject(page)
   await page.goto(`${editor.base}/p/music/demo/timing`)
+  await more(page)
   await page.getByRole('button', {name: 'Add words', exact: true}).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Add to').selectOption('line')
@@ -225,4 +234,242 @@ test('a new separate lyric segment can be added', async ({page}) => {
   await dialog.getByLabel('End (seconds)').fill('5')
   await dialog.getByRole('button', {name: 'Add words & save', exact: true}).click()
   await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toMatchObject({lines: [], add: {afterLine: 0, words: [{text: 'oh', start: 4, end: 5}]}})
+})
+
+test('the proposal of the refinement is drawn on the timeline and a line is taken on its own', async ({page}) => {
+  await stubProject(page)
+  const applied: unknown[] = []
+  const proposal = {
+    id: 'song-preview',
+    language: 'de',
+    fingerprint: 'fixture',
+    model: 'fixture',
+    change: {
+      lines: [
+        {
+          line: 0,
+          words: [
+            {text: 'Hello', start: 1.4, end: 2},
+            {text: 'night', start: 2, end: 3},
+          ],
+        },
+      ],
+    },
+    entries: [{line: 0, text: 'Hello night', before: [1, 3], after: [1.4, 3], status: 'refined', reason: 'Phoneme alignment; listen to check.'}],
+  }
+  await page.route('**/api/timing-refine', route => route.fulfill({json: proposal}))
+  await page.route('**/api/timing-refine-apply', async route => {
+    applied.push(route.request().postDataJSON())
+    await route.fulfill({
+      json: {
+        changed: [0],
+        slots: [],
+        replanned: [],
+        staleClips: [],
+        crossing: [],
+        refinement: {...proposal, change: {lines: []}, entries: [{...proposal.entries[0], status: 'applied', reason: 'Taken.'}]},
+      },
+    })
+  })
+  await page.goto(`${editor.base}/p/music/demo/timing`)
+  await page.getByText('Refine timing from vocals').click()
+  await page.getByRole('button', {name: 'Prepare refinement', exact: true}).click()
+  await expect(page.locator('.tproposal')).toHaveCount(2)
+  await expect(page.getByRole('region', {name: 'Refinement proposal'})).toContainText('Phoneme alignment')
+  await page.locator('.tedit').focus()
+  await page.keyboard.press('Enter')
+  await expect.poll(() => applied).toEqual([{id: 'song-preview', lines: [0]}])
+  await expect(page.locator('.tproposal')).toHaveCount(0)
+})
+
+test('two lines that run into each other share one boundary handle: dragging it moves the earlier end and the later start', async ({page}) => {
+  const posted = await stubProject(page)
+  const lines = [
+    {
+      line: 0,
+      section: 'Chorus',
+      text: 'Ich bin',
+      words: [
+        {text: 'Ich', start: 1, end: 2},
+        {text: 'bin', start: 2, end: 3},
+      ],
+      estimated: false,
+      byHand: false,
+      beats: [],
+    },
+    {
+      line: 1,
+      section: 'Chorus',
+      text: 'nicht mehr',
+      words: [
+        {text: 'nicht', start: 2.5, end: 3.5},
+        {text: 'mehr', start: 3.5, end: 5},
+      ],
+      estimated: false,
+      byHand: false,
+      beats: [],
+    },
+  ]
+  await page.route('**/api/timing', r =>
+    r.request().method() === 'POST' ? r.fallback() : r.fulfill({json: {timing: {duration: 10, lines, cuts: [], beats: [], unplanned: [], outdated: []}}}),
+  )
+  await page.goto(`${editor.base}/p/music/demo/timing`)
+  await expect(page.locator('.toverlap')).toHaveCount(1)
+  const joint = page.locator('.tjoint')
+  const box = (await joint.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2, {steps: 6})
+  await page.mouse.up()
+  await expect(page.locator('.toverlap')).toHaveCount(0)
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toMatchObject({lines: [{line: 0}, {line: 1}]})
+})
+
+test('a boundary without an overlap shows its handle only on hover', async ({page}) => {
+  await stubProject(page)
+  const lines = [
+    {
+      line: 0,
+      section: 'Chorus',
+      text: 'Ich bin',
+      words: [
+        {text: 'Ich', start: 1, end: 2},
+        {text: 'bin', start: 2, end: 3},
+      ],
+      estimated: false,
+      byHand: false,
+      beats: [],
+    },
+    {
+      line: 1,
+      section: 'Chorus',
+      text: 'nicht mehr',
+      words: [
+        {text: 'nicht', start: 3.2, end: 4},
+        {text: 'mehr', start: 4, end: 5},
+      ],
+      estimated: false,
+      byHand: false,
+      beats: [],
+    },
+  ]
+  await page.route('**/api/timing', r =>
+    r.request().method() === 'POST' ? r.fallback() : r.fulfill({json: {timing: {duration: 10, lines, cuts: [], beats: [], unplanned: [], outdated: []}}}),
+  )
+  await page.goto(`${editor.base}/p/music/demo/timing`)
+  const joint = page.locator('.tjoint')
+  await expect(joint).toHaveCount(1)
+  await expect(page.locator('.toverlap')).toHaveCount(0)
+  await expect(joint).toHaveCSS('opacity', '0')
+  const box = (await joint.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await expect(joint).toHaveCSS('opacity', '1')
+})
+
+test('B chooses a boundary, the arrows move it, Esc leaves it', async ({page}) => {
+  await stubProject(page)
+  const lines = [
+    {
+      line: 0,
+      section: 'Chorus',
+      text: 'Ich bin',
+      words: [
+        {text: 'Ich', start: 1, end: 2},
+        {text: 'bin', start: 2, end: 3},
+      ],
+      estimated: false,
+      byHand: false,
+      beats: [],
+    },
+    {
+      line: 1,
+      section: 'Chorus',
+      text: 'nicht mehr',
+      words: [
+        {text: 'nicht', start: 2.5, end: 3.5},
+        {text: 'mehr', start: 3.5, end: 5},
+      ],
+      estimated: false,
+      byHand: false,
+      beats: [],
+    },
+  ]
+  await page.route('**/api/timing', r =>
+    r.request().method() === 'POST' ? r.fallback() : r.fulfill({json: {timing: {duration: 10, lines, cuts: [], beats: [], unplanned: [], outdated: []}}}),
+  )
+  await page.goto(`${editor.base}/p/music/demo/timing`)
+  await expect(page.locator('.toverlap')).toHaveCount(1)
+  await page.locator('.tedit').focus()
+  await page.keyboard.press('b')
+  await expect(page.locator('.tjoint.active')).toHaveCount(1)
+  for (let n = 0; n < 11; n++) await page.keyboard.press('ArrowRight')
+  await expect(page.locator('.toverlap')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.tjoint.active')).toHaveCount(0)
+  // every press is one step back, as with a line
+  for (let n = 0; n < 11; n++) await page.keyboard.press('Control+z')
+  await expect(page.locator('.toverlap')).toHaveCount(1)
+})
+
+const crossingLine = [
+  {
+    line: 0,
+    section: 'Verse',
+    text: 'Ein Traum',
+    words: [
+      {text: 'Ein', start: 1, end: 2.5},
+      {text: 'Traum', start: 2.5, end: 4},
+    ],
+    estimated: false,
+    byHand: false,
+    beats: [],
+  },
+]
+const cuts = [
+  {id: 'clip-1', start: 0, end: 3.2},
+  {id: 'clip-2', start: 3.2, end: 10},
+]
+
+test('a word a cut falls into is split at the cut from the warning, and Re-split sets the boundary again', async ({page}) => {
+  const posted = await stubProject(page)
+  await page.route('**/api/timing', r =>
+    r.request().method() === 'POST'
+      ? r.fallback()
+      : r.fulfill({json: {timing: {duration: 10, lines: crossingLine, cuts, beats: [], unplanned: [], outdated: []}}}),
+  )
+  await page.goto(`${editor.base}/p/music/demo/timing`)
+  await expect(page.getByText('A clip cut falls into')).toBeVisible()
+  await page.getByRole('button', {name: 'Split Tr│aum at the cut', exact: true}).click()
+  await expect(page.getByText('A clip cut falls into')).toHaveCount(0)
+  // the two parts: choose both and set the boundary again
+  await page.locator('.tword', {hasText: /^Tr$/}).click()
+  await page.locator('.tword', {hasText: /^aum$/}).click({modifiers: ['Shift']})
+  await page.getByRole('button', {name: 'Re-split', exact: true}).click()
+  await expect(page.getByLabel('Split after character')).toHaveValue('2')
+  await expect(page.getByLabel('Split time')).toHaveValue('3.2')
+  await page.getByLabel('Split after character').fill('3')
+  await page.getByRole('button', {name: 'Split word', exact: true}).click()
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await expect
+    .poll(() => (posted.find(p => p.path === 'timing')?.body as {lines: {words: {text: string}[]}[]} | undefined)?.lines[0]?.words.map(w => w.text))
+    .toEqual(['Ein', 'Tra', 'um'])
+})
+
+test('Split words at cuts lists every word first and splits them in one step', async ({page}) => {
+  await stubProject(page)
+  await page.route('**/api/timing', r =>
+    r.request().method() === 'POST'
+      ? r.fallback()
+      : r.fulfill({json: {timing: {duration: 10, lines: crossingLine, cuts, beats: [], unplanned: [], outdated: []}}}),
+  )
+  await page.goto(`${editor.base}/p/music/demo/timing`)
+  await page.locator('.tw-more > summary').click()
+  await page.getByRole('button', {name: 'Split words at cuts (1)', exact: true}).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toContainText('Tr│aum')
+  await dialog.getByRole('button', {name: 'Split 1 word', exact: true}).click()
+  await expect(page.getByText('A clip cut falls into')).toHaveCount(0)
+  await page.locator('.tw-more > summary').click()
+  await expect(page.getByRole('button', {name: 'Split words at cuts (0)', exact: true})).toBeDisabled()
 })

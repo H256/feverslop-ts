@@ -13,6 +13,16 @@ bun run timing <project-id> --apply-refinement=<proposal-id>
 
 Use `--refine=en` or `--refine=fr` for those languages, and add `--json` for the full proposal. The language is selected explicitly: this does not detect code-switching within a song. German and one English recording have now been compared against hand-edited timing; French singing accuracy remains untested. See [the full-library results](alignment-library-results.md) and [the accepted direction and next experiments](alignment-next-steps.md).
 
+## Taking a proposal line by line
+
+A prepared proposal is drawn on the timeline: choose a line and its proposed words appear as a green lane under the real words, on the same waveform, with a dashed line up to where each proposed word starts. A line the refinement could not place shows why in the bar above the editor, in yellow. Click a proposed word to hear it; **▶ Now** and **▶ Proposal** play the whole line, as it is and as proposed.
+
+**Take** (Enter) applies that line only and goes on to the next one with a proposal; **Keep mine** (X) leaves it as it is and goes on; `[` and `]` step back and forth. **Take all** applies everything left. Taking one line keeps the rest of the proposal valid. A line is refused when it would run into a neighbour of the same singer that keeps its times: take both, or move one by hand. The timing from before the proposal is saved once, under the first line taken. Pending edits must be saved first, as with the whole proposal.
+
+```powershell
+bun run timing <project-id> --apply-refinement=<proposal-id> --lines=3,5
+```
+
 ## Retry a confirmed sung passage
 
 ### Refine words after roughly placing a block
