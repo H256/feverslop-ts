@@ -183,6 +183,9 @@ bun index.ts my-project
 
 Lyrics are only written when `input/lyrics.txt` does not exist yet - write your own, or delete the file to have them
 written again. The musical direction in `input/music-style.txt` (if there is one) is part of the lyrics prompt.
+The lyrics are asked for without thinking (`reasoning: 'none'` in `songLyricsPrompt`, `lib/prompts.ts`): with thinking a model takes 1-2 minutes
+and the lyrics were no better in a test. A model that writes badly without it can be given a level there (`low`, `medium`, `high`) - it is
+not a setting yet.
 
 Answers with a fixed shape (the cast, the beats, the views, the singers, the style shortlist) are asked with a JSON
 schema on the server's Chat Completions API (`response_format`), so the server keeps the answer to that shape and to the

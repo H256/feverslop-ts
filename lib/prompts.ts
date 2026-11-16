@@ -16,6 +16,7 @@ export function songLyricsPrompt(idea: string, language: string, durationSec?: n
     return {
         // no thinking: with the style and the rhyme rules a model thinks 4500-5000 words (1-2 minutes) and writes lyrics that are
         // no better, only shorter (measured 2026-11-16, Qwen3.8 27B and Flash-Next); without it the lyrics take 5-8 seconds
+        // LYRICS THINKING LEVEL: raise it here ('low', 'medium', 'high') if a model needs to think to write well
         reasoning: 'none',
         input: `Write song lyrics from this idea for a music video, for the YuE2 text-to-music model.
 Idea: ${idea}
