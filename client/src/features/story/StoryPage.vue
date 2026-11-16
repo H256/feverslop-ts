@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import CalloutBox from '../../components/CalloutBox.vue'
 import {computed} from 'vue'
 import PageBar from '../../components/PageBar.vue'
@@ -138,8 +139,8 @@ const drop = toasts.guard(async () => {
         </div>
         <div class="section"><textarea v-model="draft.text.value" class="book" rows="24" :aria-label="name" :readonly="!book.editable" /></div>
         <div v-if="book.editable" class="section btn-row">
-          <button class="btn primary" :disabled="!draft.dirty.value" @click="save">Save the story</button>
-          <button class="btn" @click="writeAgain">Write it again</button>
+          <button class="btn primary" :disabled="!draft.dirty.value" @click="save"><AppIcon name="save" />Save the story</button>
+          <button class="btn" @click="writeAgain"><AppIcon name="repeat" />Write it again</button>
           <button class="btn" title="The same story with the cast as the Casting page has it now - a proposal next to this one" @click="adapt">
             Tell it anew for the cast
           </button>

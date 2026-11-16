@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import {computed, ref} from 'vue'
 import {RouterLink} from 'vue-router'
 import {keptThisSession} from '../../lib/browser-store'
@@ -26,7 +27,7 @@ const dismiss = () => {
     <span :title="last.failures.join('\n')">{{ said.map(found => `${found.text} ${found.action}`).join(' ') }}</span>
     <div class="spacer" />
     <RouterLink v-for="page in pages" :key="page" class="btn primary" :to="`${session.root}/${page}`">Open the {{ PAGE_NAMES[page] }} page</RouterLink>
-    <button class="btn" @click="actions.repeatLast(last)">Repeat</button>
+    <button class="btn" @click="actions.repeatLast(last)"><AppIcon name="repeat" />Repeat</button>
     <button class="btn" aria-label="Close" @click="dismiss">✕</button>
   </div>
 </template>

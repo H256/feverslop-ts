@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import DisclosureBox from '../../components/DisclosureBox.vue'
 import type {DirectionView} from '../../../../shared/direction'
 
@@ -19,7 +20,9 @@ defineEmits<{plan: []; restore: [string]}>()
         >{{ version.id.startsWith('baseline-') ? 'Original plan' : new Date(version.createdAt).toLocaleString() }} · {{ version.changes.length }} shot edits{{
           version.id === view.activeVersion ? ' · current' : ''
         }}</span
-      ><button class="btn mini" :disabled="blocked || version.id === view.activeVersion" @click="$emit('restore', version.id)">Restore plan</button>
+      ><button class="btn mini" :disabled="blocked || version.id === view.activeVersion" @click="$emit('restore', version.id)">
+        <AppIcon name="undo" />Restore plan
+      </button>
     </div>
   </DisclosureBox>
   <DisclosureBox class="side-block" title="CLI" quiet>

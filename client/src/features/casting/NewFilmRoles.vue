@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import {stableKeys} from '../../lib/stable-key'
 import FormField from '../../components/FormField.vue'
 
@@ -18,7 +19,7 @@ const keyOf = stableKeys<object>()
       <div class="head">
         <b>new</b>
         <div class="spacer" />
-        <button class="btn danger" title="Not added after all" @click="remove(n)">Remove</button>
+        <button class="btn danger" title="Not added after all" @click="remove(n)"><AppIcon name="remove" />Remove</button>
       </div>
       <FormField label="Name"><input v-model="role.name" type="text" aria-label="Name" maxlength="80" /></FormField>
       <FormField label="Role in the story">

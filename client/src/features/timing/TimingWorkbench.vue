@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import SplitLayout from '../../components/SplitLayout.vue'
 import CalloutBox from '../../components/CalloutBox.vue'
 import {computed, h, onMounted, ref, toRef, watch} from 'vue'
@@ -450,7 +451,9 @@ onMounted(() => {
             <button class="btn mini" @click="choose(entry.line)">{{ entry.line + 1 }}</button>
             <b>{{ entry.text }}</b> [{{ entry.status }}] {{ entry.before.map(n => n.toFixed(2)).join('–')
             }}<span v-if="entry.after"> → {{ entry.after.map(n => n.toFixed(2)).join('–') }}</span> — {{ entry.reason }}
-            <button class="btn mini" @click="play(Math.max(0, entry.before[0] - 0.3), Math.min(view.duration, entry.before[1] + 0.3))">Listen before</button>
+            <button class="btn mini" @click="play(Math.max(0, entry.before[0] - 0.3), Math.min(view.duration, entry.before[1] + 0.3))">
+              <AppIcon name="listen" />Listen before
+            </button>
             <button v-if="entry.after" class="btn mini" @click="play(Math.max(0, entry.after[0] - 0.3), Math.min(view.duration, entry.after[1] + 0.3))">
               Listen to proposal
             </button>
@@ -459,7 +462,7 @@ onMounted(() => {
         <button class="btn" :disabled="!refinement.change.lines.length || draft.edits.value.size > 0 || refining.pending.value" @click="takeRefinement">
           {{ refinement.passage?.mode === 'line-window' ? 'Apply word refinement' : refinement.passage ? 'Apply passage' : 'Apply proposal' }}
         </button>
-        <button class="btn" @click="refinement = undefined">Dismiss</button>
+        <button class="btn" @click="refinement = undefined"><AppIcon name="close" />Dismiss</button>
       </template>
     </details>
     <LipsyncPreview :view="view" :dirty="draft.edits.value.size > 0" />
@@ -499,7 +502,7 @@ onMounted(() => {
         </template>
         <div class="spacer" />
         <span v-if="draft.line.value" class="tw-grp">
-          <button class="btn" @click="editor?.playLine(draft.line.value)">Listen</button>
+          <button class="btn" @click="editor?.playLine(draft.line.value)"><AppIcon name="listen" />Listen</button>
           <button
             v-if="draft.line.value && lead >= EARLY_FROM"
             class="btn"
@@ -602,8 +605,8 @@ onMounted(() => {
           </div>
         </details>
         <span class="tw-grp">
-          <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()">Undo</button>
-          <button class="btn" :disabled="!draft.future.length" title="Ctrl+Shift+Z" @click="draft.redo()">Redo</button>
+          <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()"><AppIcon name="undo" />Undo</button>
+          <button class="btn" :disabled="!draft.future.length" title="Ctrl+Shift+Z" @click="draft.redo()"><AppIcon name="redo" />Redo</button>
         </span>
         <span class="tw-grp">
           <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(0.8)">+</button>

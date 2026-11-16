@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import {ref} from 'vue'
 import ModalDialog from '../../components/ModalDialog.vue'
 import {TERMS} from '../../lib/terms'
@@ -61,6 +62,8 @@ const REVIEW = [
         <dd>{{ text }}</dd></template
       >
     </dl>
-    <div class="btn-row u-end u-mt-3"><button class="btn" @click="modal?.close()">Close</button></div>
+    <div class="btn-row u-end u-mt-3">
+      <button class="btn" @click="modal?.close()"><AppIcon name="close" />Close</button>
+    </div>
   </ModalDialog>
 </template>

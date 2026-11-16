@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import FormField from '../../components/FormField.vue'
 import type {DraftMember} from './forms'
 
@@ -20,7 +21,7 @@ defineEmits<{remove: []}>()
         :title="kind === 'character' ? 'Out of the cast: the beats and shots are planned without them' : 'Out of the cast: the beats are planned without it'"
         @click="$emit('remove')"
       >
-        Remove
+        <AppIcon name="remove" />Remove
       </button>
     </div>
     <FormField label="Name"><input v-model="draft.name" type="text" aria-label="Name" /></FormField>

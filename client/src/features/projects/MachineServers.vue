@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import CalloutBox from '../../components/CalloutBox.vue'
 import {onMounted, reactive, shallowRef} from 'vue'
 import type {SetupChange, SetupView} from '../../../../shared/workspace'
@@ -56,13 +57,13 @@ const fromEnv = (source?: string) => source && source !== 'file' && source !== '
         <FormField :label="view.llm.apiKey ? `API key (${view.llm.apiKey} - empty keeps it)` : 'API key (if it needs one)'"
           ><input v-model="llm.key" type="password" autocomplete="off"
         /></FormField>
-        <button type="button" class="btn" :disabled="pending || !llm.url.trim()" @click="change({command: 'llm', options: {url: llm.url, model: llm.model, ...(llm.key ? {key: llm.key} : {})}})">Save</button>
+        <button type="button" class="btn" :disabled="pending || !llm.url.trim()" @click="change({command: 'llm', options: {url: llm.url, model: llm.model, ...(llm.key ? {key: llm.key} : {})}})"><AppIcon name="save" />Save</button>
         <CalloutBox v-if="fromEnv(view.sources.llmUrl)" kind="warn" class="ms-wide">Set by {{ view.sources.llmUrl }} - it beats what is saved here.</CalloutBox>
       </div>
       <div class="ms-row">
         <FormField label="Server that reads pictures (empty: the language model server)"><input v-model="vision.url" type="text" /></FormField>
         <FormField label="Its model"><input v-model="vision.model" type="text" /></FormField>
-        <button type="button" class="btn" :disabled="pending || (!vision.url.trim() && !vision.model.trim())" @click="change({command: 'vision', options: {url: vision.url || '-', model: vision.model}})">Save</button>
+        <button type="button" class="btn" :disabled="pending || (!vision.url.trim() && !vision.model.trim())" @click="change({command: 'vision', options: {url: vision.url || '-', model: vision.model}})"><AppIcon name="save" />Save</button>
         <button v-if="view.llm.vision" type="button" class="btn" :disabled="pending" @click="change({command: 'vision', options: {off: true}})">
           The text model reads them
         </button>
@@ -73,7 +74,7 @@ const fromEnv = (source?: string) => source && source !== 'file' && source !== '
         <ul>
           <li v-for="server in view.comfy" :key="server.url">
             <span>{{ server.name }}</span> <code class="muted">{{ server.url }}</code>
-            <button type="button" class="btn mini" :disabled="pending" @click="change({command: 'comfy', options: {remove: server.name}})">Remove</button>
+            <button type="button" class="btn mini" :disabled="pending" @click="change({command: 'comfy', options: {remove: server.name}})"><AppIcon name="remove" />Remove</button>
           </li>
         </ul>
         <div class="ms-row">

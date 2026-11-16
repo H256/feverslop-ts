@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import SplitLayout from '../../components/SplitLayout.vue'
 import {computed, h, reactive, ref} from 'vue'
 import type {AssetKind, LibraryEntry, LibrarySongEntry} from '../../../../shared/workspace'
@@ -69,7 +70,7 @@ const createAsset = toasts.guard(async () => {
         <input v-model="text" type="search" :placeholder="kind === 'song' ? 'Find a song' : 'Find an asset'" :aria-label="kind === 'song' ? 'Find a song' : 'Find an asset'">
         <span v-if="data" class="muted" :title="data.dir">{{ kind === 'song' ? plural(songs.length, 'song') : plural(shown.length, 'asset') }}</span>
         <div class="spacer" />
-        <button class="btn primary" @click="createAsset">New asset from a picture</button>
+        <button class="btn primary" @click="createAsset"><AppIcon name="add" />New asset from a picture</button>
       </PageBar>
       <ResourceState :loading="loading" :error="error" :loaded="!!data" @retry="reload" />
       <div v-if="data && kind === 'song'" class="lp-songs">

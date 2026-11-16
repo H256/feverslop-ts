@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from './AppIcon.vue'
 import CalloutBox from './CalloutBox.vue'
 import {computed, nextTick, onScopeDispose, ref, watch} from 'vue'
 import {useAsk} from '../services/ask'
@@ -110,7 +111,7 @@ const stop = toasts.guard(async () => {
       </details>
       <div class="spacer" />
       <button class="btn" :aria-expanded="run.logOpen.value" @click="run.logOpen.value = !run.logOpen.value">Log</button>
-      <button v-if="shown.running && run.scope.value?.stop" class="btn danger" @click="stop">Stop</button>
+      <button v-if="shown.running && run.scope.value?.stop" class="btn danger" @click="stop"><AppIcon name="stop" />Stop</button>
       <button v-if="past.length" class="btn" :aria-expanded="pastOpen" title="The runs that ended: bun run runs" @click="pastOpen = !pastOpen">Runs</button>
       <button v-if="!shown.running" class="btn" aria-label="Close" @click="run.closed.value = true">✕</button>
     </div>

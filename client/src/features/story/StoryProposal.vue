@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import CalloutBox from '../../components/CalloutBox.vue'
 import {computed} from 'vue'
 
@@ -30,7 +31,7 @@ const change = computed(() =>
     </div>
     <div class="btn-row u-mt-2">
       <button class="btn primary" @click="$emit('take')">Take the new {{ what }}</button>
-      <button class="btn" @click="$emit('drop')">Drop it</button>
+      <button class="btn" @click="$emit('drop')"><AppIcon name="remove" />Drop it</button>
     </div>
   </div>
 </template>

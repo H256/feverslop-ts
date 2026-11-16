@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../../components/AppIcon.vue'
 import {computed, ref} from 'vue'
 import type {EditorClip} from '../../../../../shared/workspace'
 import {useToasts} from '../../../services/toasts'
@@ -37,7 +38,7 @@ const custom = () => {
       <span class="muted">to</span>
       <input v-model.number="to" type="number" min="0" :max="seconds" step="0.1" aria-label="To second" class="u-num" />
       <span class="muted">s</span>
-      <button class="btn" @click="custom">Render this part</button>
+      <button class="btn" @click="custom"><AppIcon name="render" />Render this part</button>
     </div>
   </div>
 </template>

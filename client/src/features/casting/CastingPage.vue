@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import CalloutBox from '../../components/CalloutBox.vue'
 import {computed, h, reactive} from 'vue'
 import type {CastingProp, CastingRole} from '../../../../shared/workspace'
@@ -197,7 +198,7 @@ const {
     <template v-if="data">
       <CalloutBox v-if="changed && !editing" as="div" class="btn-row">
         <span>casting.json has changes the plan does not have yet: they take effect with the next plan run.</span>
-        <button class="btn primary" :disabled="busy" @click="planNow">Plan now</button>
+        <button class="btn primary" :disabled="busy" @click="planNow"><AppIcon name="plan" />Plan now</button>
       </CalloutBox>
       <CalloutBox v-if="data.cast?.layerQuestion?.length && !editing && !film" as="div" class="btn-row" data-cast-layers>
         <span>
@@ -225,8 +226,8 @@ const {
         <CastEditor :members="draft.characters" title="Characters" kind="character" :film="film" :can-add="data.cast.canAdd" data-cast="character" />
         <CastEditor :members="draft.locations" title="Places" kind="location" :film="film" :can-add="data.cast.canAdd" data-cast="location" />
         <div class="section btn-row">
-          <button class="btn primary" :disabled="busy" @click="saveCast">Save the cast</button>
-          <button class="btn" @click="cancel">Cancel</button>
+          <button class="btn primary" :disabled="busy" @click="saveCast"><AppIcon name="save" />Save the cast</button>
+          <button class="btn" @click="cancel"><AppIcon name="close" />Cancel</button>
           <span v-if="data.cast.builtOn.length" class="muted" :title="stepNames(data.cast.builtOn)"
             >Saving drops what is built on the cast: {{ listSteps(data.cast.builtOn, project.kind) }}.</span
           >
@@ -313,8 +314,8 @@ const {
             - the screenplay is told anew for them, as a proposal</span
           >
           <div class="spacer" />
-          <button class="btn primary" :disabled="busy" @click="tellAnew">Tell the screenplay anew</button>
-          <button class="btn" @click="discard">Discard</button>
+          <button class="btn primary" :disabled="busy" @click="tellAnew"><AppIcon name="plan" />Tell the screenplay anew</button>
+          <button class="btn" @click="discard"><AppIcon name="remove" />Discard</button>
         </CalloutBox>
         <CalloutBox v-else-if="out.size" as="div" class="castbar btn-row">
           <span
@@ -326,8 +327,8 @@ const {
             }}</span
           >
           <div class="spacer" />
-          <button class="btn primary" :disabled="busy" @click="saveCast">Save the cast</button>
-          <button class="btn" @click="out.clear()">Discard</button>
+          <button class="btn primary" :disabled="busy" @click="saveCast"><AppIcon name="save" />Save the cast</button>
+          <button class="btn" @click="out.clear()"><AppIcon name="remove" />Discard</button>
         </CalloutBox>
       </template>
       <p class="muted">

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import {computed, ref} from 'vue'
 import type {DirectionRule, DirectionShot} from '../../../../shared/direction'
 
@@ -55,7 +56,7 @@ defineExpose({focusFor})
     <h3>Instructions</h3>
     <div v-for="r in rules" :key="r.id" class="row">
       <span>{{ r.characterId ? `${name(r.characterId)}: ` : '' }}{{ r.text }}</span
-      ><button class="btn" :disabled="blocked" @click="$emit('remove', r)">Remove</button>
+      ><button class="btn" :disabled="blocked" @click="$emit('remove', r)"><AppIcon name="remove" />Remove</button>
     </div>
     <label class="instruction-for"
       >New instruction for

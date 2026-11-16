@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import {computed, ref} from 'vue'
 import type {DirectionChange, DirectionEdit, DirectionRule, DirectionShot, DirectionSize} from '../../../../shared/direction'
 import ModalDialog from '../../components/ModalDialog.vue'
@@ -121,7 +122,7 @@ const describeEdit = (e: DirectionEdit) => (e.remove ? `${nameOf(e.remove)} out 
           <h2>{{ shotId }}</h2>
           <span v-if="shot.start !== undefined && shot.end !== undefined" class="num muted">{{ shot.start.toFixed(1) }}–{{ shot.end.toFixed(1) }} s</span>
           <div class="spacer" />
-          <button class="btn" @click="modal?.close()">Close</button>
+          <button class="btn" @click="modal?.close()"><AppIcon name="close" />Close</button>
         </header>
         <div class="about">
           <p class="muted">{{ [data.framing, data.camera].filter(Boolean).map(plain).join(' · ') }}</p>
@@ -152,7 +153,7 @@ const describeEdit = (e: DirectionEdit) => (e.remove ? `${nameOf(e.remove)} out 
           <h3>Direct edits</h3>
           <div v-for="e in edits" :key="e.id" class="row">
             <span>{{ describeEdit(e) }}</span
-            ><button class="btn" :disabled="blocked" @click="unedit(e)">Undo</button>
+            ><button class="btn" :disabled="blocked" @click="unedit(e)"><AppIcon name="undo" />Undo</button>
           </div>
           <div v-for="(issue, n) in issues" :key="n" class="row sd-issue">
             <span>{{ issue.message }}</span>

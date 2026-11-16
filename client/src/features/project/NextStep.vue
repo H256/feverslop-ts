@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed} from 'vue'
+import AppIcon from '../../components/AppIcon.vue'
 import {RouterLink} from 'vue-router'
 import {plural} from '../../lib/format'
 import {useAsk} from '../../services/ask'
@@ -63,9 +64,9 @@ const runNext = toasts.guard(async () => {
         :title="stageDoes(preproduction, project.kind)"
         @click="toasts.guard(planStage)(preproduction)"
       >
-        Plan the {{ stageName(preproduction, project.kind).toLowerCase() }}
+        <AppIcon name="plan" />Plan the {{ stageName(preproduction, project.kind).toLowerCase() }}
       </button>
-      <button v-else class="btn mini primary" @click="runNext">Run it</button>
+      <button v-else class="btn mini primary" @click="runNext"><AppIcon name="play" />Run it</button>
     </template>
     <span v-else class="ns-why muted">Everything is done</span>
     <button
@@ -74,7 +75,7 @@ const runNext = toasts.guard(async () => {
       title="The casting photos: the pictures of the cast and the places, before the shots are planned"
       @click="toasts.guard(renderLookPictures)()"
     >
-      Render the pictures
+      <AppIcon name="render" />Render the pictures
     </button>
     <button
       v-if="!songFirst && project.plan.next && project.plan.next !== 'plan'"
@@ -82,7 +83,7 @@ const runNext = toasts.guard(async () => {
       title="Every stage up to the shots in one run, without stopping"
       @click="toasts.guard(planStage)()"
     >
-      Plan everything
+      <AppIcon name="plan" />Plan everything
     </button>
     <!-- a planned project planned again, from a step or by what changed: the question says what it would do first (#836) -->
     <button
@@ -91,7 +92,7 @@ const runNext = toasts.guard(async () => {
       title="What a plan run would make again - from a step, or by what changed - asked before it runs"
       @click="toasts.guard(planStage)()"
     >
-      Plan again…
+      <AppIcon name="repeat" />Plan again…
     </button>
   </div>
 </template>

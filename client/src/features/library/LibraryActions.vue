@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import {h, reactive} from 'vue'
 import type {AssetKind} from '../../../../shared/workspace'
 import {workspace} from '../../api/workspace'
@@ -64,9 +65,9 @@ const remove = toasts.guard(async () => {
 
 <template>
   <div class="btn-row la-actions">
-    <button class="btn" @click="rename">Rename</button>
+    <button class="btn" @click="rename"><AppIcon name="edit" />Rename</button>
     <button v-if="kind !== 'song'" class="btn" @click="describe">Describe anew</button>
-    <button class="btn danger" @click="remove">Remove</button>
+    <button class="btn danger" @click="remove"><AppIcon name="remove" />Remove</button>
   </div>
 </template>
 

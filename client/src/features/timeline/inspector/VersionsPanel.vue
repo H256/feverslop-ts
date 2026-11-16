@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../../components/AppIcon.vue'
 import {computed, ref, watch} from 'vue'
 import type {ClipVersionView, EditorClip} from '../../../../../shared/workspace'
 import VersionCard from '../../../components/VersionCard.vue'
@@ -54,7 +55,7 @@ const frameOf = (version: ClipVersionView) => (version.firstFrame ? {file: versi
     >
       <template #note><div v-if="version.fromThisPlan === false" class="muted u-stale">Made from another plan: it will count as stale.</div></template>
       <button v-if="clip.video" class="btn" @click="compare(version)">Compare</button>
-      <button class="btn" @click="actions.pickVersion(clip, version)">Make current</button>
+      <button class="btn" @click="actions.pickVersion(clip, version)"><AppIcon name="check" />Make current</button>
     </VersionCard>
   </div>
 </template>

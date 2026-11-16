@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from './AppIcon.vue'
 import CalloutBox from './CalloutBox.vue'
 import {computed, ref} from 'vue'
 import {errorText} from '../lib/format'
@@ -58,7 +59,7 @@ async function confirm() {
       <ServerPick v-if="request.render" v-model="chosen" />
       <CalloutBox v-if="failure" role="alert" kind="error" as="div">{{ failure }}</CalloutBox>
       <div class="btn-row">
-        <button type="button" class="btn" :disabled="pending" @click="cancel">Cancel</button>
+        <button type="button" class="btn" :disabled="pending" @click="cancel"><AppIcon name="close" />Cancel</button>
         <button type="submit" :class="['btn', request.danger ? 'danger' : 'primary']" :disabled="pending">{{ pending ? 'Working…' : request.confirm }}</button>
       </div>
     </form>

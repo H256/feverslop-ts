@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../components/AppIcon.vue'
 import CalloutBox from '../../components/CalloutBox.vue'
 import {computed} from 'vue'
 import type {CastingRole} from '../../../../shared/workspace'
@@ -46,7 +47,9 @@ const about = computed(() => (props.role.kind === 'character' ? props.role.role 
     </div>
     <div class="choice">
       <template v-if="out">
-        <button class="btn" :aria-label="`Put back ${role.name}`" :title="`Keep ${role.name} in the cast`" @click="emit('putBack')">Put back</button>
+        <button class="btn" :aria-label="`Put back ${role.name}`" :title="`Keep ${role.name} in the cast`" @click="emit('putBack')">
+          <AppIcon name="undo" />Put back
+        </button>
       </template>
       <template v-else>
         <select
@@ -89,7 +92,7 @@ const about = computed(() => (props.role.kind === 'character' ? props.role.role 
           "
           @click="emit('remove')"
         >
-          Remove
+          <AppIcon name="remove" />Remove
         </button>
       </template>
     </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '../../../components/AppIcon.vue'
 import CalloutBox from '../../../components/CalloutBox.vue'
 import {computed} from 'vue'
 import type {EditorClip, EditorOverride} from '../../../../../shared/workspace'
@@ -56,15 +57,17 @@ const move = (id: string, direction: number) => {
       <span class="u-grow">{{ n + 1 }}. {{ picture.name }}</span>
       <button class="btn" :disabled="n === 0" :aria-label="`${picture.name} up`" @click="move(picture.id, -1)">↑</button>
       <button class="btn" :disabled="n === people.length - 1" :aria-label="`${picture.name} down`" @click="move(picture.id, 1)">↓</button>
-      <button class="btn" @click="save({without: [...override.without, picture.id]})">Leave out</button>
+      <button class="btn" @click="save({without: [...override.without, picture.id]})"><AppIcon name="close" />Leave out</button>
     </div>
   </div>
   <CalloutBox v-if="override.without.length" as="div" class="btn-row">
     <span class="u-grow">Left out: {{ override.without.join(', ') }}</span
-    ><button class="btn" @click="save({without: []})">Put back</button>
+    ><button class="btn" @click="save({without: []})"><AppIcon name="undo" />Put back</button>
   </CalloutBox>
   <CalloutBox v-if="clip.override" as="div">
     <p class="u-mb-1">This clip has a choice of its own. It takes effect with the next plan run, and the clip then goes stale.</p>
-    <div class="btn-row"><button class="btn" @click="actions.plan()">Plan now</button><button class="btn" @click="save(null)">Back to the plan</button></div>
+    <div class="btn-row">
+      <button class="btn" @click="actions.plan()"><AppIcon name="plan" />Plan now</button><button class="btn" @click="save(null)">Back to the plan</button>
+    </div>
   </CalloutBox>
 </template>
