@@ -2,6 +2,7 @@ import {expect, test} from 'bun:test'
 import {ref} from 'vue'
 import type {TimingLine, TimingView} from '../../../shared/workspace'
 import {useTimingDraft} from '../../src/features/timing/useTimingDraft'
+import {overlappingLines} from '../../src/features/timing/words'
 
 const line = (n: number, words: [string, number, number][]): TimingLine => ({
   line: n,
@@ -92,4 +93,21 @@ test('the earlier line keeps room for its own last word', () => {
   }
   expect(message).toContain('at least 0.05')
   expect(draft.edits.value.size).toBe(0)
+})
+
+test('the lines that run into the next one are found, lines left out are not sung', () => {
+  const v = view()
+  const draft = useTimingDraft(ref(v))
+  const [a, b] = v.lines as [TimingLine, TimingLine]
+  expect([...overlappingLines(v.lines, draft.startOf, draft.endOf)].join()).toBe('0,1')
+  draft.moveBoundary(a, b, 3.5)
+  expect(overlappingLines(v.lines, draft.startOf, draft.endOf).size).toBe(0)
+  const off = {...b, off: true}
+  expect(
+    overlappingLines(
+      [a, off],
+      () => 1,
+      () => 9,
+    ).size,
+  ).toBe(0)
 })

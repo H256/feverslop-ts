@@ -68,3 +68,15 @@ export function timingChanges(view: TimingView, moved: TimingLine[], wordsOf: (l
     crossing: moved.flatMap(line => crossingOf(view, wordsOf(line))),
   }
 }
+
+/** The lines that run into the line after them (or before): the later one starts before the earlier one ends. Lines left out are not sung. */
+export function overlappingLines(lines: TimingLine[], startOf: (l: TimingLine) => number, endOf: (l: TimingLine) => number): Set<number> {
+  const sung = lines.filter(l => !l.off)
+  const found = new Set<number>()
+  for (let n = 1; n < sung.length; n++)
+    if (endOf(sung[n - 1]!) > startOf(sung[n]!) + 0.02) {
+      found.add(sung[n - 1]!.line)
+      found.add(sung[n]!.line)
+    }
+  return found
+}

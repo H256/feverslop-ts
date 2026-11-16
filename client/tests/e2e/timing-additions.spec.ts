@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {test, expect, type Page} from '@playwright/test'
 import {startEditor} from './editor'
 import {stubProject} from './fixtures'
 
@@ -9,6 +9,9 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await editor?.stop()
 })
+
+// the line actions that are rarely needed sit in the "More" menu of the bar
+const more = (page: Page) => page.locator('.tw-more > summary').click()
 
 test('a roughly moved block can save and refine its words without resetting manual placement', async ({page}) => {
   const posted = await stubProject(page)
@@ -92,9 +95,11 @@ test('confirmed passage prepares without saving and applies only its reviewed pr
   })
   await page.goto(`${editor.base}/p/music/demo/timing`)
   const retry = page.getByRole('button', {name: 'Retry sung passage', exact: true})
+  await more(page)
   await retry.click()
   await page.getByRole('dialog').getByRole('button', {name: 'Cancel', exact: true}).click()
   expect(prepared).toEqual([])
+  await more(page)
   await retry.click()
   await page.getByRole('dialog').getByRole('button', {name: 'This line is sung — prepare', exact: true}).click()
   await expect(page.getByRole('button', {name: 'Listen before', exact: true})).toBeVisible()
@@ -105,6 +110,7 @@ test('confirmed passage prepares without saving and applies only its reviewed pr
   await page.getByRole('button', {name: 'Apply passage', exact: true}).click()
   await expect.poll(() => applied).toEqual([{id: 'passage-preview'}])
   await page.getByRole('button', {name: 'Mark reviewed', exact: true}).click()
+  await more(page)
   await expect(retry).toBeDisabled()
 })
 
@@ -136,6 +142,7 @@ test('omitted overlapping words do not intercept dragging; deliberate list selec
 test('missing words can be inserted with explicit timing', async ({page}) => {
   const posted = await stubProject(page)
   await page.goto(`${editor.base}/p/music/demo/timing`)
+  await more(page)
   await page.getByRole('button', {name: 'Add words', exact: true}).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Missing words').fill('oh yeah')
@@ -196,6 +203,7 @@ test('an ad-lib can be enabled while saving its pending review', async ({page}) 
   )
   await page.goto(`${editor.base}/p/music/demo/timing`)
   await page.getByRole('button', {name: 'Mark reviewed', exact: true}).click()
+  await more(page)
   const enable = page.getByRole('button', {name: 'Save changes & Sing it', exact: true})
   await expect(enable).toBeEnabled()
   await enable.click()
@@ -217,6 +225,7 @@ test('an ad-lib can be enabled while saving its pending review', async ({page}) 
 test('a new separate lyric segment can be added', async ({page}) => {
   const posted = await stubProject(page)
   await page.goto(`${editor.base}/p/music/demo/timing`)
+  await more(page)
   await page.getByRole('button', {name: 'Add words', exact: true}).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Add to').selectOption('line')

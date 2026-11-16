@@ -18,6 +18,7 @@ import {useToasts} from '../../services/toasts'
 import {usePlanning} from '../plan/usePlanning'
 import {useProject} from '../project/session'
 import {EARLY_FROM, leadOf} from './fit'
+import {overlappingLines} from './words'
 import LipsyncPreview from './LipsyncPreview.vue'
 import TimingEditor, {type Proposal} from './TimingEditor.vue'
 import TimingLineList, {type LineFilter} from './TimingLineList.vue'
@@ -86,9 +87,20 @@ const outdated = computed(() => {
   for (const {clip, lines} of props.view.outdated) for (const n of lines) found.set(n, [...(found.get(n) ?? []), clip])
   return found
 })
-// the lines that want a look, in the order of the song: a clip cut in a word, an early start, an old prompt, a guessed time
+// a line found sung nowhere has only placeholder times (several at one moment): they are no overlap worth a look
+const overlapping = computed(() =>
+  overlappingLines(
+    props.view.lines.filter(l => !(l.unplaced && !draft.isChanged(l))),
+    draft.startOf,
+    draft.endOf,
+  ),
+)
+// the lines that want a look, in the order of the song: a clip cut in a word, an early start, an old prompt, a guessed time, a line running into the next
 const problems = computed(() =>
-  props.view.lines.filter(l => !l.off && (draft.crossing(l).length || earlyLines.value.has(l.line) || outdated.value.has(l.line) || draft.unchecked(l))),
+  props.view.lines.filter(
+    l =>
+      !l.off && (draft.crossing(l).length || earlyLines.value.has(l.line) || outdated.value.has(l.line) || draft.unchecked(l) || overlapping.value.has(l.line)),
+  ),
 )
 const nextProblem = (back = false) => {
   const all = problems.value
@@ -157,6 +169,7 @@ const FILTERS = computed(
       {value: 'estimated', label: `Estimated (${props.view.lines.filter(l => l.estimated).length})`},
       {value: 'changed', label: 'Moved'},
       {value: 'adlibs', label: `Ad-libs (${props.view.lines.filter(l => l.adlib).length})`},
+      ...(overlapping.value.size ? [{value: 'overlap', label: `Overlap (${overlapping.value.size})`}] : []),
       ...(earlyLines.value.size ? [{value: 'early', label: `Early starts (${earlyLines.value.size})`}] : []),
       ...(outdated.value.size ? [{value: 'old', label: `Prompt old (${outdated.value.size})`}] : []),
     ] as const,
@@ -344,6 +357,8 @@ const open = computed(() =>
   ),
 )
 const place = computed(() => open.value.findIndex(e => e.line === draft.selected.value))
+/** The lines the refinement has something to take for, for the line list. */
+const proposed = computed(() => new Set(open.value.map(e => e.line)))
 const entry = computed(() => refinement.value?.entries.find(e => e.line === draft.selected.value))
 const listen = (span: [number, number]) => play(Math.max(0, span[0] - 0.3), Math.min(props.view.duration, span[1] + 0.3))
 const proposal = computed(() => (draft.selected.value === undefined ? undefined : proposalOf(draft.selected.value)))
@@ -587,43 +602,12 @@ onMounted(() => {
             Tighten the start
           </button>
           <button
-            v-if="draft.line.value"
-            class="btn"
-            :title="
-              draft.edits.value.size
-                ? 'Save your pending timing changes and change whether this line is sung'
-                : draft.line.value.off
-                  ? 'The line is sung again: the clips it falls into sing it'
-                  : 'Heard, but not sung (a misheard ad-lib, a line on top of another): no clip sings it. It stays here, to be sung again'
-            "
-            @click="setOff(draft.line.value, !draft.line.value.off)"
-          >
-            {{ draft.edits.value.size ? 'Save changes & ' : ''
-            }}{{ draft.line.value.off ? (draft.line.value.adlib ? 'Sing it' : 'Sing it again') : 'Leave the line out' }}
-          </button>
-          <button
             class="btn"
             :disabled="refining.pending.value || saving.pending.value"
             title="Use this block as the audio window; replace only its word boundaries after preview, even after moving it by hand"
             @click="retryPassage('line-window')"
           >
             {{ draft.edits.value.size ? 'Save changes & refine words' : 'Refine words in block' }}
-          </button>
-          <button
-            class="btn"
-            :disabled="draft.edits.value.size > 0"
-            :title="draft.edits.value.size ? 'Save your moved words before adding new words' : 'Insert missing sung words and extend the lyrics'"
-            @click="addWords"
-          >
-            Add words
-          </button>
-          <button
-            class="btn"
-            :disabled="!draft.line.value || draft.edits.value.size > 0 || refining.pending.value || saving.pending.value"
-            title="Confirm this lyric is sung, then preview a local alignment with its neighbour"
-            @click="retryPassage()"
-          >
-            Retry sung passage
           </button>
         </span>
         <span class="tw-grp">
@@ -639,14 +623,40 @@ onMounted(() => {
           <button class="btn" @click="nextKind('cut')">Next cut</button>
         </span>
         <!-- back to the saved or the automatic times: less often, in a menu (#834) -->
-        <details
-          v-if="draft.line.value?.byHand || byHand.length > 1 || (draft.line.value && draft.isChanged(draft.line.value))"
-          ref="more"
-          class="tw-more"
-          @click="closeMore"
-        >
-          <summary class="btn">Reset ▾</summary>
+        <details v-if="draft.line.value" ref="more" class="tw-more" @click="closeMore">
+          <summary class="btn">More ▾</summary>
           <div class="tw-menu" role="menu">
+            <button
+              class="btn tw-item"
+              :title="
+                draft.edits.value.size
+                  ? 'Save your pending timing changes and change whether this line is sung'
+                  : draft.line.value.off
+                    ? 'The line is sung again: the clips it falls into sing it'
+                    : 'Heard, but not sung (a misheard ad-lib, a line on top of another): no clip sings it. It stays here, to be sung again'
+              "
+              @click="setOff(draft.line.value, !draft.line.value.off)"
+            >
+              {{ draft.edits.value.size ? 'Save changes & ' : ''
+              }}{{ draft.line.value.off ? (draft.line.value.adlib ? 'Sing it' : 'Sing it again') : 'Leave the line out' }}
+              <small class="muted" aria-hidden="true">{{ draft.line.value.off ? 'clips sing it again' : 'heard, but not sung' }}</small>
+            </button>
+            <button
+              class="btn tw-item"
+              :disabled="draft.edits.value.size > 0"
+              :title="draft.edits.value.size ? 'Save your moved words before adding new words' : 'Insert missing sung words and extend the lyrics'"
+              @click="addWords"
+            >
+              Add words <small class="muted" aria-hidden="true">a word Whisper missed</small>
+            </button>
+            <button
+              class="btn tw-item"
+              :disabled="draft.edits.value.size > 0 || refining.pending.value || saving.pending.value"
+              title="Confirm this lyric is sung, then preview a local alignment with its neighbour"
+              @click="retryPassage()"
+            >
+              Retry sung passage <small class="muted" aria-hidden="true">align it with its neighbour</small>
+            </button>
             <button
               v-if="draft.line.value?.byHand"
               class="btn tw-item"
@@ -720,7 +730,16 @@ onMounted(() => {
         </CalloutBox>
       </div>
     </div>
-    <TimingLineList :view="view" :draft="draft" :filter="filter" :leads="leads" :outdated="outdated" @choose="choose" />
+    <TimingLineList
+      :view="view"
+      :draft="draft"
+      :filter="filter"
+      :leads="leads"
+      :outdated="outdated"
+      :overlapping="overlapping"
+      :proposed="proposed"
+      @choose="choose"
+    />
     <template #side>
       <TimingSide
         :view="view"
@@ -798,5 +817,12 @@ onMounted(() => {
 }
 .tw-menu .btn {
   text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+.tw-menu .btn small {
+  font-size: var(--text-xs);
 }
 </style>
