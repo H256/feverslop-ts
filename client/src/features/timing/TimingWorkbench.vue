@@ -19,7 +19,7 @@ import {usePlanning} from '../plan/usePlanning'
 import {useProject} from '../project/session'
 import {EARLY_FROM, leadOf} from './fit'
 import LipsyncPreview from './LipsyncPreview.vue'
-import TimingEditor from './TimingEditor.vue'
+import TimingEditor, {type Proposal} from './TimingEditor.vue'
 import TimingLineList, {type LineFilter} from './TimingLineList.vue'
 import TimingSide from './TimingSide.vue'
 import TimingTools from './TimingTools.vue'
@@ -321,6 +321,60 @@ const prepareRefinement = toasts.guard(() =>
     refinement.value = await api.refineTiming(refinementLanguage.value)
   }),
 )
+// the proposal line by line: the ghost on the timeline, Enter takes it, X drops it, ] and [ go on (#1104)
+const dropped = ref(new Set<number>())
+watch(refinement, (now, before) => {
+  if (now?.id !== before?.id) dropped.value = new Set()
+})
+const proposalOf = (n: number): Proposal | undefined => {
+  const entry = refinement.value?.entries.find(e => e.line === n)
+  if (!entry) return undefined
+  const words = refinement.value!.change.lines.find(l => l.line === n)?.words
+  const textOf = props.view.lines.find(l => l.line === n)?.words
+  return {
+    status: dropped.value.has(n) && entry.status === 'refined' ? 'review' : entry.status,
+    reason: dropped.value.has(n) && entry.status === 'refined' ? 'Dropped: this line keeps its times.' : entry.reason,
+    words: words && !dropped.value.has(n) ? words.map((w, i) => ({text: w.text ?? textOf?.[i]?.text ?? '', start: w.start, end: w.end})) : [],
+  }
+}
+/** The lines with a proposal still to take, in song order. */
+const open = computed(() =>
+  (refinement.value?.entries ?? []).filter(
+    e => e.status === 'refined' && !dropped.value.has(e.line) && refinement.value!.change.lines.some(l => l.line === e.line),
+  ),
+)
+const entry = computed(() => refinement.value?.entries.find(e => e.line === draft.selected.value))
+const listen = (span: [number, number]) => play(Math.max(0, span[0] - 0.3), Math.min(props.view.duration, span[1] + 0.3))
+const proposal = computed(() => (draft.selected.value === undefined ? undefined : proposalOf(draft.selected.value)))
+const nextProposal = (back = false, from = draft.selected.value ?? -1) => {
+  const lines = open.value.map(e => e.line)
+  const next = back ? [...lines].reverse().find(n => n < from) : lines.find(n => n > from)
+  const target = next ?? (back ? lines.at(-1) : lines[0])
+  if (target === undefined) return toasts.show('No proposal left to look at.')
+  choose(target)
+}
+const dropProposal = () => {
+  const n = draft.selected.value
+  if (n === undefined || !proposal.value) return
+  const after = open.value.find(e => e.line > n)?.line ?? open.value.find(e => e.line !== n)?.line
+  dropped.value = new Set([...dropped.value, n])
+  if (after !== undefined) choose(after)
+}
+const takeProposal = toasts.guard(() =>
+  saving.during(async () => {
+    const n = draft.selected.value
+    const current = refinement.value
+    if (n === undefined || !current) return
+    if (draft.edits.value.size) throw new Error('Save or discard your moved words first: the proposal is taken from the saved timing.')
+    if (current.passage) return takeRefinement()
+    const after = open.value.find(e => e.line > n)?.line ?? open.value.find(e => e.line !== n)?.line
+    const result = await api.applyTimingRefinement(current.id, [n])
+    refinement.value = result.refinement
+    await props.refresh()
+    if (after !== undefined) choose(after)
+    saved.value = `Line ${n + 1} taken; its words are unchecked. ${result.replanned.length} affected beats need planning again.`
+  }),
+)
 const takeRefinement = toasts.guard(() =>
   saving.during(async () => {
     if (!refinement.value || draft.edits.value.size) return
@@ -445,25 +499,29 @@ onMounted(() => {
           <template v-if="!refinement.passage">Refinement keeps lines sung or left out as they are.</template>
           A missing transcript match does not mean a line was not sung.
         </p>
-        <div class="tw-entries">
-          <p v-for="entry in refinement.entries" :key="entry.line">
-            <button class="btn mini" @click="choose(entry.line)">{{ entry.line + 1 }}</button>
-            <b>{{ entry.text }}</b> [{{ entry.status }}] {{ entry.before.map(n => n.toFixed(2)).join('–')
-            }}<span v-if="entry.after"> → {{ entry.after.map(n => n.toFixed(2)).join('–') }}</span> — {{ entry.reason }}
-            <button class="btn mini" @click="play(Math.max(0, entry.before[0] - 0.3), Math.min(view.duration, entry.before[1] + 0.3))">Listen before</button>
-            <button v-if="entry.after" class="btn mini" @click="play(Math.max(0, entry.after[0] - 0.3), Math.min(view.duration, entry.after[1] + 0.3))">
-              Listen to proposal
-            </button>
-          </p>
-        </div>
-        <button class="btn" :disabled="!refinement.change.lines.length || draft.edits.value.size > 0 || refining.pending.value" @click="takeRefinement">
-          {{ refinement.passage?.mode === 'line-window' ? 'Apply word refinement' : refinement.passage ? 'Apply passage' : 'Apply proposal' }}
-        </button>
-        <button class="btn" @click="refinement = undefined">Dismiss</button>
+        <p class="muted">The proposal is on the timeline: each line shows it under its words. Take or drop it there, line by line.</p>
       </template>
     </details>
     <LipsyncPreview :view="view" :dirty="draft.edits.value.size > 0" />
     <div class="tedit-wrap">
+      <div v-if="refinement" class="tw-proposal btn-row" role="region" aria-label="Refinement proposal">
+        <span :class="['chip', proposal?.status === 'refined' ? 'good' : proposal ? 'stale' : '']">{{
+          proposal ? (proposal.status === 'refined' ? 'proposal' : proposal.status === 'applied' ? 'taken' : 'no proposal') : 'proposal'
+        }}</span>
+        <span class="muted">{{ proposal ? proposal.reason : 'Choose a line to see what the refinement proposes for it.' }}</span>
+        <div class="spacer" />
+        <span class="muted num">{{ open.length }} to go</span>
+        <button v-if="entry" class="btn" @click="listen(entry.before)">Listen before</button>
+        <button v-if="entry?.after && proposal?.words.length" class="btn" @click="listen(entry.after)">Listen to proposal</button>
+        <button class="btn" :disabled="!proposal?.words.length || saving.pending.value" title="Enter" @click="takeProposal()">Take (Enter)</button>
+        <button class="btn" :disabled="!proposal || !open.length" title="X" @click="dropProposal">Drop (X)</button>
+        <button class="btn" :disabled="!open.length" title="[ and ]" @click="nextProposal(true)">‹</button>
+        <button class="btn" :disabled="!open.length" title="[ and ]" @click="nextProposal(false)">›</button>
+        <button class="btn" :disabled="!refinement.change.lines.length || draft.edits.value.size > 0 || refining.pending.value" @click="takeRefinement">
+          {{ refinement.passage?.mode === 'line-window' ? 'Apply word refinement' : refinement.passage ? 'Apply passage' : 'Take all remaining' }}
+        </button>
+        <button class="btn" @click="refinement = undefined">Dismiss</button>
+      </div>
       <div class="tedit-head btn-row">
         <template v-if="draft.line.value">
           <b>{{ draft.line.value.text }}</b>
@@ -619,7 +677,11 @@ onMounted(() => {
         :playing="!!player.playing.value"
         @play="play"
         @stop="player.stop()"
+        :proposal="proposal"
         @next="nextProblem"
+        @take="takeProposal()"
+        @drop="dropProposal"
+        @proposal="nextProposal"
       />
       <TimingTools ref="timingTools" :draft="draft" :view="view" :player="player" />
       <div>
@@ -657,9 +719,8 @@ onMounted(() => {
 
 <style scoped>
 /* the list of refined lines (the lines the transcript matched) scrolls inside its box instead of growing the page */
-.tw-entries {
-  max-height: 20rem;
-  overflow: auto;
+.tw-proposal {
+  margin-bottom: 6px;
 }
 /* the bar's buttons in groups by what they do, a line between them (#834) */
 .tw-grp {

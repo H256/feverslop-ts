@@ -217,3 +217,46 @@
   text-overflow: ellipsis;
   font-size: var(--text-s);
 }
+
+/* the proposal of the refinement, a lane under the words with a dashed line up to where its words start (#1104) */
+.tproposal {
+  position: absolute;
+  top: 124px;
+  height: 20px;
+  min-width: 3px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--ok);
+  background: color-mix(in srgb, var(--ok) 22%, transparent);
+  color: var(--ok);
+  font-size: var(--text-xs);
+  line-height: 18px;
+  cursor: pointer;
+  z-index: 2;
+}
+.tproposal span {
+  display: block;
+  padding: 0 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tproposal::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  bottom: 100%;
+  height: 96px;
+  border-left: 1px dashed var(--ok);
+  opacity: 0.7;
+  pointer-events: none;
+}
+.tproposal.review,
+.tproposal.omit {
+  border-color: var(--stale);
+  background: color-mix(in srgb, var(--stale) 22%, transparent);
+  color: var(--stale);
+}
+.tproposal.review::before,
+.tproposal.omit::before {
+  border-left-color: var(--stale);
+}

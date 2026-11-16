@@ -12,8 +12,10 @@ import {cutsIn} from './words'
  * The waveform of the vocals around the chosen line, its words to drag, the lines next to it faded, the cuts of the clips. Drag: a
  * word, its edges, or the bar above the words (the whole line). Keys on it: see the help on the side.
  */
-const props = defineProps<{view: TimingView; draft: TimingDraft; peaks?: number[]; head?: number; playing: boolean}>()
-const emit = defineEmits<{play: [from: number, to: number]; stop: []; next: [back: boolean]}>()
+/** What the refinement proposes for the chosen line: its words as ghosts under the real ones, same time axis (#1104). */
+export type Proposal = {status: 'refined' | 'review' | 'protected' | 'omit' | 'applied'; reason: string; words: {text: string; start: number; end: number}[]}
+const props = defineProps<{view: TimingView; draft: TimingDraft; peaks?: number[]; head?: number; playing: boolean; proposal?: Proposal}>()
+const emit = defineEmits<{play: [from: number, to: number]; stop: []; next: [back: boolean]; take: []; drop: []; proposal: [back: boolean]}>()
 const WAVE_RATE = 100
 const WAVE_HEIGHT = 120
 const editor = ref<HTMLElement>()
@@ -34,7 +36,14 @@ onMounted(() => {
 })
 onScopeDispose(() => observer.disconnect())
 
-const span = computed(() => frozen.value ?? props.draft.window.value)
+// the proposal may lie some seconds off the words: the view takes it in, so the two can be compared
+const span = computed(() => {
+  if (frozen.value) return frozen.value
+  const base = props.draft.window.value
+  const words = props.proposal?.words
+  if (!words?.length) return base
+  return {from: Math.max(0, Math.min(base.from, words[0]!.start - 0.3)), to: Math.min(props.view.duration, Math.max(base.to, words.at(-1)!.end + 0.3))}
+})
 const xOf = (t: number) => ((t - span.value.from) / (span.value.to - span.value.from)) * width.value
 const tOf = (x: number) => span.value.from + (x / Math.max(1, width.value)) * (span.value.to - span.value.from)
 const box = (from: number, to: number, least: number) => ({left: `${xOf(from)}px`, width: `${Math.max(least, xOf(to) - xOf(from))}px`})
@@ -269,6 +278,9 @@ function key(event: KeyboardEvent) {
     draft.settle()
   } else if (event.key === 'Tab') draft.nextWord(event.shiftKey)
   else if (event.key === 'n' || event.key === 'N') emit('next', event.key === 'N')
+  else if (event.key === 'Enter' && props.proposal?.words.length) emit('take')
+  else if ((event.key === 'x' || event.key === 'X') && props.proposal) emit('drop')
+  else if (event.key === ']' || event.key === '[') emit('proposal', event.key === '[')
   else if (event.key === 'Escape') draft.choose(line.line)
   else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
     const next = props.view.lines[at + (event.key === 'ArrowDown' ? 1 : -1)]
@@ -339,6 +351,18 @@ defineExpose({focus: () => editor.value?.focus({preventScroll: true}), playLine}
             <span>{{ w.text }}</span>
           </div>
         </template>
+      </template>
+      <template v-if="proposal?.words.length">
+        <div
+          v-for="(w, n) in proposal.words"
+          :key="`p${n}`"
+          :class="['tproposal', proposal.status]"
+          :style="box(w.start, w.end, 3)"
+          :title="`Proposal: ${w.text} · ${clock(w.start)}–${clock(w.end)} · click to listen`"
+          @click="emit('play', w.start - 0.05, w.end + 0.1)"
+        >
+          <span>{{ w.text }}</span>
+        </div>
       </template>
       <div
         v-if="selectedSpan && draft.selectedWords.value.length > 1"

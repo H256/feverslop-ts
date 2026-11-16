@@ -226,3 +226,49 @@ test('a new separate lyric segment can be added', async ({page}) => {
   await dialog.getByRole('button', {name: 'Add words & save', exact: true}).click()
   await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toMatchObject({lines: [], add: {afterLine: 0, words: [{text: 'oh', start: 4, end: 5}]}})
 })
+
+test('the proposal of the refinement is drawn on the timeline and a line is taken on its own', async ({page}) => {
+  await stubProject(page)
+  const applied: unknown[] = []
+  const proposal = {
+    id: 'song-preview',
+    language: 'de',
+    fingerprint: 'fixture',
+    model: 'fixture',
+    change: {
+      lines: [
+        {
+          line: 0,
+          words: [
+            {text: 'Hello', start: 1.4, end: 2},
+            {text: 'night', start: 2, end: 3},
+          ],
+        },
+      ],
+    },
+    entries: [{line: 0, text: 'Hello night', before: [1, 3], after: [1.4, 3], status: 'refined', reason: 'Phoneme alignment; listen to check.'}],
+  }
+  await page.route('**/api/timing-refine', route => route.fulfill({json: proposal}))
+  await page.route('**/api/timing-refine-apply', async route => {
+    applied.push(route.request().postDataJSON())
+    await route.fulfill({
+      json: {
+        changed: [0],
+        slots: [],
+        replanned: [],
+        staleClips: [],
+        crossing: [],
+        refinement: {...proposal, change: {lines: []}, entries: [{...proposal.entries[0], status: 'applied', reason: 'Taken.'}]},
+      },
+    })
+  })
+  await page.goto(`${editor.base}/p/music/demo/timing`)
+  await page.getByText('Refine timing from vocals').click()
+  await page.getByRole('button', {name: 'Prepare refinement', exact: true}).click()
+  await expect(page.locator('.tproposal')).toHaveCount(2)
+  await expect(page.getByRole('region', {name: 'Refinement proposal'})).toContainText('Phoneme alignment')
+  await page.locator('.tedit').focus()
+  await page.keyboard.press('Enter')
+  await expect.poll(() => applied).toEqual([{id: 'song-preview', lines: [0]}])
+  await expect(page.locator('.tproposal')).toHaveCount(0)
+})
