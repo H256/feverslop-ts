@@ -124,7 +124,7 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 8px;
+  gap: var(--space-1) var(--space-2);
   font-size: var(--text-s);
   color: var(--muted);
   min-width: 0;
@@ -140,7 +140,7 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
 .sf-actions {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-1);
 }
 @media (max-width: 640px) {
   .sf-row {
