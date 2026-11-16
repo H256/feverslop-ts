@@ -87,14 +87,7 @@ const outdated = computed(() => {
   for (const {clip, lines} of props.view.outdated) for (const n of lines) found.set(n, [...(found.get(n) ?? []), clip])
   return found
 })
-// a line found sung nowhere has only placeholder times (several at one moment): they are no overlap worth a look
-const overlapping = computed(() =>
-  overlappingLines(
-    props.view.lines.filter(l => !(l.unplaced && !draft.isChanged(l))),
-    draft.startOf,
-    draft.endOf,
-  ),
-)
+const overlapping = computed(() => overlappingLines(props.view.lines, draft.startOf, draft.endOf))
 // the lines that want a look, in the order of the song: a clip cut in a word, an early start, an old prompt, a guessed time, a line running into the next
 const problems = computed(() =>
   props.view.lines.filter(
