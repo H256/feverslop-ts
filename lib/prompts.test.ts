@@ -82,12 +82,12 @@ describe('the lyrics prompt', () => {
         expect(input).toContain('Musical style - the lyrics must fit its sound, tempo and mood: hard rock, 170 BPM\n')
         expect(songLyricsPrompt('a lighthouse', 'German').input).not.toContain('Musical style')
     })
-    test('rhymes, numbered verses and a break without words are asked for; thinking gets room beside the answer', () => {
+    test('rhymes, numbered verses and a break without words are asked for, without thinking', () => {
         const options = songLyricsPrompt('a lighthouse', 'German')
         expect(options.input).toContain('Lines rhyme')
         expect(options.input).toContain('[Verse 1], [Verse 2]')
         expect(options.input).toContain('[Instrumental Break] is a part without words')
-        expect(options.maxTokens).toBeGreaterThanOrEqual(12000)
+        expect(options.reasoning).toBe('none')
     })
 })
 
