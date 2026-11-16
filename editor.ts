@@ -6,7 +6,7 @@ import {extraArgument} from './lib/command-schema.ts'
 import {parseArgs} from 'node:util'
 import {startEditor} from './lib/editor/server.ts'
 import {listProjects, projectExists} from './lib/project-setup.ts'
-import {log, styles} from './lib/log.ts'
+import {beQuiet, log, styles} from './lib/log.ts'
 import {filmExists, filmIds} from './lib/film/setup.ts'
 import {FILMS_DIR} from './lib/film/store.ts'
 import {buildClient, clientBuildState} from './lib/editor/client-build.ts'
@@ -52,3 +52,5 @@ const server = startEditor(port)
 const path = id ? `p/${args.film ? 'film' : 'music'}/${id}/` : ''
 log.step('Open', styles.name(`http://127.0.0.1:${server.port}/${path}`))
 log.step('Stop', styles.muted('Ctrl+C'))
+// the routes call the same functions the commands call (LLM questions, cast, ...): their progress lines are not the server's to print - runs started from the page have their own log; warnings and errors still show
+beQuiet()
