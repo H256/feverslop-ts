@@ -9,13 +9,14 @@ import {LOCATION_VIEWS} from './sequenceSheet.ts'
 // Lyrics only - kept separate from the style prompt so lyrics.txt can be hand-corrected and kept fixed while the
 // style (music-style.txt) is redone around it, or vice versa (see songStylePrompt).
 // durationSec: the maximum length of the song (config.json songDuration) - YuE2 cuts a song off there, so lyrics that are
-// too long lose their end. The LLM is told the limit, not a number of words: what fits depends on tempo and style.
+// too long lose their end. The LLM is told the limit and the most words that fit (0.9 s per word: YuE2 sang 0.73-0.84 s per word at 90 and 170 BPM).
 // musicStyle: the direction from music-style.txt, when there is one - the lyrics are written to fit that sound
 export function songLyricsPrompt(idea: string, language: string, durationSec?: number, singerVoice: SingerVoice = 'auto', musicStyle = ''): AskOptions {
     const seconds = durationSec ? Math.round(durationSec) : 0
     return {
-        // thinking and answer share this limit: a model that thinks long left no room for the lyrics at 4096
-        maxTokens: 12000,
+        // no thinking: with the style and the rhyme rules a model thinks 4500-5000 words (1-2 minutes) and writes lyrics that are
+        // no better, only shorter (measured 2026-11-16, Qwen3.8 27B and Flash-Next); without it the lyrics take 5-8 seconds
+        reasoning: 'none',
         input: `Write song lyrics from this idea for a music video, for the YuE2 text-to-music model.
 Idea: ${idea}
 Language: ${language}

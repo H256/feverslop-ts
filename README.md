@@ -164,7 +164,7 @@ Prefer the settings file or the env var over `--llm-key` - flags end up in the s
 (CI, scripts), `bun run setup` prints these env vars instead of asking.
 
 **Which model for the lyrics.** A model that follows a brief closely is good at the story, the cast and the shots, but it can
-write flat, rhymeless lyrics - and one that thinks for long may use up its token limit before the lyrics start. If you have a
+write flat, rhymeless lyrics (the lyrics are asked for without thinking, so the model's own writing decides). If you have a
 stronger or freer writer on another server, let it write the song (step `1`, `1a`) and keep the other model for the rest.
 `--llm-url=` and `--llm-model=` belong together: the saved model (settings file or project) stays in force next to a new URL, and a
 server without that model stops the run (`The LLM server … has no model …`). Only the song step on the other server - the
