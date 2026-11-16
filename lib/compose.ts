@@ -1,5 +1,6 @@
 import {escapeRegExp} from './shot-plan.ts'
-import {asBeatShots, type ShotProps} from './shot-plan.ts'
+import {howStemPlays, leadOf} from './instrument-parts.ts'
+import {asBeatShots, type ShotHow, type ShotProps} from './shot-plan.ts'
 import {readTokens, replaceTokens} from './refs.ts'
 import {splitAtCuts, splitBySinger} from './singing-parts.ts'
 import type {
@@ -398,7 +399,14 @@ export function activeSpans(window: {start: number; end: number}, ranges: {start
 // `heardPerShot`: when in a shot it is heard, in seconds of the shot, where that is not (nearly) the whole of it - the planner
 // writes the playing for those times only, and the stopping and coming back in (#968).
 // Characters without a stem-bound prop (a non-instrument prop, or no prop at all) never appear here.
-export function propActivityPerBeat(input: CutsInput & Partial<Pick<Input, 'singing'>>, activity: PropActivity): Record<string, ShotProps> {
+/** A stem as the shots read it: its frame power and its own playing level (stemLoudDb). */
+export type StemPower = {power: number[]; hopSec: number; loudDb: number}
+
+export function propActivityPerBeat(
+    input: CutsInput & Partial<Pick<Input, 'singing'>>,
+    activity: PropActivity,
+    stems?: Record<string, StemPower>,
+): Record<string, ShotProps> {
     const {beats, characters} = input
     const windows = shotWindowsPerBeat(input)
     const propped = characters.filter((c): c is Character & {prop: string; propStem: PropStem} => Boolean(c.prop && c.propStem && activity[c.propStem]?.length))
@@ -414,7 +422,25 @@ export function propActivityPerBeat(input: CutsInput & Partial<Pick<Input, 'sing
                     ? activeSpans(w, activity[c.propStem]!)?.map(s => ({start: round(s.start - w.start), end: round(s.end - w.start)}))
                     : undefined,
             )
-            return {characterId: c.id, prop: c.prop, activePerShot, ...(heardPerShot.some(Boolean) ? {heardPerShot} : {})}
+            // how it is heard in each shot where it is heard at all: single hits with silence between, and who carries the part (#1024)
+            const howPerShot = stems?.[c.propStem]
+                ? beatWindows.map((w, j): ShotHow | undefined => {
+                      if (!activePerShot[j]) return undefined
+                      const own = howStemPlays(stems[c.propStem]!.power, stems[c.propStem]!.hopSec, stems[c.propStem]!.loudDb, w.start, w.end)
+                      const rel = Object.fromEntries(
+                          Object.entries(stems).map(([name, s]) => [name, howStemPlays(s.power, s.hopSec, s.loudDb, w.start, w.end).relDb]),
+                      )
+                      const leads = leadOf(rel) === c.propStem
+                      return own.articulation === 'hits' || leads ? {articulation: own.articulation, ...(leads ? {leads} : {})} : undefined
+                  })
+                : undefined
+            return {
+                characterId: c.id,
+                prop: c.prop,
+                activePerShot,
+                ...(heardPerShot.some(Boolean) ? {heardPerShot} : {}),
+                ...(howPerShot?.some(Boolean) ? {howPerShot} : {}),
+            }
         })
     }
     return result
