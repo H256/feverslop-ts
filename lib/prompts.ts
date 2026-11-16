@@ -6,24 +6,33 @@ import {LOCATION_VIEWS} from './sequenceSheet.ts'
 // The LLM prompt templates for the early song/story/look pipeline steps (index.ts, steps 1-8b) - kept separate from
 // the orchestration so the prompt copy can be read and edited without the surrounding pipeline wiring.
 
+// YuE2 sings what it is given and plans the song around it, so the length is given in sung words (about 2-3 per second)
+export const SUNG_WORDS_PER_SECOND = {min: 2, max: 3}
+
 // Lyrics only - kept separate from the style prompt so lyrics.txt can be hand-corrected and kept fixed while the
 // style (music-style.txt) is redone around it, or vice versa (see songStylePrompt).
 // durationSec: an upper bound (config.json songDuration) - the model decides the actual song length, so this only
-// shapes how many sections/lines the lyrics get, it doesn't force an exact length
-export function songLyricsPrompt(idea: string, language: string, durationSec?: number, singerVoice: SingerVoice = 'auto'): AskOptions {
+// shapes how many sections/lines/words the lyrics get, it doesn't force an exact length
+// musicStyle: the direction from music-style.txt, when there is one - the lyrics are written to fit that sound
+export function songLyricsPrompt(idea: string, language: string, durationSec?: number, singerVoice: SingerVoice = 'auto', musicStyle = ''): AskOptions {
+    const seconds = durationSec ? Math.round(durationSec) : 0
     return {
-        maxTokens: 4096,
+        // thinking and answer share this limit: a model that thinks long left no room for the lyrics at 4096
+        maxTokens: 12000,
         input: `Write song lyrics from this idea for a music video, for the YuE2 text-to-music model.
 Idea: ${idea}
 Language: ${language}
-${durationSec ? `Target length: around ${Math.round(durationSec)} seconds - shape the number and length of sections accordingly.\n` : ''}
+${musicStyle ? `Musical style - the lyrics must fit its sound, tempo and mood: ${musicStyle.trim()}\n` : ''}${seconds ? `Target length: around ${seconds} seconds - about ${seconds * SUNG_WORDS_PER_SECOND.min}-${seconds * SUNG_WORDS_PER_SECOND.max} sung words in all (${SUNG_WORDS_PER_SECOND.min}-${SUNG_WORDS_PER_SECOND.max} per second); shape the number and length of sections accordingly.\n` : ''}
 Rules:
-- Section labels in square brackets on their own line: [Intro], [Verse], [Pre-Chorus], [Chorus], [Bridge], [Interlude], [Outro]. Blank line between sections.
+- Section labels in English, in square brackets on their own line, whatever the language of the song: [Intro], [Verse 1], [Verse 2], [Pre-Chorus], [Chorus], [Bridge], [Instrumental Break], [Outro]. Number the verses. Blank line between sections.
+- [Instrumental Break] is a part without words: the tag alone, no lines under it.
 - Start with a verse or chorus, never a lyric-filled intro.
-- 4-6 lines per section.
+- 4-6 lines per section, up to 8 in a verse.
 - Write every repeated chorus out in full - never shorthand like "(repeat chorus)".
+- Lines rhyme (in pairs or crosswise) and neighbouring lines are close in syllable count, so none is sung rushed; make them short and punchy for a fast or hard style, flowing for a slow one.
 - Keep the syllable count identical when a line repeats.
-- Nothing but section tags and sung words - no production notes like "(drums build)", no title, no hyphenated syllable forcing.
+- Write every word in its ordinary spelling, and choose words whose stress falls on the long notes of the line.
+- Nothing but section tags and sung words - no production notes like "(drums build)", no singer or instrument cues, no title, no hyphenated syllable forcing.
 - Written in ${language}.${voiceRules(singerVoice).lyrics}
 
 Answer only with the lyrics.`,

@@ -294,7 +294,9 @@ if (render.has('song')) {
     const lyricsExisted = existsSync(project.input('lyrics.txt'))
     if (!lyricsExisted) {
         log.section('1 · WRITING THE LYRICS')
-        const generatedLyrics = await ask(songLyricsPrompt(idea, language, config.songDuration === -1 ? undefined : config.songDuration, config.singerVoice))
+        const generatedLyrics = await ask(
+            songLyricsPrompt(idea, language, config.songDuration === -1 ? undefined : config.songDuration, config.singerVoice, musicStyleInput),
+        )
         log.box('Lyrics', generatedLyrics)
         await Bun.write(project.input('lyrics.txt'), generatedLyrics)
         project.invalidate('songStyle') // fresh lyrics need a style written to match them
