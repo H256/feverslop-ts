@@ -2,6 +2,31 @@
 
 One section per release. The section of a tag becomes its GitHub release (`.github/workflows/release.yml`).
 
+## v0.12.0 – a green workspace, a Timing page that shows the proposal on the timeline, and songs that start from their style
+
+_2026-11-17_
+
+The workspace has a new look: a dark green theme with title bars on cards, tonal buttons and Lucide icons. The Timing page shows the refinement proposal on the timeline itself, with one handle for the boundary of two lines, and keeps its editing part fixed while only the line list scrolls. A song that is still to be made starts from its musical style, voice and length, and the lyrics prompt now takes 5-8 seconds instead of one to two minutes.
+
+### Highlights
+
+- **A new look.** A dark green theme, title bars on cards, tonal buttons and Lucide icons throughout the workspace (#1106).
+- **Timing: the proposal is on the timeline.** The refinement proposal is drawn on the timeline and taken line by line; the proposal bar is one row, with Take as the main action. Two lines that run into each other share one handle for their boundary, which snaps to where a new sound starts and works from the keyboard. The line list has colours and an overlap filter (an overlap counts from 0.15 s), and the rare line actions are in one More menu. A word that a clip cut falls into is split at the cut in one click, and a split can be set again (#1104, #1105).
+- **Timing: the editing part stays fixed.** Only the line list scrolls; the editing part above it keeps its place and has a tighter layout (#1107, #1108).
+- **A song to be made starts from its style.** The start form asks a song that is still to be made for its musical style, voice and length, and makes it the first step (#1089, #1091).
+- **A faster lyrics prompt that follows the rules of a song.** The prompt runs without thinking - 5-8 seconds instead of 1-2 minutes, with lyrics no worse. It asks for the length in sung words (at most as many as fit the duration, 0.9 s per word), the musical style, rhymes and numbered tags. The docs say that `songDuration` is the maximum length YuE2 cuts a song off at, and the README names the model and server for the song step (#1100, #1102, #1103).
+
+### Cast and status
+
+- A band member left without a layer of the song is asked for once more; the Casting page has "Ask which layer", shown only where it is needed, and `bun run cast --stems` repairs a planned project (#1085, #1094).
+- The status no longer ends in an endless "Next: songStyle" for a project with a finished song; the song style is written by `--render=song` and is not listed as a step to plan (#1095, #1096).
+
+### Editor and build
+
+- After its start line the editor server prints no progress lines of the work its routes do, only warnings and errors (#1101).
+- The editor build passes again: no `toMatchObject` in the client's bun-test types, settings gaps from the scale (#1097, #1098).
+
+
 ## v0.11.0 – props as things of their own, a band that plays in its gaps, finer lyric timing, and a hardened pipeline
 
 _2026-11-16_
