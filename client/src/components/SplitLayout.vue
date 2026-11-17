@@ -13,6 +13,8 @@ withDefaults(
     full?: boolean
     /** the side column folded away (kept, not unmounted): the main column takes the width */
     folded?: boolean
+    /** `full` only: the main column itself does not scroll - the page puts a scroller of its own around what is long (Timing: the line list) */
+    pinned?: boolean
     /** the side column stays in view while the main column scrolls */
     sticky?: boolean
     /** in a narrow window the side column comes first (it holds what is done on the page) */
@@ -20,7 +22,7 @@ withDefaults(
     /** what the side column is, for a screen reader */
     label?: string
   }>(),
-  {side: '460px', full: false, folded: false, sticky: false, sideFirst: false, label: undefined},
+  {side: '460px', full: false, pinned: false, folded: false, sticky: false, sideFirst: false, label: undefined},
 )
 // the main column, for a page that scrolls in it or looks for its rows
 const main = ref<HTMLElement>()
@@ -32,7 +34,7 @@ defineExpose({main})
     :class="['ui-split', {view: full, 'ui-split-full': full, 'ui-split-folded': folded, 'ui-split-sticky': sticky, 'ui-split-side-first': sideFirst}]"
     :style="{'--ui-split-side': side}"
   >
-    <div ref="main" :class="full ? 'scrollpage' : 'ui-split-main'"><slot /></div>
+    <div ref="main" :class="[full ? 'scrollpage' : 'ui-split-main', {'ui-split-pinned': full && pinned}]"><slot /></div>
     <aside v-show="!folded" :class="full ? 'detail' : 'ui-split-side'" :aria-label="label"><slot name="side" /></aside>
   </div>
 </template>
@@ -58,6 +60,14 @@ defineExpose({main})
 }
 .ui-split-side {
   min-width: 0;
+}
+/* a column that stays put: the page puts the scroller around its long part */
+.ui-split-pinned {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 16px;
+  min-height: 0;
 }
 .ui-split-sticky > .ui-split-side {
   position: sticky;
