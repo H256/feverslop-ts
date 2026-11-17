@@ -32,9 +32,22 @@ const twoShots: ShotPlan[] = [
     {action: 'Lead walks to the front.', characters: ['lead']},
 ]
 
-function clip(options: {shots?: ShotPlan[]; staging?: string; summary?: string} = {}): ClipRequest {
+function clip(options: {shots?: ShotPlan[]; staging?: string; summary?: string; sung?: boolean} = {}): ClipRequest {
     return buildClipRequests({
-        slots: [{id: 'slot-001', index: 0, section: 'Intro', start: 0, end: 4, bars: 2, energy: 0.8, lyrics: []}],
+        slots: [
+            {
+                id: 'slot-001',
+                index: 0,
+                section: 'Intro',
+                start: 0,
+                end: 4,
+                bars: 2,
+                energy: 0.8,
+                lyrics: [],
+                ...(options.sung ? {vocals: [{line: 0, text: 'into the fire', start: 0.2, end: 1.6, words: [{text: 'fire', start: 0.4, end: 1.6}]}]} : {}),
+            },
+        ],
+        ...(options.sung ? {singing: {singers: ['lead'], lines: [{line: 0, text: 'into the fire', singers: ['lead']}]}} : {}),
         mapping: [{slotId: 'slot-001', beatId: 'b1'}],
         beats: [{...beat, ...(options.summary ? {summary: options.summary} : {})}],
         characters: band,
@@ -89,6 +102,29 @@ describe('the cast of a clip is the people its shots show', () => {
         const c = clip()
         expect(c.prompt).not.toContain('Every listed subject is already fully visible')
         expect(c.prompt).toContain('from the first frame of the shots it appears in')
+    })
+
+    // tides-261115, slot-019/026: the singer was pulled into a shot of the band the planner had left her out of - "in the frame",
+    // without a place - and the video model merged her into the bassist, the singer holding the bass
+    test('a singer the plan leaves out of a shot is heard off screen, not pulled into it', () => {
+        const c = clip({
+            sung: true,
+            shots: [
+                {action: 'Drm hits the snare.', characters: ['drm']},
+                {action: 'Lead walks to the front.', characters: ['lead']},
+            ],
+        })
+        const first = c.prompt.slice(c.prompt.lastIndexOf('[Shot 1] '), c.prompt.lastIndexOf('[Shot 2] '))
+        expect(c.shots[0]!.subjects).not.toContain('<Subject 2>')
+        expect(first).not.toContain('<Subject 2>, Lead, in the frame')
+        expect(first).toContain('the voice of <Subject 2> (S1) is heard off screen, singing <d>[English] into the fire.</d> while <Subject 3> hits the snare.')
+        expect(first).not.toContain('holds the long note')
+        expect(first).toContain('<Subject 3>, Drm, stays silent')
+    })
+
+    test('a plan that answers "no" for the others in the picture says nothing of them', () => {
+        const c = clip({shots: [{action: 'Drm hits the snare.', characters: ['drm', 'lead'], rest: 'no'}, twoShots[1]!]})
+        expect(c.prompt).not.toContain('in it as well: no')
     })
 
     test('a plan whose shots do not say who they show keeps the cast of the beat', () => {

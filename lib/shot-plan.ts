@@ -18,6 +18,12 @@ const SIZES = ['wide', 'medium', 'close', 'extreme'] as const
  */
 export const SHOT_ROOM: Record<(typeof SIZES)[number], number | undefined> = {extreme: 1, close: 2, medium: 3, wide: undefined}
 /** A flag the planner answered: true, or "yes" in the line format. */
+/** A free-text field the planner may leave out, answered with the format's own empty word ("rest: no") instead: nothing. Taken as
+ * it was, "<Subject 2> is in it as well: no." went into the clip (tides-261115, slot-019). */
+export const said = (value: unknown) => {
+    const t = text(value)
+    return /^["'(]*(no|none|nobody|nothing|n\/a|-)["'.)]*$/i.test(t) ? '' : t
+}
 const yes = (value: unknown) => value === true || (typeof value === 'string' && /^\s*(yes|true)\b/i.test(value))
 /** The planner's "playing:" - what the hands do on the instrument (a phrase), a bare "yes", or "no" / nothing. */
 function playingOf(value: unknown): {playing?: true; plays?: string} {
@@ -329,7 +335,7 @@ export function readBeatPlan(
             ...(yes(e.risky) ? {risky: true} : {}),
             ...(ids.length ? {characters: ids} : {}),
             ...(Object.keys(people).length ? {people} : {}),
-            ...(text(e.rest) ? {rest: text(e.rest)} : {}),
+            ...(said(e.rest) ? {rest: said(e.rest)} : {}),
             ...(handsOf ? {hands: handsOf.id} : {}),
         }
     })

@@ -1,6 +1,6 @@
 import {escapeRegExp} from './shot-plan.ts'
 import {howStemPlays, leadOf} from './instrument-parts.ts'
-import {asBeatShots, type ShotHow, type ShotProps} from './shot-plan.ts'
+import {asBeatShots, said, type ShotHow, type ShotProps} from './shot-plan.ts'
 import {readTokens, replaceTokens} from './refs.ts'
 import {splitAtCuts, splitBySinger} from './singing-parts.ts'
 import type {
@@ -960,16 +960,19 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 const starting = shotVocals.filter(v => inShot(j, v.start))
                 const continuing = shotVocals.filter(v => v.start < at && v.end > at)
                 // while someone sings, they always stay in frame - the establishing shot still shows everyone, singers first
-                const singersInShot = [...new Set([...continuing, ...starting].flatMap(v => v.singers))]
-                // staged by the planner: who is in the picture is its call, the singers of this shot are kept in
+                const singersHeard = [...new Set([...continuing, ...starting].flatMap(v => v.singers))]
+                // staged by the planner: who is in the picture is its call - a singer it left out is heard off screen (a shot of the
+                // band while she sings). Pulled in anyway, the singer stood "in the frame" without a place, and the video model
+                // merged her into the one woman it had a place for: the singer holding the bassist's bass (tides-261115, slot-019/026)
                 const planned = plan?.characters?.map(id => castSubjects.find(s => s.id === id)).filter(s => s !== undefined)
                 // a shot of a player's hands on the instrument (plan.hands): that player alone - the face is out of the frame,
                 // so the singer of the line is not pulled in
                 const player = plan?.hands ? castSubjects.find(s => s.id === plan.hands && s.prop) : undefined
+                const singersInShot = player ? [] : planned?.length ? singersHeard.filter(s => planned.some(p => p.id === s.id)) : singersHeard
                 const focus = player
                     ? [player]
                     : planned?.length
-                      ? [...new Set([...singersInShot, ...planned])]
+                      ? planned
                       : opensScene && j === 0
                         ? [...new Set([...singersInShot, ...castSubjects])]
                         : pickFocus(castSubjects, singersInShot, blockingCursor++, named)
@@ -1024,8 +1027,14 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             slot.vocals
                 ? slot.vocals.filter(v => inShot(j, v.start)).map(v => v.text)
                 : sung.filter((_, n) => Math.floor((n * shots.length) / sung.length) === j)
-        const sings = (v: (typeof vocals)[number] & {continues?: boolean}) =>
-            `${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'sing' : 'sings'} <d>[${language}] ${v.continues && !v.text.endsWith('-') ? normalizeLyric(v.text).replace(/\.$/, '') : normalizeLyric(v.text)}</d>`
+        // `seen`: the singers of the shot's picture - a line nobody of them sings is heard off screen, and nobody in the frame mouths it
+        const sings = (v: (typeof vocals)[number] & {continues?: boolean}, seen?: {id: string}[]) => {
+            const words = `<d>[${language}] ${v.continues && !v.text.endsWith('-') ? normalizeLyric(v.text).replace(/\.$/, '') : normalizeLyric(v.text)}</d>`
+            const shown = seen ? v.singers.filter(s => seen.some(o => o.id === s.id)) : v.singers
+            // nobody in the frame mouths it: the shot's "stays silent, lips together" says so for everyone in it
+            if (!shown.length) return `the voice of ${joinAnd(v.singers.map(voice))} is heard off screen, singing ${words}`
+            return `${joinAnd(shown.map(voice))} ${shown.length > 1 ? 'sing' : 'sings'} ${words}`
+        }
 
         // "not playing" / "hands off it" reads as a negation to the video model, which tends to render the
         // negated action anyway (it renders "holding", not "not holding") - a concrete, affirmative hand/prop
@@ -1177,8 +1186,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // standing by: the video model otherwise lets them wait in their reference pose while the shot's two or
                 // three people act
                 const unstaged = shot.plan ? shot.focus.filter(s => !stagedPeople?.[s.id]) : []
+                const rest = said(shot.plan?.rest)
                 const restClause = unstaged.length
-                    ? ` ${joinAnd(unstaged.map(s => s.label))} ${unstaged.length > 1 ? 'are' : 'is'} in it as well: ${shot.plan?.rest && !slot.micro && namesOnlyCast(shot.plan.rest, planTokens) ? withLabels(shot.plan.rest, planTokens).replace(/[.\s]+$/, '') : `${unstaged.length > 1 ? 'each takes' : 'takes'} part in what happens in the shot in their own way, busy with something of their own`}.`
+                    ? ` ${joinAnd(unstaged.map(s => s.label))} ${unstaged.length > 1 ? 'are' : 'is'} in it as well: ${rest && !slot.micro && namesOnlyCast(rest, planTokens) ? withLabels(rest, planTokens).replace(/[.\s]+$/, '') : `${unstaged.length > 1 ? 'each takes' : 'takes'} part in what happens in the shot in their own way, busy with something of their own`}.`
                     : ''
                 const viewClause = shot.plan?.view ? ` Camera position: ${withLabels(shot.plan.view, planTokens)}.` : ''
                 const holdClause = shot.plan?.hold
@@ -1206,7 +1216,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     : `${viewClause}${holdClause}`
 
                 if (performing) {
-                    const continuingSingers = [...new Set(shot.continuing.flatMap(v => v.singers))]
+                    // only who is in the picture sings in it: a singer the plan left out is a voice off screen
+                    const seen = (s: {id: string}) => shot.singers.some(o => o.id === s.id)
+                    const continuingSingers = [...new Set(shot.continuing.flatMap(v => v.singers))].filter(seen)
                     const keepsSinging = continuingSingers.length
                         ? ` ${joinAnd(continuingSingers.map(voice))} ${continuingSingers.length > 1 ? 'keep' : 'keeps'} singing.`
                         : ''
@@ -1214,7 +1226,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     // starts the lip-sync with the shot (schwarzer-flur slot-018: a quick flutter of the lips at its start). Only the
                     // lip-sync is held back, the face stays free to show the moment (a laugh, a shout)
                     const notYet = [...new Set(shot.starting.flatMap(v => v.singers))]
-                        .filter(s => !continuingSingers.includes(s))
+                        .filter(s => seen(s) && !continuingSingers.includes(s))
                         .map(s => ({s, from: Math.min(...shot.starting.filter(v => v.singers.includes(s)).map(v => v.heard))}))
                         .filter(({from}) => from - shot.at >= LATE_ONSET_SEC)
                         .map(
@@ -1227,12 +1239,14 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     const lines = shot.starting
                         .map(
                             (v, n) =>
-                                ` From ${clipTime(v.heard)} to ${clipTime(Math.min(v.end, duration))}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`,
+                                ` From ${clipTime(v.heard)} to ${clipTime(Math.min(v.end, duration))}, ${sings(v, shot.singers)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`,
                         )
                         .join('')
                     // a long held note: the mouth flaps open and shut on it unless told to hold one shape
                     const shotEnd = cuts[j + 1] ?? duration
                     const held = [...shot.continuing, ...shot.starting]
+                        .map(v => ({...v, singers: v.singers.filter(seen)}))
+                        .filter(v => v.singers.length)
                         .flatMap(v =>
                             v.words
                                 .filter(w => w.end - w.start >= HELD_NOTE_SEC && w.start < shotEnd && w.end > shot.at)
