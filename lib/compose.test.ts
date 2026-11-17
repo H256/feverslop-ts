@@ -205,7 +205,8 @@ describe('a piece of a fight clip names only the people it has pictures for', ()
         expect(clip.prompt).toContain(
             '2-second music-video clip set in <Subject 1> with <Subject 2> and <Subject 3>: <Subject 2> drives her hammer into the <Subject 3>.',
         )
-        expect(clip.prompt).toContain('keeps their lips together and still, silent.')
+        // the orcs sing nothing either: in a song with a singer, nobody in frame opens the mouth while nobody sings
+        expect(clip.prompt).toContain('<Subject 2> (Greta) and <Subject 3> (Orcs) keep their lips together and still, silent.')
         expect(clip.prompt).not.toContain('eyes and brows')
     })
     // a silent singer seen from behind, walking away in a wide shot: lips named turned him to the lens, walking backwards
@@ -216,9 +217,9 @@ describe('a piece of a fight clip names only the people it has pictures for', ()
             const shot = {...beat.shots[0]!, size}
             return buildClipRequests({...base, singing: {singers: ['greta'], lines: []}, shotMoments: {b9: {...beat, shots: [shot]}}})[0]!.prompt
         }
-        expect(sized('wide')).toContain('<Subject 2>, Greta, is silent.')
+        expect(sized('wide')).toContain('<Subject 2> (Greta) and <Subject 3> (Orcs) are silent.')
         expect(sized('wide')).not.toContain('lips')
-        expect(sized('medium')).toContain('<Subject 2>, Greta, keeps their lips together and still, silent.')
+        expect(sized('medium')).toContain('<Subject 2> (Greta) and <Subject 3> (Orcs) keep their lips together and still, silent.')
     })
 })
 

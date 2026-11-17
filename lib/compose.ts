@@ -370,6 +370,8 @@ function shotWindowsPerBeat(input: CutsInput & Partial<Pick<Input, 'singing'>>):
 // tens of milliseconds near its edge shouldn't flip it to active, but a real, short riff or hit inside an
 // otherwise longer shot (which fails a >50%-of-duration bar) should.
 const MIN_ACTIVE_SEC = 0.3
+// a shot in which a stem is this far below its own playing level hears it only quietly, under the others (lib/instrument-parts.ts)
+const QUIET_DB = -15
 function isActive(window: {start: number; end: number}, ranges: {start: number; end: number}[]): boolean {
     const duration = window.end - window.start
     if (duration <= 0) return false
@@ -416,24 +418,30 @@ export function propActivityPerBeat(
         if (!onScreen.length) continue
         const beatWindows = windows[beat.id] ?? []
         result[beat.id] = onScreen.map(c => {
-            const activePerShot = beatWindows.map(w => isActive(w, activity[c.propStem]!))
+            const stem = stems?.[c.propStem]
+            const own = (w: {start: number; end: number}) => (stem ? howStemPlays(stem.power, stem.hopSec, stem.loudDb, w.start, w.end) : undefined)
+            // the stem itself has the last word: still in the shot is not heard, whatever the bar average of the activity says
+            const activePerShot = beatWindows.map(w => isActive(w, activity[c.propStem]!) && own(w)?.articulation !== 'still')
             const heardPerShot = beatWindows.map((w, j) =>
                 activePerShot[j]
                     ? activeSpans(w, activity[c.propStem]!)?.map(s => ({start: round(s.start - w.start), end: round(s.end - w.start)}))
                     : undefined,
             )
-            // how it is heard in each shot where it is heard at all: single hits with silence between, and who carries the part (#1024)
-            const howPerShot = stems?.[c.propStem]
-                ? beatWindows.map((w, j): ShotHow | undefined => {
-                      if (!activePerShot[j]) return undefined
-                      const own = howStemPlays(stems[c.propStem]!.power, stems[c.propStem]!.hopSec, stems[c.propStem]!.loudDb, w.start, w.end)
-                      const rel = Object.fromEntries(
-                          Object.entries(stems).map(([name, s]) => [name, howStemPlays(s.power, s.hopSec, s.loudDb, w.start, w.end).relDb]),
-                      )
-                      const leads = leadOf(rel) === c.propStem
-                      return own.articulation === 'hits' || leads ? {articulation: own.articulation, ...(leads ? {leads} : {})} : undefined
-                  })
-                : undefined
+            // how it is heard in each shot where it is heard at all - always said, never left to the planner: a shot of a guitar
+            // heard all through got "one downstroke, the hand still" where nothing told it so (#1024). Single hits with silence
+            // between, playing through, part of the shot; quiet under the others; who carries the part
+            const howPerShot =
+                stem && stems
+                    ? beatWindows.map((w, j): ShotHow | undefined => {
+                          if (!activePerShot[j]) return undefined
+                          const mine = own(w)!
+                          const rel = Object.fromEntries(
+                              Object.entries(stems).map(([name, s]) => [name, howStemPlays(s.power, s.hopSec, s.loudDb, w.start, w.end).relDb]),
+                          )
+                          const leads = leadOf(rel) === c.propStem
+                          return {articulation: mine.articulation, ...(leads ? {leads} : {}), ...(mine.relDb < QUIET_DB ? {quiet: true} : {})}
+                      })
+                    : undefined
             return {
                 characterId: c.id,
                 prop: c.prop,
@@ -1097,14 +1105,18 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // "the face showing ..." turned a singer seen from behind to the lens, and walking away face first is walking backwards
                 // In a wide shot it names no lips either: the faces are small there, and the lips of someone seen from behind
                 // (walking away, the back to the lens - a wide shot only) turned him to the lens again, walking backwards
-                const silentSingers = shot.focus.filter(s => singing?.singers.includes(s.id) && !shot.singers.includes(s))
+                const onSinger = shot.starting.length > 0 || shot.continuing.length > 0
+                // and in a song with a singer, everybody else in frame while nobody sings, too: a guitarist with nothing said of his
+                // mouth came out with it open, singing along to the riff (tides, after he was taken out of the singers)
+                const silentSingers = shot.focus.filter(
+                    s => (singing?.singers.includes(s.id) || (singing?.singers.length && !onSinger)) && !shot.singers.includes(s),
+                )
                 const silentWho = silentSingers.length > 1 ? joinAnd(silentSingers.map(namedInList)) : silentSingers[0] ? named(silentSingers[0]) : ''
                 const silentClause = !silentSingers.length
                     ? ''
                     : shot.plan?.size === 'wide'
                       ? ` ${silentWho} ${silentSingers.length > 1 ? 'are' : 'is'} silent.`
                       : ` ${silentWho} ${silentSingers.length > 1 ? 'keep' : 'keeps'} their lips together and still, silent.`
-                const onSinger = shot.starting.length > 0 || shot.continuing.length > 0
                 // while the singer sings, everyone else in the frame (a shadow, a creature of fog) sits it out - the video
                 // model otherwise gives the lip-sync to them too, and the singer ends up in a duet with them
                 const others = onSinger ? shot.focus.filter(s => !singing?.singers.includes(s.id)) : []

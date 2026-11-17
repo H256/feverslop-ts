@@ -2,7 +2,8 @@ import {describe, expect, test} from 'bun:test'
 import {propActivityPerBeat, type StemPower} from './compose.ts'
 import type {Character, StoryBeat} from './project.ts'
 
-// How an instrument is heard in a shot, from its stem (#1024): single hits with silence between, and who carries the part.
+// How an instrument is heard in a shot, from its stem (#1024): through the shot or in single hits with silence between, quietly
+// under the others, and who carries the part - and where the stem is still, it is not heard at all.
 // tides-of-eternal-flame-261113, slot-020: the guitar strikes at 2:12.0 and 2:14.1 with silence between - the activity calls it
 // playing all through, the stem says hits. Here a clip of 8 s in two shots of 4 s.
 const band: Character[] = [
@@ -37,17 +38,28 @@ const stem = (f: (t: number) => number, loudDb = db(loud)): StemPower => ({power
 const hits = (t: number) => (t % 2 < 0.5 ? loud : quiet)
 
 describe('propActivityPerBeat - how the instrument is heard in each shot', () => {
-    test('a stem that plays through says nothing, one of single hits says so', () => {
+    test('every heard shot says how: through, or in single hits - a stem that plays through is not left to the planner', () => {
         const [gtr] = propActivityPerBeat(base, propActivity, {guitar: stem(t => (t < 4 ? loud : hits(t)))}).b1!
         expect(gtr!.activePerShot).toEqual([true, true])
-        expect(gtr!.howPerShot).toEqual([undefined, {articulation: 'hits'}])
+        expect(gtr!.howPerShot).toEqual([{articulation: 'sustained'}, {articulation: 'hits'}])
+    })
+
+    test('a stem still in a shot is not heard there, whatever the activity says (tides bridge, 2:42-2:46)', () => {
+        const [gtr] = propActivityPerBeat(base, propActivity, {guitar: stem(t => (t < 4 ? loud : quiet))}).b1!
+        expect(gtr!.activePerShot).toEqual([true, false])
+        expect(gtr!.howPerShot).toEqual([{articulation: 'sustained'}, undefined])
+    })
+
+    test('a stem far below its own level is heard quietly, under the others', () => {
+        const [gtr] = propActivityPerBeat(base, propActivity, {guitar: stem(t => (t < 4 ? loud : loud * 1e-2))}).b1!
+        expect(gtr!.howPerShot).toEqual([{articulation: 'sustained'}, {articulation: 'sustained', quiet: true}])
     })
 
     test('the stem that is above its own usual level while the others are not carries the part', () => {
         // the guitar is 10 dB over its own loud level in the first shot, the other stem sits on its own level
         const stems = {guitar: stem(t => (t < 4 ? loud : 1e-3), db(1e-3)), other: stem(() => loud)}
         const [gtr] = propActivityPerBeat(base, propActivity, stems).b1!
-        expect(gtr!.howPerShot).toEqual([{articulation: 'sustained', leads: true}, undefined])
+        expect(gtr!.howPerShot).toEqual([{articulation: 'sustained', leads: true}, {articulation: 'sustained'}])
     })
 
     test('without the stems nothing is said - a project without them plans as before', () => {
