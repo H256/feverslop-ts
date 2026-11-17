@@ -27,6 +27,11 @@ const rendered = computed(() => clips.value.some(c => c.video))
 // a post-work step starts from a finished video
 const hasFinal = computed(() => project.value.finals.some(f => !f.preview))
 const allClips = () => actions.preview(clips.value, `all ${clips.value.length} clips`)
+// the previews that are not there, and those of an older plan (#1118, #1117): rendered alone, the others stay
+const noPreview = computed(() => clips.value.filter(c => !c.preview))
+const oldPreview = computed(() => clips.value.filter(c => c.preview && fresh.value.previews?.[c.id] === 'stale'))
+const previewMissing = () => actions.preview(noPreview.value, plural(noPreview.value.length, 'clip') + ' without a preview')
+const previewOld = () => actions.preview(oldPreview.value, plural(oldPreview.value.length, 'preview') + ' of an older plan')
 const previewMarked = () => actions.preview(markedClips.value, plural(markedClips.value.length, 'clip'))
 const reviewNow = () => review.start(reviewList(project.value, marked, fresh.value))
 // the beats of the marked clips (#762): their shots can be planned again
@@ -128,6 +133,22 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
       </template>
     </div>
     <div v-if="clips.length" class="grp">
+      <button
+        v-if="noPreview.length"
+        class="b-finish"
+        title="Cheap renders of the clips that have no preview yet - the others stay. In the terminal: --render=videos --preview"
+        @click="previewMissing"
+      >
+        <AppIcon name="preview" />Preview missing ({{ noPreview.length }})
+      </button>
+      <button
+        v-if="oldPreview.length"
+        class="b-finish"
+        title="Cheap renders again of the clips whose preview was made from an older plan. In the terminal: --render=videos --preview --refresh=videos"
+        @click="previewOld"
+      >
+        <AppIcon name="preview" />Preview stale ({{ oldPreview.length }})
+      </button>
       <button class="b-finish" title="Cheap renders of all clips into previews/" @click="allClips"><AppIcon name="preview" />Preview all</button>
       <button
         v-if="clips.some(c => c.preview)"

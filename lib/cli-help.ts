@@ -18,7 +18,7 @@ const rendering: [string, string][] = [
         'With --render=videos: cheap renders into previews/ (config.json "preview"), never a clip. With --render=final: a low-resolution video from them',
     ],
     ['--retake=CLIP:PART', 'Render part of a clip again, between the frames around it: slot-007:3.2-5.0 in seconds, or slot-007:shot2. The old clip is kept'],
-    ['--refresh=images,videos', 'Render again what is stale - made from an older plan; the old files go to old/attempts/. pictures, clips say the same'],
+    ['--refresh=images,videos', 'Render again what is stale - made from an older plan; the old files go to old/attempts/. pictures, clips say the same. With --preview: the previews of an older plan'],
     ['--strict', 'Refuse stale clips in the final video instead of only listing them'],
 ]
 /** What a run renders and what it leaves (#937) - the same note in both helps. */

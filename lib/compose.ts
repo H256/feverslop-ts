@@ -18,7 +18,7 @@ import type {
     StoryBeat,
     TimedWord,
 } from './project.ts'
-import {handsOf} from './project.ts'
+import {handsOf, type LocationSet} from './project.ts'
 import {CONTEXT_SETTLE, formatTimestamp, FPS, frameAt, round} from './frames.ts'
 import {MISSING_WORD_LEAD, voiceLead} from '../shared/timing-fit.ts'
 import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from '../comfy/helpers.ts'
@@ -128,7 +128,7 @@ export type Input = {
     // per place the fixed features behind the people of every shot (step locationAnchors) - none: no background sentence
     locationAnchors?: Record<string, string>
     // per place its floor plan without people (step locationLayouts): the layout of a clip that does not open its beat
-    locationLayouts?: Record<string, {layout: string}>
+    locationLayouts?: Record<string, {layout: string; set?: LocationSet}>
     lookBrief: string
     music: MusicMap
     language: string // for <d>[...], e.g. "English"
@@ -674,6 +674,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // a clip of its shots' people names nobody else: the model fills a name it has no picture for with a copy of one it has
         const namesOnlyCast = (text: string, tokens: boolean) => !shotIds || idsIn(text, tokens).every(id => cast.some(c => c.id === id))
         const placeLayout = location && locationLayouts?.[location.id]?.layout
+        const placeSet = location ? locationLayouts?.[location.id]?.set : undefined
 
         // Subject N is always defined by Picture N. A group character (memberCounts[id] > 1) rotates through its
         // member pictures by slot index (groupMemberId) - computed once here so the picture file (pictureId) and
@@ -1376,7 +1377,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     s.kind === 'location'
                         ? `${s.label} is ${the(s.name)} environment in ${s.picture}: ${s.description}`.trim()
                         : s.kind === 'prop'
-                          ? `${s.label} is ${the(s.name)} of ${s.owner}, the object in ${s.picture}: ${s.description}`.trim()
+                          ? `${s.label} is ${the(s.name)} of ${s.owner}, the object in ${s.picture}, at the real size such an object has next to ${s.owner}: ${s.description}`.trim()
                           : s.companionOf
                             ? `${s.label} is another one of ${s.name} (the group ${s.companionOf}), the individual in ${s.picture}, clearly a different person from the others of the group; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
                             : s.isGroup && s.companions.length
@@ -1444,6 +1445,16 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                           ? [layoutLine(false, '', placeLayout)]
                           : []
                     : []),
+                // the fixed spots of this clip's people in the place (#1119): where the drum kit stands, where the audience watches from -
+                // with the kit drawn as a picture of its own and no spot for it in the place, every clip put it and the crowd elsewhere
+                ...(() => {
+                    const spotted = castSubjects.filter(s => (s.stationary || s.isGroup) && placeSet?.spots[s.id])
+                    if (!spotted.length) return []
+                    const said = spotted.map(
+                        s => `${s.label}, ${s.name}${s.stationary ? `, at the ${s.stationary}` : ''}: ${placeSet!.spots[s.id]!.replace(/[.s]+$/, '')}`,
+                    )
+                    return [`Fixed places in ${locationSubject?.label ?? 'the place'}, the same in every shot: ${said.join('; ')}.`]
+                })(),
                 ...(alreadyPresentNote ? [alreadyPresentNote] : []),
                 // a fact that names somebody without a picture in this clip is left out
                 ...(state.length

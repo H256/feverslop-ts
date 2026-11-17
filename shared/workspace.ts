@@ -270,7 +270,8 @@ export type PostworkView = {
     edits: {format: 'mlt' | 'openshot' | 'edl'; file: string; changed: number}[]
     problem?: string // what is wrong with the settings when they cannot be read: the steps take their defaults then, and the form says it
 }
-export type EditorFreshness = {clips: Record<string, Freshness>; pictures: Record<string, Freshness>}
+// previews: a music video's previews, as the clips - "pinned" for one whose record does not say what it was made from (#1117)
+export type EditorFreshness = {clips: Record<string, Freshness>; pictures: Record<string, Freshness>; previews?: Record<string, Freshness>}
 /** What `bun run status` says of a project, as far as the page shows it. */
 export type ProjectStatus = {
     /** every step with where it stands: done, redone by the next run, not generated yet, not used by this project */

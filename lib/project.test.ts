@@ -115,3 +115,14 @@ describe('the activity of the shots, a step of its own (#1115)', () => {
         })
     })
 })
+
+describe('what a redo dropped stays at hand for the run', () => {
+    test('a redone step and the steps built on it are kept in before(); a step that had no result is not', () => {
+        const project = store({beats: [{id: 'b1'}], characterLookVariants: {crowd: ['a', 'b']}, characterDescriptionVariants: {crowd: ['x', 'y']}})
+        project.invalidate('beats')
+        expect(project.data.characterLookVariants).toBeUndefined()
+        expect(project.before('characterLookVariants')).toEqual({crowd: ['a', 'b']})
+        expect(project.before('characterDescriptionVariants')).toEqual({crowd: ['x', 'y']})
+        expect(project.before('shotMoments')).toBeUndefined()
+    })
+})
