@@ -169,6 +169,10 @@ export async function planBeats(run: BeatsRun) {
     // groupSize) get one extra look prompt per member here, so they don't all render from the same shared reference
     // picture - see computeMemberCounts/groupMemberId in lib/compose.ts for how a shot picks which member to show.
     const memberCounts = computeMemberCounts(beats, cast.characters)
+    // a redo of the beats redoes this step too, while a member's look is asked from the same input as before: the group's own look,
+    // the look of the video and the members before it. Such a look is taken as it was - asked again, every member of the audience
+    // came out another person and their pictures were drawn anew, the references the clips were made with lost
+    const lookVariantsBefore = project.before('characterLookVariants') ?? {}
     const characterLookVariants = await project.step('characterLookVariants', '9c · GENERATING GROUP MEMBER VARIANTS', async () => {
         const variants: Record<string, string[]> = {}
         for (const char of cast.characters) {
@@ -179,7 +183,9 @@ export async function planBeats(run: BeatsRun) {
             for (let i = 1; i < count; i++) {
                 log.step(`Member ${i + 1}/${count}`, styles.name(char.id))
                 const options = characterVariantLookPrompt(lookBrief, asDrawn(char, config.propPictures), looks)
-                looks.push(await project.each('characterLookVariants', `${char.id}/${i}`, options, () => ask(options)))
+                const old = sameStart(lookVariantsBefore[char.id], looks) ? lookVariantsBefore[char.id]?.[i] : undefined
+                if (old) log.step('Kept', styles.muted(`characterLookVariants · ${char.id}/${i} - the same as before the redo`))
+                looks.push(await project.each('characterLookVariants', `${char.id}/${i}`, options, () => (old ? Promise.resolve(old) : ask(options))))
             }
             variants[char.id] = looks
             const shown = config.propPictures ? undefined : pictureProp(char)
@@ -196,6 +202,8 @@ export async function planBeats(run: BeatsRun) {
     // characterDescriptions entry (derived from member 0's look alone) described every other member's anchor image
     // with member 0's text, which reads as the video model fighting itself and drifting the whole sequence toward
     // whichever member the text actually described.
+    // a member's description is read from its look: the same look, the same description as before the redo
+    const descriptionVariantsBefore = project.before('characterDescriptionVariants') ?? {}
     const characterDescriptionVariants = await project.step('characterDescriptionVariants', '9d · DESCRIBING THE GROUP MEMBER VARIANTS', async () => {
         const descriptions: Record<string, string[]> = {}
         for (const [id, looks] of Object.entries(characterLookVariants)) {
@@ -204,7 +212,8 @@ export async function planBeats(run: BeatsRun) {
                 characterDescriptions[id] ?? '',
                 ...(await llmMap(looks.slice(1), (look, i) => {
                     const options = characterDescriptionPrompt(look)
-                    return project.each('characterDescriptionVariants', `${id}/${i + 1}`, options, () => ask(options))
+                    const old = lookVariantsBefore[id]?.[i + 1] === look ? descriptionVariantsBefore[id]?.[i + 1] : undefined
+                    return project.each('characterDescriptionVariants', `${id}/${i + 1}`, options, () => (old ? Promise.resolve(old) : ask(options)))
                 })),
             ]
         }
@@ -233,3 +242,6 @@ export async function planBeats(run: BeatsRun) {
     }
     return {beats, memberCounts, characterLookVariants, characterDescriptionVariants, timeline}
 }
+
+/** Whether the looks of a group before the redo start with the ones asked so far - then the next one was asked from the same input. */
+export const sameStart = (before: string[] | undefined, now: string[]) => !!before && before.length > now.length && now.every((look, n) => before[n] === look)

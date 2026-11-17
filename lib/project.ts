@@ -412,8 +412,19 @@ export class ProjectStore {
         return this.saving
     }
 
+    // what a redo dropped, for this run: a step that asks per element can take an old answer whose input is the same (before())
+    private dropped: Partial<Project> = {}
+
+    /** The result a step had before this run redid it - undefined when it was not there. */
+    before<K extends StepName>(name: K): Project[K] | undefined {
+        return this.dropped[name] as Project[K] | undefined
+    }
+
     invalidate(name: StepName) {
-        if (this.data[name] !== undefined) log.step('Redo', styles.name(name))
+        if (this.data[name] !== undefined) {
+            log.step('Redo', styles.name(name))
+            ;(this.dropped as Record<string, unknown>)[name] = this.data[name]
+        }
         delete this.data[name]
         dropPartials(this.data, name)
         for (const [step, deps] of Object.entries(dependsOn) as [StepName, StepName[]][]) {
