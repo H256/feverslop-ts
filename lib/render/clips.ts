@@ -244,7 +244,7 @@ export async function clipJob(
 
 /**
  * A clip as a cheap render into previews/ (--preview): never a file of videos/, it leaves no first or last frame behind and stays out of
- * what is current or stale. A clip that goes on from another starts on the last frame of that one's preview or render, and says it is approximate.
+ * what is current or stale of the clips - its own record has the request it was made from, so the page can say whether it is the plan's. A clip that goes on from another starts on the last frame of that one's preview or render, and says it is approximate.
  */
 export async function renderClipPreview(r: Renderer, clip: ClipRequest, stemFiles: Record<string, string>) {
     const file = `previews/${clip.id}.mp4`
@@ -278,7 +278,8 @@ export async function renderClipPreview(r: Renderer, clip: ClipRequest, stemFile
             ...(start ? {startFrame: remote, extraUploads: [{from: join(r.projectDir, start), to: remote!}]} : {}),
         })
     })
-    await r.savePreviewRecord(clip, target, seed)
+    // what it was made from, as a clip's own render records it: the page says whether the preview still is the plan's (#1117)
+    await r.savePreviewRecord(clip, target, seed, specId(clipSpec(clip, r.projectDir, r.config)))
 }
 
 /** The picture a preview starts on: the last frame of the clip before as the preview shows it - its preview, else its render. */
@@ -300,7 +301,7 @@ export async function previewStart(r: Renderer, id: string): Promise<string | un
     return frame
 }
 
-export async function savePreviewRecord(r: Renderer, clip: {id: string; frames: number; startsFrom?: string}, target: string, seed: number) {
+export async function savePreviewRecord(r: Renderer, clip: {id: string; frames: number; startsFrom?: string}, target: string, seed: number, request?: string) {
     const rendered = await probeVideo(target)
     await Bun.write(
         `${target}.json`,
@@ -309,6 +310,7 @@ export async function savePreviewRecord(r: Renderer, clip: {id: string; frames: 
                 preview: true,
                 workflow: r.config.videoWorkflow,
                 seed,
+                ...(request ? {fingerprint: request} : {}),
                 ...r.config.preview,
                 ...(clip.startsFrom ? {approximate: true, startsFrom: clip.startsFrom} : {}),
                 frames: clip.frames,

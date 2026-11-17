@@ -18,7 +18,13 @@ const viewer = useViewer()
 const c = computed(() => props.clip)
 const files = computed((): Fact[] => [
   {name: 'Video', value: c.value.video?.file ?? 'not rendered', key: 'video'},
-  {name: 'Preview', value: c.value.preview?.file, key: 'preview'},
+  {
+    name: 'Preview',
+    value: c.value.preview
+      ? `${c.value.preview.file}${fresh.value.previews?.[c.value.id] === 'stale' ? ' - of an older plan' : fresh.value.previews?.[c.value.id] === 'current' ? ' - of the plan now' : ''}`
+      : undefined,
+    key: 'preview',
+  },
   {name: 'Workflow', value: c.value.video?.workflow},
   {name: 'Size', value: c.value.video?.size},
   {name: 'Seed', value: c.value.video?.seed === undefined ? undefined : String(c.value.video.seed)},
