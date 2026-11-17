@@ -249,7 +249,9 @@ export async function clipJob(
 export async function renderClipPreview(r: Renderer, clip: ClipRequest, stemFiles: Record<string, string>) {
     const file = `previews/${clip.id}.mp4`
     const target = join(r.projectDir, file)
-    if (existsSync(target)) return log.step('Exists', styles.muted(file))
+    // what it is made from, as a clip's own render records it: one of an older plan is made again with --refresh=videos (#1117)
+    const request = specId(clipSpec(clip, r.projectDir, r.config))
+    if (existsSync(target) && !r.staleFile('clips', file, request, [file, `${file}.json`])) return log.step('Exists', styles.muted(file))
     const missing = clip.assets.pictures.filter(p => p.kind !== 'frame' && !existsSync(join(r.projectDir, p.file)))
     if (missing.length) return log.warn(`${clip.id}: no preview - missing pictures: ${missing.map(p => p.file).join(', ')}`)
     if (!(stemFiles.song && existsSync(stemFiles.song))) return log.warn(`${clip.id}: no preview - missing the full song`)
@@ -279,7 +281,7 @@ export async function renderClipPreview(r: Renderer, clip: ClipRequest, stemFile
         })
     })
     // what it was made from, as a clip's own render records it: the page says whether the preview still is the plan's (#1117)
-    await r.savePreviewRecord(clip, target, seed, specId(clipSpec(clip, r.projectDir, r.config)))
+    await r.savePreviewRecord(clip, target, seed, request)
 }
 
 /** The picture a preview starts on: the last frame of the clip before as the preview shows it - its preview, else its render. */
