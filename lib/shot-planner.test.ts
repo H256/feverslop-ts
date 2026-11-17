@@ -89,6 +89,11 @@ describe('people walk forward, not backwards (#412)', () => {
         expect(instructions).toContain('is fixed to the camera of its first view')
         expect(blockingPrompt(context, beat, undefined, undefined).instructions).toContain('is fixed to the camera of its first view')
     })
+    // the blocking is "fixed, keep to it" for the shots: a drummer's start "her mouth open as she sings through the blows" came from a
+    // beat's summary and went into every shot of the beat, sung from the first frame (tides-261115, a test re-plan)
+    test('the start and the end of the blocking never have an open mouth', () => {
+        expect(blockingPrompt(context, beat, undefined, undefined).instructions).toContain('never an open mouth, a dropped jaw, a shout or a scream')
+    })
 })
 
 describe('the planner sees what the pictures show', () => {
