@@ -594,3 +594,15 @@ test('a save made from an older read is refused, nothing another tab saved is re
     await setDirectionEdits(target, {edits: []})
     await setDirectionEdits(target, {edits: [], basedOn: staleEdits})
 })
+test('a shot handed back with the id and times it was listed with is the same shot', async () => {
+    const {target} = fixture()
+    await setDirectionRules(target, {rules: [{id: 'r', text: 'Walk gently.', scope: {kind: 'global'}, characterId: 'a'}]})
+    await previewDirection(target, async o => {
+        const r = answer(JSON.parse(o.input))
+        r.changes[0].after = {id: r.changes[0].shotId, groupId: 'x', start: 1, end: 2, ruleIds: ['r'], ...r.changes[0].after}
+        return r
+    })
+    const after = readDirection(target).proposal!.changes[0]!.after
+    expect(after.action).toBe('walk gently')
+    expect(after.id).toBeUndefined()
+})
