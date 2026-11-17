@@ -1,4 +1,4 @@
-import type {Project} from '../project.ts'
+import {type Project, shotActivityOf} from '../project.ts'
 import {buildClipRequests, shotsOfClips} from '../compose.ts'
 import {defaults, languageName, type ProjectConfig} from '../config.ts'
 import {splitFightSlots} from '../music.ts'
@@ -23,7 +23,7 @@ export function beatClips(data: Project, options: Partial<ProjectConfig> = {}): 
         beats: data.beats,
         characters: data.cast.characters,
         music: data.music,
-        propActivity: data.propActivity,
+        propActivity: shotActivityOf(data),
         shotMoments: data.shotMoments,
     })
 }
@@ -52,7 +52,7 @@ export function musicShots(data: Project, options: Partial<ProjectConfig> = {}):
             singing: data.singing,
             lyricsTiming: data.lyricsTiming,
             shotMoments: data.shotMoments,
-            propActivity: data.propActivity,
+            propActivity: shotActivityOf(data),
             stemsAvailable: !!data.stems,
             continuity: config.continuity,
             pinStartFrame: config.pinStartFrame || config.contextFrames > 0,
@@ -99,7 +99,7 @@ export const musicContext = (data: Project) => ({
     characterLooks: data.characterLooks,
     locationLooks: data.locationLooks,
     locationLayouts: data.locationLayouts,
-    propActivity: data.propActivity,
+    propActivity: shotActivityOf(data),
     music: data.music,
     blocking: data.blocking,
     timeline: data.timeline,

@@ -225,6 +225,9 @@ export type Project = {
     timeline?: Timeline
     mapping?: Assignment[]
     propActivity?: PropActivity
+    // the activity the shots and the clips are cut and planned by (shotActivityOf): measured as the shots were planned - the step
+    // propActivity also shapes the story beats, and redoing it for a better measure made the beats again (#1115)
+    shotActivity?: PropActivity
     // beatId -> the floor plan of the beat and where everybody starts and ends (step 11a), each beat from the end of the one
     // before - the shots are planned from it. A beat whose blocking stayed unusable has no entry: its shots plan their own staging
     blocking?: Record<string, Blocking>
@@ -265,10 +268,22 @@ const dependsOn: Record<StepName, StepName[]> = {
     mapping: ['beats', 'timeline'],
     // the bar length (music.bpm) is the window the activity is averaged over
     propActivity: ['stems', 'instrumentStems', 'cast', 'music'],
+    shotActivity: ['stems', 'instrumentStems', 'cast', 'music'],
     // the floor plan of each beat, in the place and with the people the pictures show (the clips of a fight beat: timeline, mapping)
     blocking: ['beats', 'timeline', 'mapping', 'characterDescriptions', 'locationDescriptions', 'locationLayouts'],
     // the planner stages in the place and with the people the pictures show
-    shotMoments: ['blocking', 'beats', 'timeline', 'mapping', 'propActivity', 'singing', 'characterDescriptions', 'locationDescriptions', 'locationLayouts'],
+    shotMoments: [
+        'blocking',
+        'beats',
+        'timeline',
+        'mapping',
+        'propActivity',
+        'shotActivity',
+        'singing',
+        'characterDescriptions',
+        'locationDescriptions',
+        'locationLayouts',
+    ],
     shotViews: ['shotMoments'],
 }
 
@@ -521,3 +536,9 @@ export class ProjectStore {
         )
     }
 }
+
+/**
+ * The activity the shots of a project are cut and planned by: its own measure (shotActivity) when the shots were planned with it,
+ * else the one the beats were made from - a project planned before the step keeps its cuts until its shots are planned again.
+ */
+export const shotActivityOf = (data: Pick<Project, 'propActivity' | 'shotActivity'>) => data.shotActivity ?? data.propActivity

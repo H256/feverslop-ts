@@ -68,6 +68,9 @@ export function stepUsed(step: StepName, dir: string, data: Project, config: Pro
             return config.alignLyrics && (['guitar', 'piano'] as const).some(name => props.has(name) && !data.stems?.[name])
         case 'propActivity':
             return config.alignLyrics && props.size > 0
+        // made when the shots are planned: shots planned before the step existed keep the activity they were cut by
+        case 'shotActivity':
+            return config.alignLyrics && props.size > 0 && (data.shotActivity !== undefined || data.shotMoments === undefined)
         case 'props':
             return config.propPictures && (data.cast?.characters ?? []).some(c => c.prop)
         case 'singing':

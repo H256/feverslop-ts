@@ -45,7 +45,7 @@ export const STAGE_STEPS: Record<ProjectKind, Record<PlanStage, string[]>> = {
       'locationAnchors',
       'locationLayouts',
     ],
-    plan: ['beats', 'timeline', 'mapping', 'propActivity', 'blocking', 'shotMoments', 'shotViews'],
+    plan: ['beats', 'timeline', 'mapping', 'propActivity', 'shotActivity', 'blocking', 'shotMoments', 'shotViews'],
   },
   film: {
     story: ['brief', 'outline', 'screenplay', 'scriptNotes', 'scriptFixes'],

@@ -114,7 +114,7 @@ export function newId(name: string, taken: Set<string>, fallback: string) {
 export function droppedByCast(kind: EditorKind, before: Data, after: Data): string[] {
     if (kind === 'film') return filmBuiltOn(['cast'], before as FilmProject)
     const stems = (data: Data) => [...new Set(((data as Project).cast?.characters ?? []).map(c => c.propStem).filter(Boolean))].sort().join(',')
-    const keep: StepName[] = stems(before) === stems(after) ? ['instrumentStems', 'propActivity'] : []
+    const keep: StepName[] = stems(before) === stems(after) ? ['instrumentStems', 'propActivity', 'shotActivity'] : []
     return builtOn(['cast'], before as Project).filter(step => !keep.includes(step))
 }
 

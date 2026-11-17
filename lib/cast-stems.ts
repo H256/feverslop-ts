@@ -77,7 +77,7 @@ export function withStems<T extends Extracted>(characters: T[], layers: {name: s
  * layers, and the shot plans built on the activity. The looks, the beats, the timeline and the places stay - the layer is no part of
  * how a character looks, and the language model need not tell the story again.
  */
-export const DROPPED_BY_LAYERS = ['instrumentStems', 'propActivity', 'shotMoments', 'shotViews']
+export const DROPPED_BY_LAYERS = ['instrumentStems', 'propActivity', 'shotActivity', 'shotMoments', 'shotViews']
 
 /** Gives the layers an answer names to those who were asked, in the cast of a planned project (#1085), and drops what is built on them. */
 export function giveLayers(

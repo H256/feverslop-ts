@@ -5,7 +5,7 @@ import type {ProjectConfig} from './config.ts'
 import {languageName} from './config.ts'
 import {formatTimestamp, frameAt, round} from './frames.ts'
 import {slotVocals} from './lyrics.ts'
-import type {Project, SlotVocal, StoryBeat, TimedWord} from './project.ts'
+import {type Project, shotActivityOf, type SlotVocal, type StoryBeat, type TimedWord} from './project.ts'
 import {fileFingerprint} from './provenance.ts'
 import {barCuts} from './shot-cuts.ts'
 import {splitAtCuts, splitBySinger} from './singing-parts.ts'
@@ -96,7 +96,7 @@ function cutsOfClips(data: Project): Map<string, number[]> {
                 beats: data.beats,
                 characters: data.cast.characters,
                 music,
-                propActivity: data.propActivity,
+                propActivity: shotActivityOf(data),
                 shotMoments: data.shotMoments,
             })
         } catch {

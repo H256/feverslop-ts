@@ -80,7 +80,7 @@ export const commandHelp: Record<string, Help> = {
             ['--debug-audio', 'Also cut one listenable wav per track and clip into output/audio'],
         ],
         steps: [
-            ['Song', 'songStyle, music, stems, instrumentStems, transcript, lyricsTiming, propActivity'],
+            ['Song', 'songStyle, music, stems, instrumentStems, transcript, lyricsTiming, propActivity, shotActivity'],
             ['Story', 'story, summary, cast, props (propPictures), singing, beats'],
             [
                 'Look',
