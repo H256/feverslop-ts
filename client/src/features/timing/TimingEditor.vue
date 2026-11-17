@@ -390,6 +390,9 @@ defineExpose({focus: () => editor.value?.focus({preventScroll: true}), playLine}
   <div class="btn-row">
     <label><input v-model="snap" type="checkbox" /> Snap <span class="muted">(Alt bypasses)</span></label
     ><span class="muted">Shift-click selects words; Shift-drag the lower waveform selects a range.</span><span v-if="error" role="alert">{{ error }}</span>
+    <!-- the page puts its undo and zoom here, in the free part of the row -->
+    <div class="spacer" />
+    <slot />
   </div>
   <div ref="editor" class="tedit" tabindex="0" @keydown="key" @wheel="wheel">
     <canvas ref="canvas" class="twave" @click="playFrom" @pointerdown="selectRange" />

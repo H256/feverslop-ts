@@ -66,7 +66,8 @@ defineExpose({main})
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding-bottom: 16px;
+  padding-top: 10px;
+  padding-bottom: 12px;
   min-height: 0;
 }
 .ui-split-sticky > .ui-split-side {

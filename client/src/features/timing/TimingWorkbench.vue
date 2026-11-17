@@ -489,7 +489,7 @@ onMounted(() => {
 
 <template>
   <SplitLayout full pinned :folded="sideFolded" :inert="saving.pending.value" :aria-busy="saving.pending.value" @keydown.capture="timingTools?.key($event)">
-    <PageBar title="When the lyrics are sung"
+    <PageBar class="tw-bar" title="When the lyrics are sung"
       ><SegmentedControl v-model="filter" :options="FILTERS" label="Lines shown" /><button
         class="btn mini"
         :aria-expanded="!sideFolded"
@@ -500,48 +500,52 @@ onMounted(() => {
       </button></PageBar
     >
     <div class="tw-top">
-      <details class="timing-refinement" :open="refinement?.passage ? true : undefined">
-        <summary>Refine timing from vocals</summary>
-        <p>Align the existing lyrics to phonemes. Hand edits and anchors stay. Check the proposal before applying; affected shot plans will need rebuilding.</p>
-        <div class="btn-row">
-          <label
-            >Lyrics language
-            <select v-model="refinementLanguage" :disabled="refining.pending.value">
-              <option value="de">Deutsch</option>
-              <option value="en">English</option>
-              <option value="fr">Français</option>
-            </select></label
-          >
-          <button class="btn" :disabled="refining.pending.value || draft.edits.value.size > 0" @click="prepareRefinement">
-            {{ refining.pending.value ? 'Aligning vocals…' : 'Prepare refinement' }}
-          </button>
-          <span v-if="draft.edits.value.size" class="muted">Save or discard your edits first.</span>
-        </div>
-        <p v-if="refining.pending.value" role="status">
-          This can take several minutes. The first run downloads the local model. The proposal is not applied automatically.
-        </p>
-        <template v-if="refinement">
-          <p v-if="refinement.passage?.mode === 'line-window'">
-            Words within block {{ refinement.passage.line + 1 }}: {{ refinement.passage.start.toFixed(3) }}–{{ refinement.passage.end.toFixed(3) }} s.
-            Neighbours stay unchanged. Listen before applying the new word boundaries.
-          </p>
-          <p v-else-if="refinement.passage">
-            Passage only: lines {{ refinement.passage.targets.map(n => n + 1).join(', ') }}. Apply the proposed changes together. This also confirms line
-            {{ refinement.passage.line + 1 }} is sung; other lines stay unchanged.
-          </p>
-          <p v-if="refinement.logFile" class="muted">
-            Alignment log: <code>{{ refinement.logFile }}</code>
-          </p>
+      <div class="tw-folds">
+        <details class="timing-refinement" :open="refinement?.passage ? true : undefined">
+          <summary>Refine timing from vocals</summary>
           <p>
-            {{ refinement.entries.filter(e => e.status === 'refined').length }} refined ·
-            {{ refinement.entries.filter(e => e.status === 'review' || e.status === 'omit').length }} need manual review.
-            <template v-if="!refinement.passage">Refinement keeps lines sung or left out as they are.</template>
-            A missing transcript match does not mean a line was not sung.
+            Align the existing lyrics to phonemes. Hand edits and anchors stay. Check the proposal before applying; affected shot plans will need rebuilding.
           </p>
-          <p class="muted">The proposal is on the timeline: each line shows it under its words. Take or drop it there, line by line.</p>
-        </template>
-      </details>
-      <LipsyncPreview :view="view" :dirty="draft.edits.value.size > 0" />
+          <div class="btn-row">
+            <label
+              >Lyrics language
+              <select v-model="refinementLanguage" :disabled="refining.pending.value">
+                <option value="de">Deutsch</option>
+                <option value="en">English</option>
+                <option value="fr">Français</option>
+              </select></label
+            >
+            <button class="btn" :disabled="refining.pending.value || draft.edits.value.size > 0" @click="prepareRefinement">
+              {{ refining.pending.value ? 'Aligning vocals…' : 'Prepare refinement' }}
+            </button>
+            <span v-if="draft.edits.value.size" class="muted">Save or discard your edits first.</span>
+          </div>
+          <p v-if="refining.pending.value" role="status">
+            This can take several minutes. The first run downloads the local model. The proposal is not applied automatically.
+          </p>
+          <template v-if="refinement">
+            <p v-if="refinement.passage?.mode === 'line-window'">
+              Words within block {{ refinement.passage.line + 1 }}: {{ refinement.passage.start.toFixed(3) }}–{{ refinement.passage.end.toFixed(3) }} s.
+              Neighbours stay unchanged. Listen before applying the new word boundaries.
+            </p>
+            <p v-else-if="refinement.passage">
+              Passage only: lines {{ refinement.passage.targets.map(n => n + 1).join(', ') }}. Apply the proposed changes together. This also confirms line
+              {{ refinement.passage.line + 1 }} is sung; other lines stay unchanged.
+            </p>
+            <p v-if="refinement.logFile" class="muted">
+              Alignment log: <code>{{ refinement.logFile }}</code>
+            </p>
+            <p>
+              {{ refinement.entries.filter(e => e.status === 'refined').length }} refined ·
+              {{ refinement.entries.filter(e => e.status === 'review' || e.status === 'omit').length }} need manual review.
+              <template v-if="!refinement.passage">Refinement keeps lines sung or left out as they are.</template>
+              A missing transcript match does not mean a line was not sung.
+            </p>
+            <p class="muted">The proposal is on the timeline: each line shows it under its words. Take or drop it there, line by line.</p>
+          </template>
+        </details>
+        <LipsyncPreview :view="view" :dirty="draft.edits.value.size > 0" />
+      </div>
       <div class="tedit-wrap">
         <div v-if="refinement" class="tw-proposal" role="region" aria-label="Refinement proposal">
           <div class="tw-why">
@@ -730,14 +734,6 @@ onMounted(() => {
               </button>
             </div>
           </details>
-          <span class="tw-grp">
-            <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()"><AppIcon name="undo" />Undo</button>
-            <button class="btn" :disabled="!draft.future.length" title="Ctrl+Shift+Z" @click="draft.redo()"><AppIcon name="redo" />Redo</button>
-          </span>
-          <span class="tw-grp">
-            <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(0.8)">+</button>
-            <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(1.25)">−</button>
-          </span>
         </div>
         <TimingEditor
           ref="editor"
@@ -753,7 +749,16 @@ onMounted(() => {
           @take="takeProposal()"
           @drop="dropProposal"
           @proposal="nextProposal"
-        />
+        >
+          <span class="tw-grp">
+            <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()"><AppIcon name="undo" />Undo</button>
+            <button class="btn" :disabled="!draft.future.length" title="Ctrl+Shift+Z" @click="draft.redo()"><AppIcon name="redo" />Redo</button>
+          </span>
+          <span class="tw-grp">
+            <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(0.8)">+</button>
+            <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(1.25)">−</button>
+          </span>
+        </TimingEditor>
         <TimingTools ref="timingTools" :draft="draft" :view="view" :player="player" />
         <div>
           <CalloutBox v-if="draft.line.value && draft.crossing(draft.line.value).length" kind="warn" as="div">
@@ -822,6 +827,43 @@ onMounted(() => {
 }
 .tw-top .tedit-wrap {
   top: 0;
+}
+/* a tighter page (as the buttons of the bar above it): small buttons, closer rows, the folded parts side by side */
+.tw-bar {
+  margin-bottom: 6px;
+}
+.tw-top :deep(.btn) {
+  padding: 2px 8px;
+  font-size: var(--text-s);
+}
+.tw-top :deep(.btn-row) {
+  gap: var(--space-1) var(--space-2);
+}
+.tw-top .tedit-head {
+  margin-bottom: 4px;
+}
+.tw-top .tw-grp {
+  gap: var(--space-1);
+  padding-left: 8px;
+}
+.tw-folds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0 var(--space-5);
+}
+.tw-folds > :deep(details) {
+  flex: 0 1 auto;
+}
+.tw-folds > :deep(details[open]) {
+  flex: 1 1 100%;
+}
+.tw-folds :deep(summary) {
+  padding: 3px 0;
+  font-weight: 400;
+}
+.tw-folds > :deep(.lp) {
+  margin: 0;
 }
 .tw-list {
   flex: 1 1 0;
