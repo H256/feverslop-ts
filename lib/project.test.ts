@@ -93,6 +93,29 @@ describe('the shots of chosen beats planned again (#762)', () => {
     })
 })
 
+describe('the activity of the shots, a step of its own (#1115)', () => {
+    test('redoing it plans the shots again and keeps the beats, the group members and the blocking', () => {
+        const project = store({
+            propActivity: {},
+            shotActivity: {},
+            beats: [],
+            characterLookVariants: {},
+            mapping: [],
+            blocking: {},
+            shotMoments: {},
+            shotViews: {},
+        })
+        expect(project.redoneBy(['shotActivity'])).toEqual(['shotActivity', 'shotMoments', 'shotViews'])
+    })
+    test('the shots read their own measure, and a project planned before it the one of the beats', async () => {
+        const {shotActivityOf} = await import('./project.ts')
+        expect(shotActivityOf({propActivity: {drums: [{start: 0, end: 1}]}})).toEqual({drums: [{start: 0, end: 1}]})
+        expect(shotActivityOf({propActivity: {drums: [{start: 0, end: 1}]}, shotActivity: {drums: [{start: 0, end: 0.8}]}})).toEqual({
+            drums: [{start: 0, end: 0.8}],
+        })
+    })
+})
+
 describe('what a redo dropped stays at hand for the run', () => {
     test('a redone step and the steps built on it are kept in before(); a step that had no result is not', () => {
         const project = store({beats: [{id: 'b1'}], characterLookVariants: {crowd: ['a', 'b']}, characterDescriptionVariants: {crowd: ['x', 'y']}})
