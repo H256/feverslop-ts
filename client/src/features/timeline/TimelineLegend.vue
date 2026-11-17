@@ -141,7 +141,12 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
       >
         <AppIcon name="preview" />Preview missing ({{ noPreview.length }})
       </button>
-      <button v-if="oldPreview.length" class="b-finish" title="Cheap renders again of the clips whose preview was made from an older plan. In the terminal: --render=videos --preview --refresh=videos" @click="previewOld">
+      <button
+        v-if="oldPreview.length"
+        class="b-finish"
+        title="Cheap renders again of the clips whose preview was made from an older plan. In the terminal: --render=videos --preview --refresh=videos"
+        @click="previewOld"
+      >
         <AppIcon name="preview" />Preview stale ({{ oldPreview.length }})
       </button>
       <button class="b-finish" title="Cheap renders of all clips into previews/" @click="allClips"><AppIcon name="preview" />Preview all</button>
