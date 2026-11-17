@@ -295,6 +295,10 @@ describe('the music of a beat in the planner prompt', () => {
         expect(instructions).toContain('a guitar is struck with a pick held between the thumb and the first finger')
         expect(instructions).toContain('Whoever does not sing in a shot still acts with the whole face and body')
         expect(instructions).toContain('Only the mouth stays closed in every field')
+        // a drummer's "bared-teeth snarl" and an audience with "their mouths open" came out screaming (tides-261115, slot-019/024/031)
+        expect(instructions).not.toContain('teeth bared')
+        expect(instructions).toContain('never a dropped jaw, an open mouth, bared teeth, a snarl')
+        expect(instructions).toContain('every member of a crowd or a group too')
         expect(instructions).toContain('"single hits with silence between" - "playing" is then the form of one hit')
     })
 
@@ -349,6 +353,16 @@ describe('musicStretches - the music along the way for the beats', () => {
         expect(band).toContain(rule)
         expect(singers).not.toContain(rule)
         expect(singers).toContain('Empty array if nothing changes.')
+    })
+
+    // "{Sera}'s violet alloy armor is now pure white": the story's look of the costume, not the picture's, went into every later clip
+    // as continuity (tides-261115, slot-040)
+    test('a fact about what a character wears names the change only, never the look before', () => {
+        const args = {durationSec: 60, beatCount: 2, locations: [{id: 'hall', name: 'Hall'}], lyrics: '', story: 'They play.', performance: ''}
+        const input = beatsPrompt({...args, characters: [{id: 'kael', name: 'Kael', role: 'singer'}]}).input
+        expect(input).toContain('names only what the story changes on it')
+        expect(input).toContain('never its colors, material or look before')
+        expect(input).toContain('Never describe how a character looks')
     })
 })
 

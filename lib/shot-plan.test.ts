@@ -39,6 +39,14 @@ describe('readBeatPlan', () => {
         expect(r.plan.shots[0]!.people!.cael!.frame).toBe('left')
         expect(r.plan.ends).toEqual({cael: 'stands at the shaft'})
     })
+    // "rest: no" went into the clip as "<Subject 2> is in it as well: no." (tides-261115, slot-019)
+    test('a "rest" answered with the empty word of the format is no rest', () => {
+        for (const rest of ['no', 'None.', '"nobody"', '-'])
+            expect(readBeatPlan({shots: [{action: '{Cael} waits', characters: ['Cael'], rest}]}, beat, [cael, maren], 1)!.plan.shots[0]!.rest).toBeUndefined()
+        expect(readBeatPlan({shots: [{action: '{Cael} waits', characters: ['Cael'], rest: 'no one moves'}]}, beat, [cael, maren], 1)!.plan.shots[0]!.rest).toBe(
+            'no one moves',
+        )
+    })
     test('asks again for an unknown name and a stranger in the text; a singer heard off screen is a note, not a question', () => {
         const r = readBeatPlan({shots: [{action: '{Maren} swings', characters: ['Cael', 'Nobody']}]}, beat, [cael, maren], 1, {
             singerIds: ['cael'],
