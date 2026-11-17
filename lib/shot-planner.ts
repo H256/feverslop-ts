@@ -4,7 +4,7 @@ import {type BeatSinging, isContinuous} from './compose.ts'
 import type {ProjectConfig} from './config.ts'
 import type {AskOptions} from './llm.ts'
 import {formatTime} from './frames.ts'
-import {MAX_FOREGROUND, SHOT_ROOM, type ShotProps} from './shot-plan.ts'
+import {MAX_FOREGROUND, SHOT_ROOM, type ShotHow, type ShotProps} from './shot-plan.ts'
 
 // a limit of lib/shot-plan.ts as the prompt says it
 const inWords = (n: number) => ['none', 'one', 'two', 'three', 'four', 'five', 'six'][n] ?? String(n)
@@ -162,7 +162,7 @@ const PLAN_RULES: {rule: string; when?: (b: BeatNeeds) => boolean}[] = [
         when: b => b.sings || b.plays,
     },
     {
-        rule: `Everybody of a shot's "plays" who is in the shot plays their instrument through the whole shot, and their "playing" says how: what the hands (or what the cast gives the player instead) do on that instrument in this shot, as ONE calm, steady action in the way a player of this song's genre plays this instrument at this loudness (the film look and the loudness of the music are in the input) - a short, tight, repeated stroke near the bridge with the palm resting on the strings, a held chord, a slow slide up the neck, a steady pluck - never a fast run, a sweep, an arpeggio, a flurry or "raking" across the strings: the video model cannot resolve fast hands and draws them as constant strumming. Where an instrument is heard only in single hits with silence between, "playing" is the form of one hit: one tight strike, the hand damps the strings or lifts off, stillness until the next hit - and the shot may leave the hands out of the frame (the face, the shoulders, the place reacting). The instrument is in the player's hands from the first frame of any shot that shows them with it: it is never lifted, swung up, picked up or drawn in the shot, and nobody gets ready to play - the player stands with it already in position. Their "motion" is the rest of the body playing along (nodding with the beat, leaning into a riff, turning to another player, stepping forward, lifting it at a peak) and never sets the instrument aside, rests it, stills the hands or takes them off it. A time after a name in "plays" ("Kael (0.0-2.2 s)") is when in the shot the instrument is heard, in seconds from the shot's start: the player plays then only, and "motion" and "action" show the change the way a player makes it - stopping (lets the last chord ring out and lays the hand flat on the strings, lifts the sticks off the drums), holding still while it is silent (the hands quiet on the instrument, a nod to the count, a look to the others), coming back in (strikes the first chord again, brings the sticks down) - with its time ("from 2.2 s"). A word after the time ("Kael (0.0-2.2 s; single hits with silence between)") says how the instrument is heard in that shot: "single hits with silence between" - "playing" is then the form of one hit and the shot may leave the hands out of the frame; "leads" - the instrument is above its usual level while the others are not: it carries the part, and the others play on behind it. Everybody else with an instrument is "playing: no" and does something else with it or with their hands, the instrument silent.`,
+        rule: `Everybody of a shot's "plays" who is in the shot plays their instrument through the whole shot, and their "playing" says how: what the hands (or what the cast gives the player instead) do on that instrument in this shot, as ONE calm, steady action in the way a player of this song's genre plays this instrument at this loudness (the film look and the loudness of the music are in the input) - a short, tight, repeated stroke near the bridge with the palm resting on the strings, a held chord, a slow slide up the neck, a steady pluck - a guitar is struck with a pick held between the thumb and the first finger of the striking hand, never with an open, outstretched hand stroking the strings - never a fast run, a sweep, an arpeggio, a flurry or "raking" across the strings: the video model cannot resolve fast hands and draws them as constant strumming. Where an instrument is heard only in single hits with silence between, "playing" is the form of one hit: one tight strike, the hand damps the strings or lifts off, stillness until the next hit - and the shot may leave the hands out of the frame (the face, the shoulders, the place reacting). The instrument is in the player's hands from the first frame of any shot that shows them with it: it is never lifted, swung up, picked up or drawn in the shot, and nobody gets ready to play - the player stands with it already in position. Their "motion" is the rest of the body playing along (nodding with the beat, leaning into a riff, turning to another player, stepping forward, lifting it at a peak) and never sets the instrument aside, rests it, stills the hands or takes them off it. A time after a name in "plays" ("Kael (0.0-2.2 s)") is when in the shot the instrument is heard, in seconds from the shot's start: the player plays then only, and "motion" and "action" show the change the way a player makes it - stopping (lets the last chord ring out and lays the hand flat on the strings, lifts the sticks off the drums), holding still while it is silent (the hands quiet on the instrument, a nod to the count, a look to the others), coming back in (strikes the first chord again, brings the sticks down) - with its time ("from 2.2 s"). Words after the name ("Kael (plays through)", "Kael (0.0-2.2 s; single hits with silence between)") say how the instrument is heard in that shot: "plays through" - it sounds without a pause from the first frame to the last: the repeated stroke goes on all through the shot, the hand never stops, rests or goes still, no single hit and no stillness; "single hits with silence between" - "playing" is then the form of one hit and the shot may leave the hands out of the frame; "quiet, under the others" - it is heard softly behind the rest: a small, steady motion of the hands, the shot is about someone else or the player's face; "leads" - the instrument is above its usual level while the others are not: it carries the part (a solo is this), and the others play on behind it. Everybody else with an instrument is "playing: no" and does something else with it or with their hands, the instrument silent.`,
         when: b => b.plays,
     },
     {
@@ -182,10 +182,10 @@ const PLAN_RULES: {rule: string; when?: (b: BeatNeeds) => boolean}[] = [
         when: b => b.props,
     },
     {
-        rule: `Only the people in a shot's "sings" sing in it: "singing: yes", into the microphone if they have one. Everybody else is "singing: no" and makes no sound with the mouth - in the "action" and "rest" too: no harmonies, no joining in, no crying out, calling or humming, even where the beat's "summary" says they sing together. A shot with nobody in "sings" is purely instrumental: the singers do something silent in it.`,
+        rule: `Only the people in a shot's "sings" sing in it: "singing: yes", into the microphone if they have one. Everybody else is "singing: no" and makes no sound with the mouth - in the "action" and "rest" too: no harmonies, no joining in, no crying out, calling or humming, even where the beat's "summary" says they sing together. A shot with nobody in "sings" is purely instrumental: the singers do something silent in it. Whoever does not sing in a shot still acts with the whole face and body - every emotion the moment brings, strong and changing from shot to shot: eyes narrowing or going wide, brows drawn together or raised, a clenched jaw, a grimace, a grin with the lips closed or the teeth bared, the head thrown back or bowed, the shoulders and the body with the music. Only the mouth stays closed in every field: never a dropped jaw, an open mouth, a scream, a roar or a shout - the video model draws an open mouth in a song as singing.`,
     },
     {
-        rule: `"singing: yes" is all a shot says about the singing. "state", "frame", "motion", "action" and "rest" never describe the singing itself - no "sings", "singing", "mouth open on the words", "jaw working through the line", "lips shaping the lyrics": the words are put in the shot later, at the time the song sings them, often a while after the cut, and a singing mouth written into these fields is sung from the shot's first frame, before the words come. What the face shows is free - a clenched jaw, a smile, a laugh with the mouth open, a shout.`,
+        rule: `"singing: yes" is all a shot says about the singing. "state", "frame", "motion", "action" and "rest" never describe the singing itself - no "sings", "singing", "mouth open on the words", "jaw working through the line", "lips shaping the lyrics": the words are put in the shot later, at the time the song sings them, often a while after the cut, and a singing mouth written into these fields is sung from the shot's first frame, before the words come. What the face of a singer shows is free - a clenched jaw, a smile, a laugh with the mouth open, a shout.`,
         when: b => b.sings,
     },
 ]
@@ -369,6 +369,13 @@ export function planPrompt(
     const nameOf = (id: string) => cast.find(c => c.id === id)?.name ?? id
     // per shot of the beat, who is heard singing and whose instrument is heard - right in the shot, not as flag lists of the
     // whole beat next to it: the planner wrote a guitar "resting on his thigh" with every flag of the beat true
+    // the words of "plays" for how the instrument is heard in a shot (ShotHow) - a still one is not in "plays" at all
+    const HOW_WORDS: Record<ShotHow['articulation'], string | undefined> = {
+        sustained: 'plays through',
+        hits: 'single hits with silence between',
+        partial: undefined,
+        still: undefined,
+    }
     const musicOf = (b: StoryBeat) => {
         const props = beatProps?.[b.id] ?? []
         const singing = beatSinging[b.id]
@@ -385,7 +392,8 @@ export function planPrompt(
                     // when it is heard, and how: "Kael (0.0-2.2 s; single hits with silence between; leads)" (#1024)
                     const said = [
                         spans?.map(s => `${s.start.toFixed(1)}-${s.end.toFixed(1)} s`).join(', '),
-                        how?.articulation === 'hits' ? 'single hits with silence between' : undefined,
+                        how ? HOW_WORDS[how.articulation] : undefined,
+                        how?.quiet ? 'quiet, under the others' : undefined,
                         how?.leads ? 'leads' : undefined,
                     ].filter(Boolean)
                     return said.length ? `${nameOf(p.characterId)} (${said.join('; ')})` : nameOf(p.characterId)

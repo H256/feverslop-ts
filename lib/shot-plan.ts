@@ -88,8 +88,8 @@ export type ShotSingers = {singerIds: string[]; singingPerShot: boolean[]; singe
  * Whose instrument is heard in which shot of a beat. `heardPerShot[j]`: when in shot j it is heard, in seconds of the shot - only
  * where that is not (nearly) the whole shot (#968).
  */
-/** How the instrument of a player is heard in a shot, from its stem (lib/instrument-parts.ts): single hits with silence between, and whether it carries the part (#1024). */
-export type ShotHow = {articulation: Articulation; leads?: boolean}
+/** How the instrument of a player is heard in a shot, from its stem (lib/instrument-parts.ts): through the shot, in single hits with silence between or for part of it, quietly under the others, and whether it carries the part (#1024). */
+export type ShotHow = {articulation: Articulation; leads?: boolean; quiet?: boolean}
 export type ShotProps = {
     characterId: string
     prop: string

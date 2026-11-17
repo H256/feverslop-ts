@@ -197,7 +197,8 @@ export function framePower(samples: Float32Array, sampleRate: number, hopSec: nu
 /**
  * The stretches where the per-frame power, averaged over one bar around each frame, lies above the stem's own threshold
  * (see stemActivity). Gaps up to a bar are bridged (a break of a beat or two is still the same playing), stretches
- * shorter than half a bar are dropped (a single hit or bleed spike). The averaging blurs each edge by up to half a bar.
+ * shorter than half a bar are dropped (a single hit or bleed spike). The edges lie on the first and the last sound of a
+ * stretch, not half a bar into the silence the averaging would blur them to.
  */
 export function activityRanges(power: number[], hopSec: number, barSec: number): {start: number; end: number}[] {
     if (!power.length) return []
@@ -212,15 +213,44 @@ export function activityRanges(power: number[], hopSec: number, barSec: number):
     const loud = [...level].sort((a, b) => a - b)[Math.floor(0.95 * (level.length - 1))]!
     const threshold = Math.max(loud - ACTIVITY_MARGIN_DB, ACTIVITY_FLOOR_DB)
 
-    const ranges: {start: number; end: number}[] = []
+    // the frames whose bar average is above the threshold, as runs of frames
+    const runs: {from: number; to: number}[] = []
     level.forEach((db, i) => {
         if (db <= threshold) return
-        const last = ranges.at(-1)
-        if (last && i * hopSec - last.end <= barSec) last.end = (i + 1) * hopSec
-        else ranges.push({start: i * hopSec, end: (i + 1) * hopSec})
+        const last = runs.at(-1)
+        if (last && last.to === i - 1) last.to = i
+        else runs.push({from: i, to: i})
     })
+    // the bar average leaks up to half a bar of playing into the silence on each side: in tides' bridge the band was "heard"
+    // for a second into a sung stretch with nothing else in it, and played there. So each edge is drawn in to the first and
+    // the last short window that is itself above the threshold - before the gaps are bridged, so a pause of more than a
+    // bar is never bridged by its own blurred edges; inside a run the bar average still carries the quiet between the hits
+    const edge = Math.max(1, Math.round(EDGE_WINDOW_SEC / hopSec))
+    const loudAt = (i: number) => {
+        const to = Math.min(power.length, i + edge)
+        return 10 * Math.log10((prefix[to]! - prefix[i]!) / Math.max(1, to - i) + 1e-12) > threshold
+    }
+    const ranges: {start: number; end: number}[] = []
+    for (const run of runs) {
+        let {from, to} = run
+        while (from <= to && !loudAt(from)) from++
+        while (to >= from && !loudAt(to)) to--
+        if (from > to) continue
+        // inside the first and the last loud window: the frame that is loud itself
+        const db = (i: number) => 10 * Math.log10(power[i]! + 1e-12)
+        while (from < to && db(from) <= threshold) from++
+        let lastLoud = Math.min(power.length, to + edge) - 1
+        while (lastLoud > to && db(lastLoud) <= threshold) lastLoud--
+        const start = from * hopSec,
+            end = (lastLoud + 1) * hopSec
+        const last = ranges.at(-1)
+        if (last && start - last.end <= barSec) last.end = end
+        else ranges.push({start, end})
+    }
     return ranges.filter(r => r.end - r.start >= barSec / 2).map(r => ({start: round(r.start), end: round(r.end)}))
 }
+/** The short window an edge of a stretch of playing is drawn in to (activityRanges): a beat at about 240 bpm. */
+const EDGE_WINDOW_SEC = 0.25
 
 // progress (and the model downloads on first use) are shown as they happen, stdout is the result
 async function runVocalsTool(args: string[], what: string) {

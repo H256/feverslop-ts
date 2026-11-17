@@ -293,19 +293,32 @@ describe('activityRanges', () => {
         const ranges = activityRanges(frames(20, groove), hop, bar)
         expect(ranges).toHaveLength(1)
         expect(ranges[0]!.start).toBe(0)
-        expect(ranges[0]!.end).toBeGreaterThan(19.9)
+        // up to the last hit (19.5 s): the quiet after it is no playing any more
+        expect(ranges[0]!.end).toBeGreaterThan(19.5)
     })
-    test('a break of several bars is inactive, its edges blurred by at most half a bar', () => {
+    test('a break of several bars is inactive, its edges on the last and the first hit - not blurred into the silence', () => {
         const ranges = activityRanges(
             frames(30, t => (t >= 10 && t < 20 ? silence() : groove(t))),
             hop,
             bar,
         )
         expect(ranges).toHaveLength(2)
-        expect(ranges[0]!.end).toBeGreaterThanOrEqual(10)
-        expect(ranges[0]!.end).toBeLessThanOrEqual(11.1)
-        expect(ranges[1]!.start).toBeGreaterThanOrEqual(18.9)
+        // the last hit before the break is at 9.5 s, the first after it at 20 s
+        expect(ranges[0]!.end).toBeGreaterThan(9.5)
+        expect(ranges[0]!.end).toBeLessThanOrEqual(9.8)
+        expect(ranges[1]!.start).toBeGreaterThanOrEqual(19.75)
         expect(ranges[1]!.start).toBeLessThanOrEqual(20)
+    })
+    test('a short sung stretch between two loud parts is not heard: the bar average does not carry the playing into it (tides bridge)', () => {
+        // a held chord to 10 s, 3 s nothing, the chord again from 13 s - the bridge of a song where only the voice is heard
+        const ranges = activityRanges(
+            frames(24, t => (t >= 10 && t < 13 ? silence() : 1e-3)),
+            hop,
+            bar,
+        )
+        expect(ranges).toHaveLength(2)
+        expect(ranges[0]!.end).toBeLessThanOrEqual(10.05)
+        expect(ranges[1]!.start).toBeGreaterThanOrEqual(12.95)
     })
     test('a quieter part of the same stem still plays, bleed far below it does not', () => {
         // 0-10 s loud, 10-20 s 12 dB quieter, 20-30 s 40 dB down (bleed)
@@ -315,8 +328,9 @@ describe('activityRanges', () => {
             bar,
         )
         expect(ranges).toHaveLength(1)
-        expect(ranges[0]!.end).toBeGreaterThanOrEqual(20)
-        expect(ranges[0]!.end).toBeLessThanOrEqual(21.1)
+        // to the last hit of the quieter part (19.5 s)
+        expect(ranges[0]!.end).toBeGreaterThan(19.5)
+        expect(ranges[0]!.end).toBeLessThanOrEqual(20)
     })
     test('a stem that is only bleed is never active', () => {
         expect(

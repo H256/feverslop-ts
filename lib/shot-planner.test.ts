@@ -258,7 +258,7 @@ describe('the music of a beat in the planner prompt', () => {
         expect(noPlayers.instructions).not.toContain('A beat may list "opensClip"')
     })
 
-    test('how an instrument is heard in a shot is said after the name: single hits with silence between, who leads (#1024)', () => {
+    test('how an instrument is heard in a shot is said after the name: through, single hits with silence between, quiet, who leads (#1024)', () => {
         const band: PlanContext = {
             ...context,
             characters: [...context.characters, {id: 'kai', name: 'Kai', role: 'guitarist', prop: 'guitar', propStem: 'guitar'}],
@@ -270,7 +270,7 @@ describe('the music of a beat in the planner prompt', () => {
                         prop: 'guitar',
                         activePerShot: [true, true, true],
                         heardPerShot: [[{start: 0, end: 2.2}], undefined, undefined],
-                        howPerShot: [{articulation: 'sustained', leads: true}, {articulation: 'hits'}, undefined],
+                        howPerShot: [{articulation: 'sustained', leads: true}, {articulation: 'hits'}, {articulation: 'partial', quiet: true}],
                     },
                 ],
             },
@@ -282,9 +282,14 @@ describe('the music of a beat in the planner prompt', () => {
             total: 3,
             written: [],
         })
-        expect(input).toContain('"plays":["Kai (0.0-2.2 s; leads)"]')
+        expect(input).toContain('"plays":["Kai (0.0-2.2 s; plays through; leads)"]')
         expect(input).toContain('"plays":["Kai (single hits with silence between)"]')
-        expect(input).toContain('"plays":["Kai"]')
+        expect(input).toContain('"plays":["Kai (quiet, under the others)"]')
+        expect(instructions).toContain('"plays through" - it sounds without a pause from the first frame to the last')
+        // a guitar with a pick, and nobody who does not sing opens the mouth (tides-261115: an open hand stroking the strings, a guitarist singing along)
+        expect(instructions).toContain('a guitar is struck with a pick held between the thumb and the first finger')
+        expect(instructions).toContain('Whoever does not sing in a shot still acts with the whole face and body')
+        expect(instructions).toContain('Only the mouth stays closed in every field')
         expect(instructions).toContain('"single hits with silence between" - "playing" is then the form of one hit')
     })
 
