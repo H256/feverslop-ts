@@ -295,6 +295,13 @@ export function readBeatPlan(
         const lineSingers = sungBy(singers, j)
         if (!handsOf && lineSingers.length && !lineSingers.some(id => ids.includes(id)))
             notes.push(`shot ${j + 1}: a line of ${lineSingers.map(id => nameOfId(characters, id)).join(' and ')} is sung in it, they are heard off screen`)
+        // a singer of the line in the picture without an entry of their own has no place in it: the clip said only "in the frame",
+        // and the video model put the singer somewhere - popping up behind the guitarist (tides-261115, slot-008)
+        for (const id of lineSingers.filter(id => ids.includes(id) && !people[id]))
+            problem(
+                j,
+                `shot ${j + 1}: ${nameOfId(characters, id)} sings in this shot and is in the picture - an entry in "people" for ${nameOfId(characters, id)}: where they are, how the camera sees them, what they do, singing: yes`,
+            )
         const unison = unisonChecks(j, people, characters)
         for (const message of [...unison.problems, ...musicChecks(j, people, characters, singers, props)]) problem(j, message)
         notes.push(...unison.notes)

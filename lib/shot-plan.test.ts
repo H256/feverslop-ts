@@ -44,7 +44,9 @@ describe('readBeatPlan', () => {
             singerIds: ['cael'],
             singingPerShot: [true],
         })!
-        expect(r.problems.length).toBe(2)
+        // the unknown name, the stranger Maren, and Cael singing in the picture without an entry of his own
+        expect(r.problems.length).toBe(3)
+        expect(r.problems.join(' ')).toContain('Cael sings in this shot and is in the picture - an entry in "people" for Cael')
         // who the text is about is read from its tokens - a plain name is plain text
         const q = readBeatPlan({shots: [{action: '{Maren} swings', characters: ['Cael']}]}, beat, [cael, maren], 1)!
         expect(q.problems[0]).toContain('Maren')
@@ -102,7 +104,7 @@ describe("hands - a shot of a player's hands on the instrument", () => {
             people: {Gtr: {state: 'at the front', motion: 'leans in', playing: 'picks a fast run'}},
         }
         const r = readBeatPlan(
-            {shots: [shot, {action: '{Lead} sings.', characters: ['Lead']}]},
+            {shots: [shot, {action: '{Lead} sings.', characters: ['Lead'], people: {Lead: {state: 'at the microphone', singing: 'yes'}}}]},
             beat,
             cast,
             2,

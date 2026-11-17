@@ -1,13 +1,14 @@
 import {CASTING_FILE} from '../casting.ts'
 import {ask, askJson, type AskOptions, llmMap} from '../llm.ts'
 import {log, styles} from '../log.ts'
-import {type Character, handsOf, type LocationLayout, redoAfter} from '../project.ts'
+import {type Character, handsOf, type LocationLayout, type LocationSet, redoAfter} from '../project.ts'
 import {
     characterDescriptionPrompt,
     characterLookPrompt,
     locationAnchorPrompt,
     locationDescriptionPrompt,
     locationLayoutPrompt,
+    type Performer,
     locationLookPrompt,
     lookBriefPrompt,
     propInUsePrompt,
@@ -163,13 +164,18 @@ export async function planLook(run: LookRun) {
             log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
             const fromLibrary = casted('location', location.id)?.layout
             if (fromLibrary) return fromLibrary
-            const options = locationLayoutPrompt(location.name, locationLooks[location.id] ?? '', locationDescriptions[location.id] ?? '')
+            const options = locationLayoutPrompt(
+                location.name,
+                locationLooks[location.id] ?? '',
+                locationDescriptions[location.id] ?? '',
+                performersOf(cast.characters, location.id),
+            )
             // an answer that cannot be read is asked once more; then the place has no layout and its beats write their own
             // staging, as before - a broken answer for one place does not stop the run
-            let answer: {layout?: unknown; views?: unknown[]} | undefined
+            let answer: {layout?: unknown; views?: unknown[]; set?: {stage?: unknown; spots?: {name?: unknown; spot?: unknown}[]}} | undefined
             for (let attempt = 1; attempt <= 2 && !answer; attempt++) {
                 answer = await project
-                    .each('locationLayouts', location.id, options, () => askJson<{layout?: unknown; views?: unknown[]}>(options))
+                    .each('locationLayouts', location.id, options, () => askJson<NonNullable<typeof answer>>(options))
                     .catch((e: unknown) => {
                         log.warn(
                             `${location.id}: the layout is unusable (${messageOf(e)})${attempt < 2 ? ' - asking again' : ' - its beats stage the place themselves'}`,
@@ -177,7 +183,9 @@ export async function planLook(run: LookRun) {
                         return undefined
                     })
             }
-            return answer && {layout: textOf(answer.layout).trim(), views: LOCATION_VIEWS.map((_, n) => textOf(answer!.views?.[n]).trim())}
+            if (!answer) return undefined
+            const set = setOf(answer.set, cast.characters)
+            return {layout: textOf(answer.layout).trim(), views: LOCATION_VIEWS.map((_, n) => textOf(answer!.views?.[n]).trim()), ...(set ? {set} : {})}
         })
         const layouts: Record<string, LocationLayout> = {}
         cast.locations.forEach((location, i) => {
@@ -201,4 +209,34 @@ export async function planLook(run: LookRun) {
     }
     for (const [id, {layout, views}] of Object.entries(locationLayouts)) log.box(`${id} · layout`, [layout, ...views.map((v, n) => `${n}: ${v}`)].join('\n'))
     return {lookBrief, characterLooks, characterDescriptions, locationLooks, locationDescriptions, locationAnchors, locationLayouts}
+}
+
+/**
+ * Who has a fixed place in a place of a music video (#1119): the players of the cast (for where the band plays), above all one
+ * whose instrument stands there (a drum kit), and a crowd. A story without a band or a crowd has nobody - the layout is as before.
+ */
+export function performersOf(characters: Character[], locationId: string): Performer[] {
+    const standing = (c: Character) => c.propCarried === false && !!c.prop && (!c.propPlace || c.propPlace === locationId)
+    return characters
+        .filter(c => c.propStem || standing(c) || c.isGroup)
+        .map(c => ({
+            name: c.name,
+            role: c.role,
+            ...(c.prop ? {prop: c.prop} : {}),
+            ...(standing(c) ? {standing: true} : {}),
+            ...(c.isGroup ? {group: true} : {}),
+        }))
+}
+
+/** The set of an answer, by character id - a spot of a name that is not in the cast is left out; no stage, no set. */
+export function setOf(answer: {stage?: unknown; spots?: {name?: unknown; spot?: unknown}[]} | undefined, characters: Character[]): LocationSet | undefined {
+    const stage = textOf(answer?.stage).trim()
+    if (!stage) return undefined
+    const spots: Record<string, string> = {}
+    for (const entry of Array.isArray(answer?.spots) ? answer.spots : []) {
+        const id = characters.find(c => c.name === textOf(entry?.name).trim())?.id
+        const spot = textOf(entry?.spot).trim()
+        if (id && spot) spots[id] = spot
+    }
+    return {stage, spots}
 }
