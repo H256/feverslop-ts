@@ -556,7 +556,8 @@ onMounted(() => {
               proposal ? proposal.reason : 'Choose a line to see what the refinement proposes for it.'
             }}</span>
           </div>
-          <span class="tw-grp">
+          <!-- a stepper through one proposal ("1 of 1") leads nowhere: shown when there is more than one, or one that is not the chosen line -->
+          <span v-if="open.length > 1 || (open.length === 1 && place < 0)" class="tw-grp">
             <button class="btn mini" :disabled="!open.length" title="Previous proposal ([)" @click="nextProposal(true)">‹</button>
             <span class="muted num">{{ !open.length ? 'none left' : place < 0 ? `${open.length} to go` : `${place + 1} of ${open.length}` }}</span>
             <button class="btn mini" :disabled="!open.length" title="Next proposal (])" @click="nextProposal(false)">›</button>
