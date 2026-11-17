@@ -288,7 +288,8 @@ describe('the music of a beat in the planner prompt', () => {
         expect(instructions).toContain('"plays through" - it sounds without a pause from the first frame to the last')
         // a guitar with a pick, and nobody who does not sing opens the mouth (tides-261115: an open hand stroking the strings, a guitarist singing along)
         expect(instructions).toContain('a guitar is struck with a pick held between the thumb and the first finger')
-        expect(instructions).toContain('Whoever does not sing in a shot keeps the mouth closed in every field')
+        expect(instructions).toContain('Whoever does not sing in a shot still acts with the whole face and body')
+        expect(instructions).toContain('Only the mouth stays closed in every field')
         expect(instructions).toContain('"single hits with silence between" - "playing" is then the form of one hit')
     })
 
