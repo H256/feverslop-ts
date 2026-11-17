@@ -276,6 +276,8 @@ test('the proposal of the refinement is drawn on the timeline and a line is take
   await page.getByRole('button', {name: 'Prepare refinement', exact: true}).click()
   await expect(page.locator('.tproposal')).toHaveCount(2)
   await expect(page.getByRole('region', {name: 'Refinement proposal'})).toContainText('Phoneme alignment')
+  // one proposal: no "1 of 1" stepper that leads nowhere (#1111)
+  await expect(page.locator('button[title^="Next proposal"]')).toHaveCount(0)
   await page.locator('.tedit').focus()
   await page.keyboard.press('Enter')
   await expect.poll(() => applied).toEqual([{id: 'song-preview', lines: [0]}])
