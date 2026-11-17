@@ -144,8 +144,7 @@ const clips = computed(() =>
 <template>
   <section class="timing-tools" aria-label="Selection tools" @keydown="key">
     <div class="btn-row">
-      <b>{{ selected.length }} word{{ selected.length === 1 ? '' : 's' }} selected</b>
-      <span class="muted">Shift-click words or lines to select a range.</span>
+      <b title="Shift-click words or lines to select a range">{{ selected.length }} word{{ selected.length === 1 ? '' : 's' }} selected</b>
       <button class="btn" :disabled="unplaced" @click="run(() => draft.patchSelection({anchor: !selected.every(w => w.anchor)}))">
         {{ selected.every(w => w.anchor) ? 'Release anchors' : 'Anchor onsets' }}
       </button>
@@ -157,164 +156,166 @@ const clips = computed(() =>
       <button class="btn" :disabled="!joinable" @click="run(draft.join)">Join parts</button>
       <button class="btn" :disabled="!joinable" title="Put the parts together and set the text boundary of the split again" @click="resplit">Re-split</button>
     </div>
-    <DisclosureBox v-model:open="splitOpen" title="Fit, split and shared boundary">
-      <div class="btn-row">
-        <label>Fit start <input v-model.number="from" aria-label="Fit start" type="number" step="0.01" /></label>
-        <label>Fit end <input v-model.number="to" aria-label="Fit end" type="number" step="0.01" /></label>
-        <button class="btn" :disabled="!player.available()" @click="player.play('fit', Math.max(0, from - 0.5), Math.min(view.duration, to + 2))">
-          Listen to fit
-        </button>
-        <button class="btn" :disabled="player.time.value === undefined" @click="captureEndpoint(false)">Set start (I)</button>
-        <button class="btn" :disabled="player.time.value === undefined" @click="captureEndpoint(true)">Set end (O)</button>
-        <button
-          class="btn"
-          @click="
-            run(() => {
-              preview = draft.previewFit(from, to)
-            })
-          "
-        >
-          Preview fit
-        </button>
-        <button class="btn" :disabled="!preview" @click="run(() => draft.fit(from, to))">Apply fit</button>
-      </div>
-      <p v-if="preview" role="status">
-        Preview (anchors stay fixed): {{ preview.map(w => `${w.text} ${w.start.toFixed(2)}–${w.end.toFixed(2)}`).join(' · ') }}
-      </p>
-      <div class="btn-row">
-        <label>Split after character <input v-model.number="character" aria-label="Split after character" type="number" min="1" /></label>
-        <label>Split time <input v-model.number="splitAt" aria-label="Split time" type="number" step="0.01" /></label>
-        <button class="btn" :disabled="selected.length !== 1" @click="run(() => draft.split(character, splitAt))">Split word</button>
-        <button class="btn" :disabled="!player.available()" @click="player.play('split', Math.max(0, splitAt - 0.7), Math.min(view.duration, splitAt + 0.7))">
-          Listen around split
-        </button>
-        <label>Shared boundary <input v-model.number="boundaryAt" aria-label="Shared boundary" type="number" step="0.01" /></label>
-        <button
-          class="btn"
-          @click="
-            run(() => {
-              const s = draft.selection.value[0]
-              if (s) {
-                draft.remember()
-                try {
-                  draft.boundary(s.line, s.first, boundaryAt)
-                } finally {
-                  draft.settle()
-                }
-              }
-            })
-          "
-        >
-          Set shared boundary
-        </button>
-      </div>
-      <p v-if="selected.length === 1">{{ selected[0]!.text.slice(0, character) }}<b aria-label="Text split">│</b>{{ selected[0]!.text.slice(character) }}</p>
-      <div v-if="selected.length === 1" class="text-boundaries" aria-label="Choose text boundary">
-        <template v-for="(letter, i) in Array.from(selected[0]!.text)" :key="i"
-          ><span>{{ letter }}</span
-          ><button
-            v-if="i < Array.from(selected[0]!.text).length - 1"
-            type="button"
-            :aria-label="`Split after ${Array.from(selected[0]!.text)
-              .slice(0, i + 1)
-              .join('')}`"
-            :aria-pressed="
-              character ===
-              Array.from(selected[0]!.text)
-                .slice(0, i + 1)
-                .join('').length
-            "
+    <div class="tt-folds">
+      <DisclosureBox v-model:open="splitOpen" title="Fit, split and shared boundary">
+        <div class="btn-row">
+          <label>Fit start <input v-model.number="from" aria-label="Fit start" type="number" step="0.01" /></label>
+          <label>Fit end <input v-model.number="to" aria-label="Fit end" type="number" step="0.01" /></label>
+          <button class="btn" :disabled="!player.available()" @click="player.play('fit', Math.max(0, from - 0.5), Math.min(view.duration, to + 2))">
+            Listen to fit
+          </button>
+          <button class="btn" :disabled="player.time.value === undefined" @click="captureEndpoint(false)">Set start (I)</button>
+          <button class="btn" :disabled="player.time.value === undefined" @click="captureEndpoint(true)">Set end (O)</button>
+          <button
+            class="btn"
             @click="
-              character = Array.from(selected[0]!.text)
-                .slice(0, i + 1)
-                .join('').length
+              run(() => {
+                preview = draft.previewFit(from, to)
+              })
             "
           >
-            │
-          </button></template
-        >
-      </div>
-      <p class="muted">
-        Split keeps every character and the complete time span. Joining only combines parts of the same source word. Drag an edge with Shift to move a shared
-        boundary; Alt bypasses snapping.
-      </p>
-    </DisclosureBox>
-    <DisclosureBox title="Listen and mark onsets">
-      <div class="btn-row">
-        <button class="btn" :disabled="!player.available() || !selected.length" @click="startListening()">Start marking</button>
-        <button class="btn" :disabled="player.time.value === undefined || !selected.length" @click="startListening(true)">Mark from cursor</button>
-        <button class="btn" :disabled="!listening" @click="player.paused.value ? player.resume() : player.pause()">
-          {{ player.paused.value ? 'Resume' : 'Pause' }}
-        </button>
-        <button class="btn" :disabled="!listening || marks.length >= selected.length" @click="tap()">Mark onset (M)</button>
-        <button class="btn" :disabled="!listening || marks.length !== selected.length" @click="tap(true)">Final end</button>
-        <button class="btn" :disabled="!marks.length" @click="marks.pop()"><AppIcon name="undo" />Retract (Backspace)</button>
-        <button
-          class="btn"
-          :disabled="marks.length !== selected.length + 1"
-          @click="
-            run(() => {
-              draft.mark(marks.map(t => t - offset / 1000))
-              listening = false
-              marks = []
-              player.stop()
-            })
-          "
-        >
-          Apply marks
-        </button>
-        <button
-          class="btn"
-          @click="
-            () => {
-              listening = false
-              marks = []
-              player.stop()
-            }
-          "
-        >
-          Cancel marking
-        </button>
-        <label
-          >Speed
-          <select :value="player.rate.value" @change="player.setRate(Number(($event.target as HTMLSelectElement).value))">
-            <option :value="0.5">0.5×</option>
-            <option :value="0.75">0.75×</option>
-            <option :value="1">1×</option>
-          </select></label
-        >
-        <label><input v-model="player.loop.value" type="checkbox" /> Loop</label>
-        <label>Reaction offset (ms) <input v-model.number="offset" type="number" step="10" /></label>
-      </div>
-      <p v-if="listening" role="status">
-        {{ marks.length }}/{{ selected.length + 1 }} marks. Next: {{ selected[marks.length]?.text ?? 'final end' }}. Inferred ends remain unchecked.
-      </p>
-      <div v-if="listening" class="btn-row">
-        <button
-          v-for="(w, i) in selected"
-          :key="i"
-          class="btn"
-          @click="
-            () => {
-              marks = marks.slice(0, i)
-              player.play('marking', Math.max(0, w.start - 0.3), Math.min(view.duration, to + 2))
-            }
-          "
-        >
-          Restart {{ w.text }}
-        </button>
-      </div>
-    </DisclosureBox>
-    <DisclosureBox title="Clip text and windows">
-      <p v-for="clip in clips" :key="clip.id">
-        <b>{{ clip.id }}</b> · Saved: {{ clip.before || '(silent)' }} → Draft: {{ clip.text || '(silent)' }}
-        <span v-if="clip.from !== undefined && clip.to !== undefined"> · singing {{ clip.from.toFixed(2) }}–{{ clip.to.toFixed(2) }} s</span>
-      </p>
-      <p class="muted">
-        Draft text follows clip start-frame assignment. Resolve crossing words before rendering. Windows include 0.2 s padding; singer-specific delivery is
-        applied during planning.
-      </p>
-    </DisclosureBox>
+            Preview fit
+          </button>
+          <button class="btn" :disabled="!preview" @click="run(() => draft.fit(from, to))">Apply fit</button>
+        </div>
+        <p v-if="preview" role="status">
+          Preview (anchors stay fixed): {{ preview.map(w => `${w.text} ${w.start.toFixed(2)}–${w.end.toFixed(2)}`).join(' · ') }}
+        </p>
+        <div class="btn-row">
+          <label>Split after character <input v-model.number="character" aria-label="Split after character" type="number" min="1" /></label>
+          <label>Split time <input v-model.number="splitAt" aria-label="Split time" type="number" step="0.01" /></label>
+          <button class="btn" :disabled="selected.length !== 1" @click="run(() => draft.split(character, splitAt))">Split word</button>
+          <button class="btn" :disabled="!player.available()" @click="player.play('split', Math.max(0, splitAt - 0.7), Math.min(view.duration, splitAt + 0.7))">
+            Listen around split
+          </button>
+          <label>Shared boundary <input v-model.number="boundaryAt" aria-label="Shared boundary" type="number" step="0.01" /></label>
+          <button
+            class="btn"
+            @click="
+              run(() => {
+                const s = draft.selection.value[0]
+                if (s) {
+                  draft.remember()
+                  try {
+                    draft.boundary(s.line, s.first, boundaryAt)
+                  } finally {
+                    draft.settle()
+                  }
+                }
+              })
+            "
+          >
+            Set shared boundary
+          </button>
+        </div>
+        <p v-if="selected.length === 1">{{ selected[0]!.text.slice(0, character) }}<b aria-label="Text split">│</b>{{ selected[0]!.text.slice(character) }}</p>
+        <div v-if="selected.length === 1" class="text-boundaries" aria-label="Choose text boundary">
+          <template v-for="(letter, i) in Array.from(selected[0]!.text)" :key="i"
+            ><span>{{ letter }}</span
+            ><button
+              v-if="i < Array.from(selected[0]!.text).length - 1"
+              type="button"
+              :aria-label="`Split after ${Array.from(selected[0]!.text)
+                .slice(0, i + 1)
+                .join('')}`"
+              :aria-pressed="
+                character ===
+                Array.from(selected[0]!.text)
+                  .slice(0, i + 1)
+                  .join('').length
+              "
+              @click="
+                character = Array.from(selected[0]!.text)
+                  .slice(0, i + 1)
+                  .join('').length
+              "
+            >
+              │
+            </button></template
+          >
+        </div>
+        <p class="muted">
+          Split keeps every character and the complete time span. Joining only combines parts of the same source word. Drag an edge with Shift to move a shared
+          boundary; Alt bypasses snapping.
+        </p>
+      </DisclosureBox>
+      <DisclosureBox title="Listen and mark onsets">
+        <div class="btn-row">
+          <button class="btn" :disabled="!player.available() || !selected.length" @click="startListening()">Start marking</button>
+          <button class="btn" :disabled="player.time.value === undefined || !selected.length" @click="startListening(true)">Mark from cursor</button>
+          <button class="btn" :disabled="!listening" @click="player.paused.value ? player.resume() : player.pause()">
+            {{ player.paused.value ? 'Resume' : 'Pause' }}
+          </button>
+          <button class="btn" :disabled="!listening || marks.length >= selected.length" @click="tap()">Mark onset (M)</button>
+          <button class="btn" :disabled="!listening || marks.length !== selected.length" @click="tap(true)">Final end</button>
+          <button class="btn" :disabled="!marks.length" @click="marks.pop()"><AppIcon name="undo" />Retract (Backspace)</button>
+          <button
+            class="btn"
+            :disabled="marks.length !== selected.length + 1"
+            @click="
+              run(() => {
+                draft.mark(marks.map(t => t - offset / 1000))
+                listening = false
+                marks = []
+                player.stop()
+              })
+            "
+          >
+            Apply marks
+          </button>
+          <button
+            class="btn"
+            @click="
+              () => {
+                listening = false
+                marks = []
+                player.stop()
+              }
+            "
+          >
+            Cancel marking
+          </button>
+          <label
+            >Speed
+            <select :value="player.rate.value" @change="player.setRate(Number(($event.target as HTMLSelectElement).value))">
+              <option :value="0.5">0.5×</option>
+              <option :value="0.75">0.75×</option>
+              <option :value="1">1×</option>
+            </select></label
+          >
+          <label><input v-model="player.loop.value" type="checkbox" /> Loop</label>
+          <label>Reaction offset (ms) <input v-model.number="offset" type="number" step="10" /></label>
+        </div>
+        <p v-if="listening" role="status">
+          {{ marks.length }}/{{ selected.length + 1 }} marks. Next: {{ selected[marks.length]?.text ?? 'final end' }}. Inferred ends remain unchecked.
+        </p>
+        <div v-if="listening" class="btn-row">
+          <button
+            v-for="(w, i) in selected"
+            :key="i"
+            class="btn"
+            @click="
+              () => {
+                marks = marks.slice(0, i)
+                player.play('marking', Math.max(0, w.start - 0.3), Math.min(view.duration, to + 2))
+              }
+            "
+          >
+            Restart {{ w.text }}
+          </button>
+        </div>
+      </DisclosureBox>
+      <DisclosureBox title="Clip text and windows">
+        <p v-for="clip in clips" :key="clip.id">
+          <b>{{ clip.id }}</b> · Saved: {{ clip.before || '(silent)' }} → Draft: {{ clip.text || '(silent)' }}
+          <span v-if="clip.from !== undefined && clip.to !== undefined"> · singing {{ clip.from.toFixed(2) }}–{{ clip.to.toFixed(2) }} s</span>
+        </p>
+        <p class="muted">
+          Draft text follows clip start-frame assignment. Resolve crossing words before rendering. Windows include 0.2 s padding; singer-specific delivery is
+          applied during planning.
+        </p>
+      </DisclosureBox>
+    </div>
     <CalloutBox v-if="error" role="alert" kind="warn">{{ error }}</CalloutBox>
   </section>
 </template>
@@ -334,6 +335,19 @@ const clips = computed(() =>
 }
 .timing-tools p {
   margin: 0.5rem 0;
+}
+/* the three folded parts side by side; an opened one takes the row */
+.tt-folds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0 var(--space-5);
+}
+.tt-folds > :deep(details) {
+  flex: 0 1 auto;
+}
+.tt-folds > :deep(details[open]) {
+  flex: 1 1 100%;
 }
 .text-boundaries {
   display: flex;

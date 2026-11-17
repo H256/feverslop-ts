@@ -488,8 +488,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <SplitLayout full :folded="sideFolded" :inert="saving.pending.value" :aria-busy="saving.pending.value" @keydown.capture="timingTools?.key($event)">
-    <PageBar title="When the lyrics are sung"
+  <SplitLayout full pinned :folded="sideFolded" :inert="saving.pending.value" :aria-busy="saving.pending.value" @keydown.capture="timingTools?.key($event)">
+    <PageBar class="tw-bar" title="When the lyrics are sung"
       ><SegmentedControl v-model="filter" :options="FILTERS" label="Lines shown" /><button
         class="btn mini"
         :aria-expanded="!sideFolded"
@@ -499,289 +499,308 @@ onMounted(() => {
         {{ sideFolded ? 'Show the side column' : 'Hide the side column' }}
       </button></PageBar
     >
-    <details class="timing-refinement" :open="refinement?.passage ? true : undefined">
-      <summary>Refine timing from vocals</summary>
-      <p>Align the existing lyrics to phonemes. Hand edits and anchors stay. Check the proposal before applying; affected shot plans will need rebuilding.</p>
-      <div class="btn-row">
-        <label
-          >Lyrics language
-          <select v-model="refinementLanguage" :disabled="refining.pending.value">
-            <option value="de">Deutsch</option>
-            <option value="en">English</option>
-            <option value="fr">Français</option>
-          </select></label
-        >
-        <button class="btn" :disabled="refining.pending.value || draft.edits.value.size > 0" @click="prepareRefinement">
-          {{ refining.pending.value ? 'Aligning vocals…' : 'Prepare refinement' }}
-        </button>
-        <span v-if="draft.edits.value.size" class="muted">Save or discard your edits first.</span>
-      </div>
-      <p v-if="refining.pending.value" role="status">
-        This can take several minutes. The first run downloads the local model. The proposal is not applied automatically.
-      </p>
-      <template v-if="refinement">
-        <p v-if="refinement.passage?.mode === 'line-window'">
-          Words within block {{ refinement.passage.line + 1 }}: {{ refinement.passage.start.toFixed(3) }}–{{ refinement.passage.end.toFixed(3) }} s. Neighbours
-          stay unchanged. Listen before applying the new word boundaries.
-        </p>
-        <p v-else-if="refinement.passage">
-          Passage only: lines {{ refinement.passage.targets.map(n => n + 1).join(', ') }}. Apply the proposed changes together. This also confirms line
-          {{ refinement.passage.line + 1 }} is sung; other lines stay unchanged.
-        </p>
-        <p v-if="refinement.logFile" class="muted">
-          Alignment log: <code>{{ refinement.logFile }}</code>
-        </p>
-        <p>
-          {{ refinement.entries.filter(e => e.status === 'refined').length }} refined ·
-          {{ refinement.entries.filter(e => e.status === 'review' || e.status === 'omit').length }} need manual review.
-          <template v-if="!refinement.passage">Refinement keeps lines sung or left out as they are.</template>
-          A missing transcript match does not mean a line was not sung.
-        </p>
-        <p class="muted">The proposal is on the timeline: each line shows it under its words. Take or drop it there, line by line.</p>
-      </template>
-    </details>
-    <LipsyncPreview :view="view" :dirty="draft.edits.value.size > 0" />
-    <div class="tedit-wrap">
-      <div v-if="refinement" class="tw-proposal" role="region" aria-label="Refinement proposal">
-        <div class="tw-why">
-          <span :class="['chip', proposal?.status === 'refined' ? 'good' : proposal ? 'stale' : '']">{{
-            proposal ? (proposal.status === 'refined' ? 'proposal' : proposal.status === 'applied' ? 'taken' : 'no proposal') : 'proposal'
-          }}</span>
-          <span class="tw-reason" :title="proposal?.reason">{{
-            proposal ? proposal.reason : 'Choose a line to see what the refinement proposes for it.'
-          }}</span>
-        </div>
-        <span class="tw-grp">
-          <button class="btn mini" :disabled="!open.length" title="Previous proposal ([)" @click="nextProposal(true)">‹</button>
-          <span class="muted num">{{ !open.length ? 'none left' : place < 0 ? `${open.length} to go` : `${place + 1} of ${open.length}` }}</span>
-          <button class="btn mini" :disabled="!open.length" title="Next proposal (])" @click="nextProposal(false)">›</button>
-        </span>
-        <span class="tw-grp">
-          <button v-if="entry" class="btn mini" aria-label="Listen before" title="Listen to the line as it is now" @click="listen(entry.before)">▶ Now</button>
-          <button
-            v-if="entry?.after && proposal?.words.length"
-            class="btn mini"
-            aria-label="Listen to proposal"
-            title="Listen to the line as proposed"
-            @click="listen(entry.after)"
-          >
-            ▶ Proposal
-          </button>
-        </span>
-        <span class="tw-grp">
-          <button class="btn" :disabled="!proposal || !open.length" title="X" @click="dropProposal">Keep mine (X)</button>
-          <button class="btn primary" :disabled="!proposal?.words.length || saving.pending.value" title="Enter" @click="takeProposal()">Take (Enter)</button>
-        </span>
-        <span class="tw-grp">
-          <button class="btn mini" :disabled="!refinement.change.lines.length || draft.edits.value.size > 0 || refining.pending.value" @click="takeRefinement">
-            {{ refinement.passage?.mode === 'line-window' ? 'Apply word refinement' : refinement.passage ? 'Apply passage' : 'Take all' }}
-          </button>
-          <button class="btn mini" @click="refinement = undefined"><AppIcon name="close" />Dismiss</button>
-        </span>
-      </div>
-      <div class="tedit-head btn-row">
-        <template v-if="draft.line.value">
-          <b>{{ draft.line.value.text }}</b>
-          <span class="muted num"
-            >{{ draft.line.value.section }} · {{ clock(draft.startOf(draft.line.value)) }}–{{ clock(draft.endOf(draft.line.value)) }}</span
-          >
-          <span v-if="draft.unchecked(draft.line.value)" class="chip stale" title="Barely found in the transcript: the times are spread over the line, a guess"
-            >estimated</span
-          >
-          <span v-if="draft.isChanged(draft.line.value)" class="chip u-accent">moved</span>
-          <span
-            v-if="draft.line.value.adlib"
-            class="chip stale"
-            :title="draft.line.value.off ? 'Heard but not enabled. Sing it includes this line in clips.' : 'Enabled: this ad-lib is included in clips.'"
-            >{{ draft.line.value.off ? 'ad-lib, off' : 'ad-lib, sung' }}</span
-          >
-          <span v-else-if="draft.line.value.off" class="chip bad" title="Left out: heard, but not sung - no clip sings it">left out</span>
-          <span v-if="draft.line.value.problem" class="chip bad" :title="`Against lyrics.txt: ${draft.line.value.problem}`">{{
-            draft.line.value.problem
-          }}</span>
-          <span
-            v-if="lead >= EARLY_FROM"
-            class="chip stale"
-            title="The first word starts before the singing does: its box covers silence. Tighten the start, or drag it."
-            >starts {{ lead.toFixed(1) }} s early</span
-          >
-          <span
-            v-if="outdated.has(draft.line.value.line)"
-            class="chip stale"
-            :title="`The prompt of ${outdated.get(draft.line.value.line)!.join(', ')} still has this line at its old times: plan again`"
-            >prompt old</span
-          >
-        </template>
-        <div class="spacer" />
-        <span v-if="draft.line.value" class="tw-grp">
-          <button class="btn" @click="editor?.playLine(draft.line.value)"><AppIcon name="listen" />Listen</button>
-          <button
-            v-if="draft.line.value && lead >= EARLY_FROM"
-            class="btn"
-            title="Move the start of the first word to where the singing begins"
-            @click="draft.tighten(new Map([[draft.line.value.line, lead]]))"
-          >
-            Tighten the start
-          </button>
-          <button
-            class="btn"
-            :disabled="refining.pending.value || saving.pending.value"
-            title="Use this block as the audio window; replace only its word boundaries after preview, even after moving it by hand"
-            @click="retryPassage('line-window')"
-          >
-            {{ draft.edits.value.size ? 'Save changes & refine words' : 'Refine words in block' }}
-          </button>
-        </span>
-        <span class="tw-grp">
-          <button
-            v-if="problems.length"
-            class="btn"
-            :title="`${problems.length} lines want a look: cuts in words, early starts, old prompts, guessed times. Key N, Shift+N back`"
-            @click="nextProblem()"
-          >
-            Next problem ({{ problems.length }})
-          </button>
-          <button class="btn" @click="nextKind('unchecked')">Next unchecked</button>
-          <button class="btn" @click="nextKind('cut')">Next cut</button>
-        </span>
-        <!-- back to the saved or the automatic times: less often, in a menu (#834) -->
-        <details v-if="draft.line.value" ref="more" class="tw-more" @click="closeMore">
-          <summary class="btn">More ▾</summary>
-          <div class="tw-menu" role="menu">
-            <button
-              class="btn tw-item"
-              :title="
-                draft.edits.value.size
-                  ? 'Save your pending timing changes and change whether this line is sung'
-                  : draft.line.value.off
-                    ? 'The line is sung again: the clips it falls into sing it'
-                    : 'Heard, but not sung (a misheard ad-lib, a line on top of another): no clip sings it. It stays here, to be sung again'
-              "
-              @click="setOff(draft.line.value, !draft.line.value.off)"
+    <div class="tw-top">
+      <div class="tw-folds">
+        <details class="timing-refinement" :open="refinement?.passage ? true : undefined">
+          <summary>Refine timing from vocals</summary>
+          <p>
+            Align the existing lyrics to phonemes. Hand edits and anchors stay. Check the proposal before applying; affected shot plans will need rebuilding.
+          </p>
+          <div class="btn-row">
+            <label
+              >Lyrics language
+              <select v-model="refinementLanguage" :disabled="refining.pending.value">
+                <option value="de">Deutsch</option>
+                <option value="en">English</option>
+                <option value="fr">Français</option>
+              </select></label
             >
-              {{ draft.edits.value.size ? 'Save changes & ' : ''
-              }}{{ draft.line.value.off ? (draft.line.value.adlib ? 'Sing it' : 'Sing it again') : 'Leave the line out' }}
-              <small class="muted" aria-hidden="true">{{ draft.line.value.off ? 'clips sing it again' : 'heard, but not sung' }}</small>
+            <button class="btn" :disabled="refining.pending.value || draft.edits.value.size > 0" @click="prepareRefinement">
+              {{ refining.pending.value ? 'Aligning vocals…' : 'Prepare refinement' }}
             </button>
-            <button
-              class="btn tw-item"
-              :disabled="draft.edits.value.size > 0"
-              :title="draft.edits.value.size ? 'Save your moved words before adding new words' : 'Insert missing sung words and extend the lyrics'"
-              @click="addWords"
-            >
-              Add words <small class="muted" aria-hidden="true">a word Whisper missed</small>
-            </button>
-            <button
-              class="btn tw-item"
-              :disabled="!allCutSplits.some(i => i.ok)"
-              title="Split every word a clip cut falls into at the cut, after a list to check"
-              @click="splitEverywhere()"
-            >
-              Split words at cuts ({{ allCutSplits.filter(i => i.ok).length }}) <small class="muted" aria-hidden="true">in the whole song, after a look</small>
-            </button>
-            <button
-              class="btn tw-item"
-              :disabled="draft.edits.value.size > 0 || refining.pending.value || saving.pending.value"
-              title="Confirm this lyric is sung, then preview a local alignment with its neighbour"
-              @click="retryPassage()"
-            >
-              Retry sung passage <small class="muted" aria-hidden="true">align it with its neighbour</small>
-            </button>
-            <button
-              v-if="draft.line.value?.byHand"
-              class="btn tw-item"
-              :disabled="draft.edits.value.size > 0"
-              :title="
-                draft.edits.value.size
-                  ? 'Save the moved lines first'
-                  : 'Where the alignment puts it, worked out again from the transcript - your placement goes'
-              "
-              @click="reset([draft.line.value])"
-            >
-              Back to automatic
-            </button>
-            <button
-              v-if="byHand.length > 1"
-              class="btn tw-item"
-              :disabled="draft.edits.value.size > 0"
-              :title="`All ${byHand.length} lines placed by hand back to the automatic timing`"
-              @click="reset(byHand)"
-            >
-              All back to automatic
-            </button>
-            <button
-              v-if="draft.line.value && draft.isChanged(draft.line.value)"
-              class="btn tw-item"
-              title="Back to the saved times"
-              @click="draft.resetLine(draft.line.value)"
-            >
-              Reset line
-            </button>
+            <span v-if="draft.edits.value.size" class="muted">Save or discard your edits first.</span>
           </div>
+          <p v-if="refining.pending.value" role="status">
+            This can take several minutes. The first run downloads the local model. The proposal is not applied automatically.
+          </p>
+          <template v-if="refinement">
+            <p v-if="refinement.passage?.mode === 'line-window'">
+              Words within block {{ refinement.passage.line + 1 }}: {{ refinement.passage.start.toFixed(3) }}–{{ refinement.passage.end.toFixed(3) }} s.
+              Neighbours stay unchanged. Listen before applying the new word boundaries.
+            </p>
+            <p v-else-if="refinement.passage">
+              Passage only: lines {{ refinement.passage.targets.map(n => n + 1).join(', ') }}. Apply the proposed changes together. This also confirms line
+              {{ refinement.passage.line + 1 }} is sung; other lines stay unchanged.
+            </p>
+            <p v-if="refinement.logFile" class="muted">
+              Alignment log: <code>{{ refinement.logFile }}</code>
+            </p>
+            <p>
+              {{ refinement.entries.filter(e => e.status === 'refined').length }} refined ·
+              {{ refinement.entries.filter(e => e.status === 'review' || e.status === 'omit').length }} need manual review.
+              <template v-if="!refinement.passage">Refinement keeps lines sung or left out as they are.</template>
+              A missing transcript match does not mean a line was not sung.
+            </p>
+            <p class="muted">The proposal is on the timeline: each line shows it under its words. Take or drop it there, line by line.</p>
+          </template>
         </details>
-        <span class="tw-grp">
-          <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()"><AppIcon name="undo" />Undo</button>
-          <button class="btn" :disabled="!draft.future.length" title="Ctrl+Shift+Z" @click="draft.redo()"><AppIcon name="redo" />Redo</button>
-        </span>
-        <span class="tw-grp">
-          <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(0.8)">+</button>
-          <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(1.25)">−</button>
-        </span>
+        <LipsyncPreview :view="view" :dirty="draft.edits.value.size > 0" />
       </div>
-      <TimingEditor
-        ref="editor"
-        :view="view"
-        :draft="draft"
-        :peaks="peaks"
-        :head="player.time.value"
-        :playing="!!player.playing.value"
-        @play="play"
-        @stop="player.stop()"
-        :proposal="proposal"
-        @next="nextProblem"
-        @take="takeProposal()"
-        @drop="dropProposal"
-        @proposal="nextProposal"
-      />
-      <TimingTools ref="timingTools" :draft="draft" :view="view" :player="player" />
-      <div>
-        <CalloutBox v-if="draft.line.value && draft.crossing(draft.line.value).length" kind="warn" as="div">
-          A clip cut falls into
-          {{
-            draft
-              .crossing(draft.line.value)
-              .map(c => `"${c.word.text}"`)
-              .join(', ')
-          }}: the word is then sung half in one clip, half in the next. Split the word at the cut to preserve its complete audible span, or adjust its timing
-          after listening.
-          <span class="btn-row">
-            <button
-              v-for="i in lineCutSplits.filter(x => x.ok)"
-              :key="i.n"
-              class="btn"
-              :title="`Split at the cut ${i.cut} (${clock(i.time)}); the text boundary is a guess from the time`"
-              @click="splitHere([i])"
-            >
-              Split {{ i.before }}│{{ i.after }} at the cut
-            </button>
-            <button v-if="lineCutSplits.filter(x => x.ok).length > 1" class="btn" @click="splitHere(lineCutSplits)">Split all in this line</button>
+      <div class="tedit-wrap">
+        <div v-if="refinement" class="tw-proposal" role="region" aria-label="Refinement proposal">
+          <div class="tw-why">
+            <span :class="['chip', proposal?.status === 'refined' ? 'good' : proposal ? 'stale' : '']">{{
+              proposal ? (proposal.status === 'refined' ? 'proposal' : proposal.status === 'applied' ? 'taken' : 'no proposal') : 'proposal'
+            }}</span>
+            <span class="tw-reason" :title="proposal?.reason">{{
+              proposal ? proposal.reason : 'Choose a line to see what the refinement proposes for it.'
+            }}</span>
+          </div>
+          <span class="tw-grp">
+            <button class="btn mini" :disabled="!open.length" title="Previous proposal ([)" @click="nextProposal(true)">‹</button>
+            <span class="muted num">{{ !open.length ? 'none left' : place < 0 ? `${open.length} to go` : `${place + 1} of ${open.length}` }}</span>
+            <button class="btn mini" :disabled="!open.length" title="Next proposal (])" @click="nextProposal(false)">›</button>
           </span>
-        </CalloutBox>
-        <CalloutBox v-if="draft.overlaps.value.length" kind="warn" as="div">
-          This line overlaps {{ draft.overlaps.value.map(l => `"${l.text}"`).join(' and ') }}. Fine for two singers at once - otherwise move one of them.
-        </CalloutBox>
+          <span class="tw-grp">
+            <button v-if="entry" class="btn mini" aria-label="Listen before" title="Listen to the line as it is now" @click="listen(entry.before)">
+              ▶ Now
+            </button>
+            <button
+              v-if="entry?.after && proposal?.words.length"
+              class="btn mini"
+              aria-label="Listen to proposal"
+              title="Listen to the line as proposed"
+              @click="listen(entry.after)"
+            >
+              ▶ Proposal
+            </button>
+          </span>
+          <span class="tw-grp">
+            <button class="btn" :disabled="!proposal || !open.length" title="X" @click="dropProposal">Keep mine (X)</button>
+            <button class="btn primary" :disabled="!proposal?.words.length || saving.pending.value" title="Enter" @click="takeProposal()">Take (Enter)</button>
+          </span>
+          <span class="tw-grp">
+            <button
+              class="btn mini"
+              :disabled="!refinement.change.lines.length || draft.edits.value.size > 0 || refining.pending.value"
+              @click="takeRefinement"
+            >
+              {{ refinement.passage?.mode === 'line-window' ? 'Apply word refinement' : refinement.passage ? 'Apply passage' : 'Take all' }}
+            </button>
+            <button class="btn mini" @click="refinement = undefined"><AppIcon name="close" />Dismiss</button>
+          </span>
+        </div>
+        <div class="tedit-head btn-row">
+          <template v-if="draft.line.value">
+            <b>{{ draft.line.value.text }}</b>
+            <span class="muted num"
+              >{{ draft.line.value.section }} · {{ clock(draft.startOf(draft.line.value)) }}–{{ clock(draft.endOf(draft.line.value)) }}</span
+            >
+            <span
+              v-if="draft.unchecked(draft.line.value)"
+              class="chip stale"
+              title="Barely found in the transcript: the times are spread over the line, a guess"
+              >estimated</span
+            >
+            <span v-if="draft.isChanged(draft.line.value)" class="chip u-accent">moved</span>
+            <span
+              v-if="draft.line.value.adlib"
+              class="chip stale"
+              :title="draft.line.value.off ? 'Heard but not enabled. Sing it includes this line in clips.' : 'Enabled: this ad-lib is included in clips.'"
+              >{{ draft.line.value.off ? 'ad-lib, off' : 'ad-lib, sung' }}</span
+            >
+            <span v-else-if="draft.line.value.off" class="chip bad" title="Left out: heard, but not sung - no clip sings it">left out</span>
+            <span v-if="draft.line.value.problem" class="chip bad" :title="`Against lyrics.txt: ${draft.line.value.problem}`">{{
+              draft.line.value.problem
+            }}</span>
+            <span
+              v-if="lead >= EARLY_FROM"
+              class="chip stale"
+              title="The first word starts before the singing does: its box covers silence. Tighten the start, or drag it."
+              >starts {{ lead.toFixed(1) }} s early</span
+            >
+            <span
+              v-if="outdated.has(draft.line.value.line)"
+              class="chip stale"
+              :title="`The prompt of ${outdated.get(draft.line.value.line)!.join(', ')} still has this line at its old times: plan again`"
+              >prompt old</span
+            >
+          </template>
+          <div class="spacer" />
+          <span v-if="draft.line.value" class="tw-grp">
+            <button class="btn" @click="editor?.playLine(draft.line.value)"><AppIcon name="listen" />Listen</button>
+            <button
+              v-if="draft.line.value && lead >= EARLY_FROM"
+              class="btn"
+              title="Move the start of the first word to where the singing begins"
+              @click="draft.tighten(new Map([[draft.line.value.line, lead]]))"
+            >
+              Tighten the start
+            </button>
+            <button
+              class="btn"
+              :disabled="refining.pending.value || saving.pending.value"
+              title="Use this block as the audio window; replace only its word boundaries after preview, even after moving it by hand"
+              @click="retryPassage('line-window')"
+            >
+              {{ draft.edits.value.size ? 'Save changes & refine words' : 'Refine words in block' }}
+            </button>
+          </span>
+          <span class="tw-grp">
+            <button
+              v-if="problems.length"
+              class="btn"
+              :title="`${problems.length} lines want a look: cuts in words, early starts, old prompts, guessed times. Key N, Shift+N back`"
+              @click="nextProblem()"
+            >
+              Next problem ({{ problems.length }})
+            </button>
+            <button class="btn" @click="nextKind('unchecked')">Next unchecked</button>
+            <button class="btn" @click="nextKind('cut')">Next cut</button>
+          </span>
+          <!-- back to the saved or the automatic times: less often, in a menu (#834) -->
+          <details v-if="draft.line.value" ref="more" class="tw-more" @click="closeMore">
+            <summary class="btn">More ▾</summary>
+            <div class="tw-menu" role="menu">
+              <button
+                class="btn tw-item"
+                :title="
+                  draft.edits.value.size
+                    ? 'Save your pending timing changes and change whether this line is sung'
+                    : draft.line.value.off
+                      ? 'The line is sung again: the clips it falls into sing it'
+                      : 'Heard, but not sung (a misheard ad-lib, a line on top of another): no clip sings it. It stays here, to be sung again'
+                "
+                @click="setOff(draft.line.value, !draft.line.value.off)"
+              >
+                {{ draft.edits.value.size ? 'Save changes & ' : ''
+                }}{{ draft.line.value.off ? (draft.line.value.adlib ? 'Sing it' : 'Sing it again') : 'Leave the line out' }}
+                <small class="muted" aria-hidden="true">{{ draft.line.value.off ? 'clips sing it again' : 'heard, but not sung' }}</small>
+              </button>
+              <button
+                class="btn tw-item"
+                :disabled="draft.edits.value.size > 0"
+                :title="draft.edits.value.size ? 'Save your moved words before adding new words' : 'Insert missing sung words and extend the lyrics'"
+                @click="addWords"
+              >
+                Add words <small class="muted" aria-hidden="true">a word Whisper missed</small>
+              </button>
+              <button
+                class="btn tw-item"
+                :disabled="!allCutSplits.some(i => i.ok)"
+                title="Split every word a clip cut falls into at the cut, after a list to check"
+                @click="splitEverywhere()"
+              >
+                Split words at cuts ({{ allCutSplits.filter(i => i.ok).length }})
+                <small class="muted" aria-hidden="true">in the whole song, after a look</small>
+              </button>
+              <button
+                class="btn tw-item"
+                :disabled="draft.edits.value.size > 0 || refining.pending.value || saving.pending.value"
+                title="Confirm this lyric is sung, then preview a local alignment with its neighbour"
+                @click="retryPassage()"
+              >
+                Retry sung passage <small class="muted" aria-hidden="true">align it with its neighbour</small>
+              </button>
+              <button
+                v-if="draft.line.value?.byHand"
+                class="btn tw-item"
+                :disabled="draft.edits.value.size > 0"
+                :title="
+                  draft.edits.value.size
+                    ? 'Save the moved lines first'
+                    : 'Where the alignment puts it, worked out again from the transcript - your placement goes'
+                "
+                @click="reset([draft.line.value])"
+              >
+                Back to automatic
+              </button>
+              <button
+                v-if="byHand.length > 1"
+                class="btn tw-item"
+                :disabled="draft.edits.value.size > 0"
+                :title="`All ${byHand.length} lines placed by hand back to the automatic timing`"
+                @click="reset(byHand)"
+              >
+                All back to automatic
+              </button>
+              <button
+                v-if="draft.line.value && draft.isChanged(draft.line.value)"
+                class="btn tw-item"
+                title="Back to the saved times"
+                @click="draft.resetLine(draft.line.value)"
+              >
+                Reset line
+              </button>
+            </div>
+          </details>
+        </div>
+        <TimingEditor
+          ref="editor"
+          :view="view"
+          :draft="draft"
+          :peaks="peaks"
+          :head="player.time.value"
+          :playing="!!player.playing.value"
+          @play="play"
+          @stop="player.stop()"
+          :proposal="proposal"
+          @next="nextProblem"
+          @take="takeProposal()"
+          @drop="dropProposal"
+          @proposal="nextProposal"
+        >
+          <span class="tw-grp">
+            <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()"><AppIcon name="undo" />Undo</button>
+            <button class="btn" :disabled="!draft.future.length" title="Ctrl+Shift+Z" @click="draft.redo()"><AppIcon name="redo" />Redo</button>
+          </span>
+          <span class="tw-grp">
+            <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(0.8)">+</button>
+            <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(1.25)">−</button>
+          </span>
+        </TimingEditor>
+        <TimingTools ref="timingTools" :draft="draft" :view="view" :player="player" />
+        <div>
+          <CalloutBox v-if="draft.line.value && draft.crossing(draft.line.value).length" kind="warn" as="div">
+            A clip cut falls into
+            {{
+              draft
+                .crossing(draft.line.value)
+                .map(c => `"${c.word.text}"`)
+                .join(', ')
+            }}: the word is then sung half in one clip, half in the next. Split the word at the cut to preserve its complete audible span, or adjust its timing
+            after listening.
+            <span class="btn-row">
+              <button
+                v-for="i in lineCutSplits.filter(x => x.ok)"
+                :key="i.n"
+                class="btn"
+                :title="`Split at the cut ${i.cut} (${clock(i.time)}); the text boundary is a guess from the time`"
+                @click="splitHere([i])"
+              >
+                Split {{ i.before }}│{{ i.after }} at the cut
+              </button>
+              <button v-if="lineCutSplits.filter(x => x.ok).length > 1" class="btn" @click="splitHere(lineCutSplits)">Split all in this line</button>
+            </span>
+          </CalloutBox>
+          <CalloutBox v-if="draft.overlaps.value.length" kind="warn" as="div">
+            This line overlaps {{ draft.overlaps.value.map(l => `"${l.text}"`).join(' and ') }}. Fine for two singers at once - otherwise move one of them.
+          </CalloutBox>
+        </div>
       </div>
     </div>
-    <TimingLineList
-      :view="view"
-      :draft="draft"
-      :filter="filter"
-      :leads="leads"
-      :outdated="outdated"
-      :overlapping="overlapping"
-      :proposed="proposed"
-      @choose="choose"
-    />
+    <div class="tw-list">
+      <TimingLineList
+        :view="view"
+        :draft="draft"
+        :filter="filter"
+        :leads="leads"
+        :outdated="outdated"
+        :overlapping="overlapping"
+        :proposed="proposed"
+        @choose="choose"
+      />
+    </div>
     <template #side>
       <TimingSide
         :view="view"
@@ -799,6 +818,58 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* the editing part stays fixed on top (in a low window it scrolls by itself, the waveform stays in view); only the line list scrolls below it */
+.tw-top {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 65%;
+  overflow-y: auto;
+}
+.tw-top .tedit-wrap {
+  top: 0;
+}
+/* a tighter page (as the buttons of the bar above it): small buttons, closer rows, the folded parts side by side */
+.tw-bar {
+  margin-bottom: 6px;
+}
+.tw-top :deep(.btn) {
+  padding: 2px 8px;
+  font-size: var(--text-s);
+}
+.tw-top :deep(.btn-row) {
+  gap: var(--space-1) var(--space-2);
+}
+.tw-top .tedit-head {
+  margin-bottom: 4px;
+}
+.tw-top .tw-grp {
+  gap: var(--space-1);
+  padding-left: 8px;
+}
+.tw-folds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0 var(--space-5);
+}
+.tw-folds > :deep(details) {
+  flex: 0 1 auto;
+}
+.tw-folds > :deep(details[open]) {
+  flex: 1 1 100%;
+}
+.tw-folds :deep(summary) {
+  padding: 3px 0;
+  font-weight: 400;
+}
+.tw-folds > :deep(.lp) {
+  margin: 0;
+}
+.tw-list {
+  flex: 1 1 0;
+  min-height: 8rem;
+  overflow-y: auto;
+}
 /* the list of refined lines (the lines the transcript matched) scrolls inside its box instead of growing the page */
 .tw-proposal {
   display: flex;
