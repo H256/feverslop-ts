@@ -592,6 +592,12 @@ export async function readEditorFreshness({dir, kind}: EditorTarget, settings?: 
         clips: Object.fromEntries(
             clips.filter(c => rendered(`videos/${c.id}.mp4`)).map(c => [c.id, freshness(join(dir, 'videos', `${c.id}.mp4`), clipFingerprint(c, dir, config))]),
         ),
+        // a preview is the plan's when it was made from the request there is now - one from before its record had it is "pinned": not known (#1117)
+        previews: Object.fromEntries(
+            clips
+                .filter(c => rendered(`previews/${c.id}.mp4`))
+                .map(c => [c.id, freshness(join(dir, 'previews', `${c.id}.mp4`), clipFingerprint(c, dir, config))]),
+        ),
         pictures: Object.fromEntries(pictures.filter(p => rendered(p.file)).map(p => [p.id, freshness(join(dir, p.file), pictureFingerprint(p, dir, config))])),
     }
 }

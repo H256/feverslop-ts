@@ -244,12 +244,14 @@ export async function clipJob(
 
 /**
  * A clip as a cheap render into previews/ (--preview): never a file of videos/, it leaves no first or last frame behind and stays out of
- * what is current or stale. A clip that goes on from another starts on the last frame of that one's preview or render, and says it is approximate.
+ * what is current or stale of the clips - its own record has the request it was made from, so the page can say whether it is the plan's. A clip that goes on from another starts on the last frame of that one's preview or render, and says it is approximate.
  */
 export async function renderClipPreview(r: Renderer, clip: ClipRequest, stemFiles: Record<string, string>) {
     const file = `previews/${clip.id}.mp4`
     const target = join(r.projectDir, file)
-    if (existsSync(target)) return log.step('Exists', styles.muted(file))
+    // what it is made from, as a clip's own render records it: one of an older plan is made again with --refresh=videos (#1117)
+    const request = specId(clipSpec(clip, r.projectDir, r.config))
+    if (existsSync(target) && !r.staleFile('clips', file, request, [file, `${file}.json`])) return log.step('Exists', styles.muted(file))
     const missing = clip.assets.pictures.filter(p => p.kind !== 'frame' && !existsSync(join(r.projectDir, p.file)))
     if (missing.length) return log.warn(`${clip.id}: no preview - missing pictures: ${missing.map(p => p.file).join(', ')}`)
     if (!(stemFiles.song && existsSync(stemFiles.song))) return log.warn(`${clip.id}: no preview - missing the full song`)
@@ -278,7 +280,8 @@ export async function renderClipPreview(r: Renderer, clip: ClipRequest, stemFile
             ...(start ? {startFrame: remote, extraUploads: [{from: join(r.projectDir, start), to: remote!}]} : {}),
         })
     })
-    await r.savePreviewRecord(clip, target, seed)
+    // what it was made from, as a clip's own render records it: the page says whether the preview still is the plan's (#1117)
+    await r.savePreviewRecord(clip, target, seed, request)
 }
 
 /** The picture a preview starts on: the last frame of the clip before as the preview shows it - its preview, else its render. */
@@ -300,7 +303,7 @@ export async function previewStart(r: Renderer, id: string): Promise<string | un
     return frame
 }
 
-export async function savePreviewRecord(r: Renderer, clip: {id: string; frames: number; startsFrom?: string}, target: string, seed: number) {
+export async function savePreviewRecord(r: Renderer, clip: {id: string; frames: number; startsFrom?: string}, target: string, seed: number, request?: string) {
     const rendered = await probeVideo(target)
     await Bun.write(
         `${target}.json`,
@@ -309,6 +312,7 @@ export async function savePreviewRecord(r: Renderer, clip: {id: string; frames: 
                 preview: true,
                 workflow: r.config.videoWorkflow,
                 seed,
+                ...(request ? {fingerprint: request} : {}),
                 ...r.config.preview,
                 ...(clip.startsFrom ? {approximate: true, startsFrom: clip.startsFrom} : {}),
                 frames: clip.frames,

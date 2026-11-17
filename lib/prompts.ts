@@ -539,7 +539,13 @@ Place: ${description}`,
 
 // The fixed layout of a place, written once from its look and used by every beat there (the shot planner stages people in
 // it instead of inventing a room per beat), and what each of the five views of its reference sheet shows of it.
-export function locationLayoutPrompt(name: string, look: string, description: string): AskOptions {
+/** Who has a fixed spot in a place (LocationSet): a player of an instrument that stands there, a crowd that watches; and the other players, for the stage. */
+export type Performer = {name: string; role: string; prop?: string; standing?: boolean; group?: boolean}
+
+export function locationLayoutPrompt(name: string, look: string, description: string, performers: Performer[] = []): AskOptions {
+    const spotted = performers.filter(p => p.standing || p.group)
+    const players = performers.filter(p => p.prop)
+    const withSet = spotted.length > 0 || players.length > 1
     return {
         // measured (#820): answers up to 3870 tokens under a limit of 4096, one cut off - room for the long ones
         maxTokens: 8192,
@@ -548,10 +554,19 @@ A place of a music video is shown to the video model by a reference picture and 
 ${LOCATION_VIEWS.map((v, n) => `${n}: ${v}`).join('\n')}
 Write the fixed layout of the place, so that every scene there is staged in the same room and every view shows the same place.
 
-Answer only with JSON: {"layout": "...", "views": ["...", "...", "...", "...", "..."]}
+Answer only with JSON: {"layout": "...", "views": ["...", "...", "...", "...", "..."]${withSet ? ', "set": {"stage": "...", "spots": [{"name": "...", "spot": "..."}]}' : ''}}
 - "layout": 3-5 sentences, the floor plan as seen from the camera of view 0: what is at the back, on the left, on the right and behind the camera, where the entrances are, where the light comes from, and how big the place is. Name each wall or side also by what is on it (the window wall, the door wall), so that a shot from another side can still point to it. Only what the picture shows, and where it does not show a side, what fits it plainly - nothing that moves, no people.
 - "views": five entries, one per view above, in order: one sentence each with what that view shows of the layout - which features are in it, on which side of its frame.
-
+${
+    withSet
+        ? `- "set": where the people below have their fixed places when they are in this place, the same in every scene, named by the features of the layout (never a compass point):
+  - "stage": one sentence - the area where the band plays, between which features, and where the camera of view 0 sees it.
+  - "spots": one entry per person below who has a fixed spot, "name" exactly as below: ${spotted.map(p => JSON.stringify(p.name)).join(', ') || 'nobody'}. "spot" is one sentence: for a player of an instrument that stands in the place, where that instrument stands - on the stage, at one fixed feature, and the player only ever at it; for a crowd that watches, where it stands or sits - off the stage, in front of it, never on it or among the players - and that it faces the band.
+  People of this place:
+${performers.map(p => `  - ${p.name}: ${p.role}${p.prop ? ` - ${p.standing ? 'plays' : 'carries'} ${p.prop}${p.standing ? ', which stands in the place' : ''}` : ''}${p.group ? ' - a crowd' : ''}`).join('\n')}
+`
+        : ''
+}
 Place: ${name}
 Image prompt of the reference picture: ${look}
 Description: ${description}`,
@@ -559,10 +574,34 @@ Description: ${description}`,
         schema: {
             type: 'object',
             additionalProperties: false,
-            required: ['layout', 'views'],
+            required: withSet ? ['layout', 'views', 'set'] : ['layout', 'views'],
             properties: {
                 layout: {type: 'string'},
                 views: {type: 'array', minItems: LOCATION_VIEWS.length, maxItems: LOCATION_VIEWS.length, items: {type: 'string'}},
+                ...(withSet
+                    ? {
+                          set: {
+                              type: 'object',
+                              additionalProperties: false,
+                              required: ['stage', 'spots'],
+                              properties: {
+                                  stage: {type: 'string'},
+                                  spots: {
+                                      type: 'array',
+                                      items: {
+                                          type: 'object',
+                                          additionalProperties: false,
+                                          required: ['name', 'spot'],
+                                          properties: {
+                                              name: {type: 'string', enum: spotted.length ? spotted.map(p => p.name) : undefined},
+                                              spot: {type: 'string'},
+                                          },
+                                      },
+                                  },
+                              },
+                          },
+                      }
+                    : {}),
             },
         },
     }

@@ -78,6 +78,9 @@ const PLAN_RULES: {rule: string; when?: (b: BeatNeeds) => boolean}[] = [
         rule: `Whoever or whatever a shot is about must be looking at something in the scene, never at the lens: name the target of every look or stare (the person they're threatening, the blade coming at them, the ground below) - an eye-line with no named target defaults to a dead-on stare into the camera, especially on a push-in, which reads as breaking the scene rather than being part of it.`,
     },
     {
+        rule: `How a person looks - hair, skin, face, build, costume and their colors - is set by their picture and by "looks": a text field never describes it otherwise. Where the beat's "summary" or "moments" give someone other hair or other clothes, that is left out; hair, skin and costume are named only as "looks" has them, or not at all. The same for a prop of "castProps": it keeps its shape, size, colors and decoration in every shot - nothing on it glows, flares, burns, lights up or changes; light and effects are in the place around it.`,
+    },
+    {
         rule: `Name the visible facial reaction the shot's action produces (jaw clenching, eyes widening, a grin, brows drawing together, a grimace, a flicker of relief) whenever the moment calls for one - a shot with no facial reaction described tends to render with the same flat expression as every other shot of that character.`,
     },
     {
@@ -176,6 +179,10 @@ const PLAN_RULES: {rule: string; when?: (b: BeatNeeds) => boolean}[] = [
     {
         rule: `The camera of a shot with players never takes its speed from a hand or an instrument ("tracks along the neck at the speed of the fingers", "whips with every strike"): it makes one slow, steady move, named with its direction, and the person it follows is in the frame from the first frame of the shot.`,
         when: b => b.plays,
+    },
+    {
+        rule: `The place may have a "set": where the band plays ("stage") and the fixed "spots" of some people in it. It is the same in every beat and wins over any other placing: an instrument that stands in the place is at its spot and its player is only ever at it, never somewhere else in the place; a crowd with a spot is there - off the stage, facing the band, never on the stage, among the players or beside them - and its gaze goes to the band, not up into the air; the others of the band play on the stage. Every shot keeps to it, whatever the camera does.`,
+        when: b => b.props || b.group,
     },
     {
         rule: `Someone whose instrument stands in the place (the cast says it "stands in" a place and is used there, never carried) is only in a shot together with it: at it, the instrument in the frame with them, never in front of it or away from it. A shot that cannot show the instrument - a medium or close shot of people elsewhere in the place - leaves them out; they are heard off camera.`,
@@ -282,6 +289,8 @@ Rules:
 - "start": for every character of the beat, where they are and what they do and hold when the beat starts, a phrase with a verb - never that they sing (see "STAGING"). A beat that goes on from the beat before it (the same place, no jump in time) starts where that one ended; a beat that opens a new scene starts where its story puts them.
 - "end": for every character of the beat, where they are and what they do and hold when the beat is over - where its summary and moments take them. The next beat starts from it.
 - A character holds their one prop ("castProps") unless the beat has them drop, lose or swap it; a prop that stands in a place stays there, and they are at it to use it.
+- How a person looks - hair, skin, face, build, costume and their colors - is set by their picture and by "looks": a text field never describes it otherwise. Where the beat's "summary" or "moments" give someone other hair or other clothes, that is left out; hair, skin and costume are named only as "looks" has them, or not at all. The same for a prop of "castProps": it keeps its shape, size, colors and decoration in every shot - nothing on it glows, flares, burns, lights up or changes; light and effects are in the place around it.
+- The place may have a "set": where the band plays ("stage") and the fixed "spots" of some people in it. It is the same in every beat and wins over any other placing: an instrument that stands in the place is at its spot and its player is only ever at it, never somewhere else in the place; a crowd with a spot is there - off the stage, facing the band, never on the stage, among the players or beside them - and its gaze goes to the band, not up into the air; the others of the band play on the stage.
 - Every character in a text is written as their "name" from "cast" in braces - {Kara}, {Orcs} - exactly as spelled there; the name right after "start:" and "end:" is plain, without braces.
 
 Answer in exactly this line format and nothing else - one field per line, no JSON, no markdown:
@@ -292,6 +301,36 @@ start: <Name> | <where they are and what they do and hold when the beat starts>
 ENDS
 end: <Name> | <where they are and what they do and hold when the beat is over>
 (one "end:" line for every character of the beat)`
+
+/**
+ * A place as the blocking and the shot planner read it: its name, description, floor plan and - in a band video - its set: where
+ * the band plays, where an instrument that stands there stands and where a crowd watches from (#1119), by name.
+ */
+export function placeOf(
+    id: string,
+    locations: Location[],
+    descriptions: Record<string, string>,
+    layouts: Record<string, LocationLayout> | undefined,
+    cast: Pick<Character, 'id' | 'name'>[],
+) {
+    const layout = layouts?.[id]
+    const set = layout?.set
+    return {
+        name: locations.find(l => l.id === id)?.name ?? id,
+        description: descriptions[id] ?? '',
+        ...(layout?.layout ? {layout: layout.layout} : {}),
+        ...(set
+            ? {
+                  set: {
+                      stage: set.stage,
+                      ...(Object.keys(set.spots).length
+                          ? {spots: Object.fromEntries(Object.entries(set.spots).map(([who, spot]) => [cast.find(c => c.id === who)?.name ?? who, spot]))}
+                          : {}),
+                  },
+              }
+            : {}),
+    }
+}
 
 // a prop that stands in a place (a drum kit) is used there and never carried along - said with the prop wherever it is listed
 export const castProp = (c: Character, locations: Location[]) =>
@@ -315,7 +354,7 @@ export function blockingPrompt(
         maxTokens: 8192,
         input: `castProps: ${JSON.stringify(Object.fromEntries(cast.filter(c => c.prop).map(c => [c.name, castProp(c, locations)])))}
 cast: ${JSON.stringify(cast.map(c => ({id: c.id, name: c.name, ...(c.isGroup ? {group: true} : {})})))}
-place (as its reference picture shows it): ${JSON.stringify({name: locations.find(l => l.id === beat.locationId)?.name ?? beat.locationId, description: locationDescriptions[beat.locationId] ?? '', ...(locationLayouts?.[beat.locationId]?.layout ? {layout: locationLayouts[beat.locationId]!.layout} : {})})}
+place (as its reference picture shows it): ${JSON.stringify(placeOf(beat.locationId, locations, locationDescriptions, locationLayouts, cast))}
 looks (as their reference pictures show them): ${JSON.stringify(Object.fromEntries(beat.characterIds.map(id => [cast.find(c => c.id === id)?.name ?? id, characterDescriptions[id] ?? ''])))}
 ${
     before
@@ -441,7 +480,7 @@ The first beat below follows directly after it: start from where it ends - where
 Let the last shot of the last beat below lead toward it, and write nothing for it.
 `
                 : ''
-        }place (as its reference picture shows it): ${JSON.stringify(Object.fromEntries([...new Set(block.map(b => b.locationId))].map(id => [id, {name: locations.find(l => l.id === id)?.name ?? id, description: locationDescriptions[id] ?? '', ...(locationLayouts?.[id]?.layout ? {layout: locationLayouts[id]!.layout} : {})}])))}
+        }place (as its reference picture shows it): ${JSON.stringify(Object.fromEntries([...new Set(block.map(b => b.locationId))].map(id => [id, placeOf(id, locations, locationDescriptions, locationLayouts, cast)])))}
 looks (as their reference pictures show them): ${JSON.stringify(Object.fromEntries([...new Set(block.flatMap(b => b.characterIds))].map(id => [cast.find(c => c.id === id)?.name ?? id, characterDescriptions[id] ?? ''])))}
 beats (write shots only for these):
 ${JSON.stringify(
@@ -576,6 +615,7 @@ Every character in "summary", "moments" and the facts of "stateAfter" is written
   A walk goes somewhere in the place: name where to ("toward the far end of the corridor", "out through the side door"), never only "forward" or "ahead" - which side the camera sees is decided per shot, and a walker whose face is wanted while "forward" points away from the lens is rendered walking backwards.
   Eyes and attention follow the scene, not the lens: say what a character or creature is looking at (the person it's reaching for, the weapon coming at it, the ground as it falls) - never leave it staring into the camera, and never describe a "look" or "stare" without naming its target, since an untargeted one defaults to a straight-into-camera stare that breaks the scene.
   Faces react too: name the visible facial reaction the moment produces (jaw clenching, eyes widening, a grin, brows drawing together, a grimace) whenever the action calls for one - a beat with no facial reaction described tends to render with a flat, unchanging expression throughout.
+  Never describe how a character looks - no hair, skin, eye or costume colors, no clothes: their look is drawn elsewhere, and a beat that gave the singer "black wet hair" and "deep blue robes" turned her silver-white hair black in the video.
   ${filmableRules}
 - "locationId": exactly one of the location ids below.
 - "characterIds": ids of the characters on screen, only from the list below.
