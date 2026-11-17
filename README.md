@@ -433,7 +433,8 @@ renders such a slot as 226 frames (about 9.4 s), see [The final video](#the-fina
 | 5  | `cast`           | Characters and locations with ids, each character's `prop` and, if it's a heard instrument, its `propStem` ⁴ | story |
 | 5a | `instrumentStems` | Guitar/piano separated from `other` with a second, narrower demucs pass, only for `propStem`s that need it ⁴ | stems, cast |
 | 5b | `singing`        | The singers, and who sings which line ²                                          | cast                         |
-| 5c | `propActivity`   | Bar-averaged energy activity ranges per instrument stem claimed by a character ¹ ⁴ | stems, cast, music          |
+| 5c | `propActivity`   | Bar-averaged energy activity ranges per instrument stem claimed by a character, for the story beats ¹ ⁴ | stems, cast, music          |
+| 5e | `shotActivity`   | The same measure, taken when the shots are planned: the shots and the clips are cut and planned by it. A better measure reaches a planned project with `--redo=shotActivity` (it plans the shots again, the beats and the people stay); a project planned before the step keeps the activity its shots were cut by | stems, cast, music |
 | 6  | `lookBrief`      | Film look for MiniMax H3: one format and style, palette, camera language - extends `style.txt` if there is one | summary |
 | 7  | `characterLooks` | Krea 2 prompt per character (reference sheet, plain background)                  | cast, lookBrief              |
 | 7b | `characterDescriptions` | The character look without the reference sheet - no pose, background, light or medium - for the clip prompts | characterLooks |
@@ -447,7 +448,7 @@ renders such a slot as 226 frames (about 9.4 s), see [The final video](#the-fina
 | 10 | `timeline`       | Song cut into clips on downbeats, as many bars as fit into `MAX_CLIP_SEC`; with the lyrics timing, real section starts and the words sung in every clip | music, lyricsTiming |
 | 11 | `mapping`        | Beats stretched over the clips in story order, matching intensity to energy      | beats, timeline              |
 | 11a | `blocking`      | The floor plan per beat and where everybody starts and ends, each beat from the end of the one before - one short call per beat, in order ³ ⁶ | beats, timeline, mapping, characterDescriptions, locationDescriptions, locationLayouts |
-| 11b | `shotMoments`   | The staged shots per beat, from its blocking: per shot the action, who is in the picture and where they stand and move, replacing `beat.moments` - the beats at once; `--redo=shotMoments` keeps the blocking, `--beats=beat-05,beat-07` with it plans only those beats again ³ | blocking, beats, timeline, mapping, propActivity, singing, characterDescriptions, locationDescriptions, locationLayouts |
+| 11b | `shotMoments`   | The staged shots per beat, from its blocking: per shot the action, who is in the picture and where they stand and move, replacing `beat.moments` - the beats at once; `--redo=shotMoments` keeps the blocking, `--beats=beat-05,beat-07` with it plans only those beats again ³ | blocking, beats, timeline, mapping, propActivity, shotActivity, singing, characterDescriptions, locationDescriptions, locationLayouts |
 | 11c | `shotViews`     | Per shot the view of the place's reference sheet (front, right, behind, left, wide) it is in, from the text of the plan ⁸ | shotMoments |
 | 12 | –                | MiniMax H3 requests, built deterministically, never cached                       | everything                   |
 
@@ -865,8 +866,10 @@ What happens, only when at least one character has a `propStem` **and** the lyri
 1. **Instrument activity** (`5c`): every stem a `propStem` claims (`drums.wav`, `bass.wav`, `guitar.wav`, …) is
    decoded with ffmpeg and its energy averaged over one bar, so a groove counts as playing between its hits. A stretch
    is active where that level is at most 20 dB below the stem's own loud bars and above -50 dBFS (the bleed of the
-   other instruments in a separated stem) - no extra model, just the stems already separated in step `2a`. Projects
-   from before this keep their old ranges until `--redo=propActivity` (which also redoes `shotMoments`).
+   other instruments in a separated stem) - no extra model, just the stems already separated in step `2a`. The edges of
+   a stretch lie on its first and last sound, not half a bar into the silence (#1115). The beats read `propActivity`;
+   the shots and the clips read `shotActivity` (`5e`), the same measure taken when the shots are planned - so
+   `--redo=shotActivity` brings a better measure to a planned project without making its beats again.
 2. **Shots** (`11b`): for every beat, each on-screen character with a `propStem` gets one active/inactive flag per
    shot, from whether that stem is heard over a fifth of the shot or 0.3 s - the shots as the clip is cut (step 3 below). The LLM is told to show
    the character actively using the prop only on an active shot - it picks the verb itself (playing, strumming,

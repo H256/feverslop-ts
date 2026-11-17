@@ -729,6 +729,21 @@ const {beats, memberCounts, characterLookVariants, characterDescriptionVariants,
     characterDescriptions,
 })
 
+// the activity the shots are cut and planned by, measured as they are planned (#1115): a project with a plan of its shots - or of
+// some, kept while the others are planned again - keeps the activity they were cut by, so its cuts and its plan stay together
+const plannedShots = project.data.shotMoments !== undefined || project.data.partials?.shotMoments !== undefined
+const shotActivity =
+    propActivity && (project.data.shotActivity !== undefined || !plannedShots)
+        ? await project.step('shotActivity', '5e · MEASURING THE ACTIVITY FOR THE SHOTS', async () => {
+              const result: NonNullable<typeof project.data.shotActivity> = {}
+              for (const stemName of Object.keys(propActivity) as (keyof typeof propActivity)[]) {
+                  const stemFile = allStems[stemName]
+                  result[stemName] = stemFile ? await stemActivity(join(project.dir, stemFile), music.bpm) : propActivity[stemName]
+              }
+              return result
+          })
+        : propActivity
+
 // the shots: the story matched to the clips, blocked and planned beat by beat, the direction kept (lib/pipeline/plan-shots.ts)
 const {clipSlots, mapping, locationView, directedPlan, shotViews} = await planShots({
     project,
@@ -738,7 +753,7 @@ const {clipSlots, mapping, locationView, directedPlan, shotViews} = await planSh
     music,
     timeline,
     lyricsTiming,
-    propActivity,
+    propActivity: shotActivity,
     singing,
     beats,
     cast,
@@ -759,7 +774,7 @@ const {clips, outputDir, pictures} = await buildRequests({
     stems,
     stemFiles,
     lyricsTiming,
-    propActivity,
+    propActivity: shotActivity,
     singing,
     cast,
     lookBrief,

@@ -92,3 +92,26 @@ describe('the shots of chosen beats planned again (#762)', () => {
         expect(data.partials!.shotMoments).toEqual({})
     })
 })
+
+describe('the activity of the shots, a step of its own (#1115)', () => {
+    test('redoing it plans the shots again and keeps the beats, the group members and the blocking', () => {
+        const project = store({
+            propActivity: {},
+            shotActivity: {},
+            beats: [],
+            characterLookVariants: {},
+            mapping: [],
+            blocking: {},
+            shotMoments: {},
+            shotViews: {},
+        })
+        expect(project.redoneBy(['shotActivity'])).toEqual(['shotActivity', 'shotMoments', 'shotViews'])
+    })
+    test('the shots read their own measure, and a project planned before it the one of the beats', async () => {
+        const {shotActivityOf} = await import('./project.ts')
+        expect(shotActivityOf({propActivity: {drums: [{start: 0, end: 1}]}})).toEqual({drums: [{start: 0, end: 1}]})
+        expect(shotActivityOf({propActivity: {drums: [{start: 0, end: 1}]}, shotActivity: {drums: [{start: 0, end: 0.8}]}})).toEqual({
+            drums: [{start: 0, end: 0.8}],
+        })
+    })
+})
