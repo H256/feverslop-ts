@@ -1,6 +1,7 @@
 # Changelog
 
 One section per release. The section of a tag becomes its GitHub release (`.github/workflows/release.yml`).
+
 ## v0.12.0 – a green workspace, a Timing page that shows the proposal on the timeline, and songs that start from their style
 
 _2026-11-17_
