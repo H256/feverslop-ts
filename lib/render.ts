@@ -458,8 +458,8 @@ export class Renderer implements Disposable {
         return clipsWork.previewStart(this, id)
     }
 
-    savePreviewRecord(clip: {id: string; frames: number; startsFrom?: string}, target: string, seed: number) {
-        return clipsWork.savePreviewRecord(this, clip, target, seed)
+    savePreviewRecord(clip: {id: string; frames: number; startsFrom?: string}, target: string, seed: number, request?: string) {
+        return clipsWork.savePreviewRecord(this, clip, target, seed, request)
     }
 
     retake(

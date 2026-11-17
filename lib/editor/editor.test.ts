@@ -250,6 +250,21 @@ describe('freshness', () => {
         write(join(dir, 'output/assets.json'), [{...job, prompt: 'another hall'}])
         expect((await readEditorFreshness({id: 'pictures', dir, kind: 'music'})).pictures).toEqual({hall: 'stale'})
     })
+    test('a preview says whether it was made from the request there is now - one from before its record had it is not known (#1117)', async () => {
+        const dir = music()
+        const {readClipRequests} = await import('../render-state.ts')
+        const {loadProjectConfig} = await import('../config.ts')
+        const {clipFingerprint} = await import('../render.ts')
+        const [clip] = await readClipRequests<Parameters<typeof clipFingerprint>[0]>(dir)
+        write(join(dir, 'previews', `${clip!.id}.mp4`), 'mp4')
+        write(join(dir, 'previews', `${clip!.id}.mp4.json`), {preview: true})
+        expect((await readEditorFreshness({id: 'music', dir, kind: 'music'})).previews).toEqual({[clip!.id]: 'pinned'})
+        write(join(dir, 'previews', `${clip!.id}.mp4.json`), {preview: true, fingerprint: clipFingerprint(clip!, dir, await loadProjectConfig(dir))})
+        expect((await readEditorFreshness({id: 'music', dir, kind: 'music'})).previews).toEqual({[clip!.id]: 'current'})
+        write(join(dir, 'previews', `${clip!.id}.mp4.json`), {preview: true, fingerprint: 'another plan'})
+        expect((await readEditorFreshness({id: 'music', dir, kind: 'music'})).previews).toEqual({[clip!.id]: 'stale'})
+        rmSync(join(dir, 'previews'), {recursive: true})
+    })
 })
 
 describe('serving', () => {

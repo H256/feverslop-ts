@@ -320,6 +320,7 @@ const hidePeek = () => {
               :key="clip.id"
               :clip="clip"
               :state="stateOf(clip, fresh)"
+              :preview-state="fresh.previews?.[clip.id]"
               :selected="clip === playback.clip.value"
               :marked="marked.has(clip.id)"
               :flagged="isFlagged(clip)"

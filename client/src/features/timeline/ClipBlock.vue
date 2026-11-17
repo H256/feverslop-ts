@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed} from 'vue'
-import type {ClipProgress, EditorClip} from '../../../../shared/workspace'
+import type {ClipProgress, EditorClip, Freshness} from '../../../../shared/workspace'
 import {thumbUrl, type MediaRoots} from '../../api/urls'
 import {plural} from '../../lib/format'
 import {TERMS} from '../../lib/terms'
@@ -17,7 +17,17 @@ const props = defineProps<{
   roots: MediaRoots
   again?: boolean // kept with R in a review: rendered when it ends
   reviewed?: boolean // the clip the review is at
+  previewState?: Freshness // the preview made from the plan there is now, or from an older one (#1117)
 }>()
+// what the P says: a preview, and whether it is the plan's now - one from before the record said it is not known
+const previewTitle = computed(() => {
+  const what = props.clip.preview?.approximate ? 'an approximate preview' : 'a preview'
+  return props.previewState === 'current'
+    ? `Has ${what} of the plan as it is now`
+    : props.previewState === 'stale'
+      ? `Has ${what} of an older plan - preview it again to see the plan as it is now`
+      : `Has ${what} - made before previews recorded their plan: whether it is the plan's now is not known`
+})
 defineEmits<{pick: [event: MouseEvent]}>()
 const seconds = computed(() => props.clip.end - props.clip.start)
 const stand = computed(() => standIn(props.clip))
@@ -41,7 +51,7 @@ const label = computed(
     <span v-if="clip.startsFrom" class="goes" :title="`Goes on from ${clip.startsFrom}. ${TERMS['Goes on']}`" />
     <span v-if="clip.marks.length" class="flag" />
     <span v-if="clip.video?.moved" class="moved">{{ clip.video.moved > 0 ? '+' : '' }}{{ clip.video.moved.toFixed(1) }}s</span>
-    <span v-if="clip.preview" class="has-preview" :title="clip.preview.approximate ? 'Has an approximate preview' : 'Has a preview'">P</span>
+    <span v-if="clip.preview" :class="['has-preview', previewState === 'stale' && 'old', previewState === 'current' && 'now']" :title="previewTitle">P</span>
     <span v-if="marked" class="ticked">✓</span>
     <span v-if="again" class="again" title="Kept with R: rendered again when the review ends">↻ render</span>
     <span v-if="progress" class="progress">{{ progress }}</span>
