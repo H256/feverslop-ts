@@ -37,8 +37,14 @@ export type Character = {
 /** What a character holds and plays things with, as a plural noun: "hands" unless the cast says otherwise (a creature, a donut). */
 export const handsOf = (c: {hands?: string}) => c.hands?.trim() || 'hands'
 export type Location = {id: string; name: string}
-/** The fixed floor plan of a place (step locationLayouts) and, per view of its sheet (LOCATION_VIEWS), what that view shows. */
-export type LocationLayout = {layout: string; views: string[]}
+/**
+ * The fixed floor plan of a place (step locationLayouts) and, per view of its sheet (LOCATION_VIEWS), what that view shows.
+ * `set`: where a band plays in it, and the fixed spot of everybody who has one there - a player of an instrument that stands
+ * in the place (a drum kit), and a crowd watching (#1119) - by character id. A place drawn without its standing instrument
+ * (propPictures) has no spot for it in the picture: without one in words, every beat put the kit and the audience elsewhere.
+ */
+export type LocationSet = {stage: string; spots: Record<string, string>}
+export type LocationLayout = {layout: string; views: string[]; set?: LocationSet}
 
 /** A continuity fact of a beat: of the place it happened in, or of the characters its {Name} tokens name. */
 export type Fact = {fact: string; place: boolean}
@@ -252,7 +258,7 @@ const dependsOn: Record<StepName, StepName[]> = {
     characterDescriptions: ['characterLooks'],
     locationDescriptions: ['locationLooks'],
     locationAnchors: ['locationDescriptions'],
-    locationLayouts: ['locationLooks', 'locationDescriptions'],
+    locationLayouts: ['locationLooks', 'locationDescriptions', 'cast'],
     // the loudness and the instruments heard along the song (musicStretches) shape the story's curve
     beats: ['story', 'cast', 'singing', 'music', 'lyricsTiming', 'propActivity'],
     timeline: ['music', 'lyricsTiming'],

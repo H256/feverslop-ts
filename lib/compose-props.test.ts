@@ -64,7 +64,9 @@ describe('prop pictures in a clip request (#944)', () => {
             ['<Picture 3>', 'character', 'assets/characters/gtr.png'],
             ['<Picture 4>', 'prop', 'assets/props/electric-guitar.png'],
         ])
-        expect(c.prompt).toContain('<Subject 4> is the electric guitar of <Subject 3>, the object in <Picture 4>: an electric guitar')
+        expect(c.prompt).toContain(
+            '<Subject 4> is the electric guitar of <Subject 3>, the object in <Picture 4>, at the real size such an object has next to <Subject 3>: an electric guitar',
+        )
         expect(c.prompt).toContain('In the shot: <Subject 4>, the electric guitar of <Subject 3>, exactly as in <Picture 4>.')
         expect(c.prompt).toMatch(
             /<Subject 4> \(appears in \[Shot 1\]\): fully_preserved - the shape, size, colors and material of the electric guitar are retained/,
