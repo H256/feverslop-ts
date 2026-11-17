@@ -558,6 +558,15 @@ export async function setDirectionRules(
 const editable = new Set(['action', 'framing', 'camera', 'view', 'hold', 'size', 'rest', 'people', 'characters', 'hands'])
 /** Whoever the director brought into a shot (#792): a proposal may have them although the plan before it did not. */
 const broughtInto = (s: State, shotId: string) => (s.edits ?? []).filter(e => e.add && e.scope.kind === 'shot' && e.scope.id === shotId).map(e => e.add!)
+/** A shot is listed to the model with its id, group and times around it; whatever of that it hands back is not part of the shot (the shot is its data). */
+const wrapperKeys = ['id', 'groupId', 'start', 'end', 'ruleIds', 'data']
+function unwrapShot(before: Record<string, unknown>, after: unknown) {
+    if (!after || typeof after !== 'object' || Array.isArray(after)) return after
+    const a = after as Record<string, unknown>
+    const inner = a.data
+    if (!('data' in before) && inner && typeof inner === 'object' && !Array.isArray(inner)) return inner
+    return Object.fromEntries(Object.entries(a).filter(([k]) => !wrapperKeys.includes(k) || k in before))
+}
 function validateAfter(before: Record<string, unknown>, after: unknown, brought: string[] = []) {
     if (!after || typeof after !== 'object' || Array.isArray(after)) throw Error('invalid shot object')
     const a = after as Record<string, unknown>
@@ -673,7 +682,7 @@ export async function previewDirection(t: DirectionTarget, ask?: DirectionAsk) {
                     const sh = selected.find(sh => sh.id === c?.shotId)
                     if (!sh || seen.has(c.shotId)) throw Error('unknown or duplicate shot')
                     seen.add(c.shotId)
-                    return {shotId: c.shotId, before: sh.data, after: validateAfter(sh.data, c.after)}
+                    return {shotId: c.shotId, before: sh.data, after: validateAfter(sh.data, unwrapShot(sh.data, c.after))}
                 })
                 // whoever the director brought into a shot (#792) stays in it, with a place: the model may leave others out, not them
                 for (const sh of selected) {

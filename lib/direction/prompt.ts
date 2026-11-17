@@ -11,7 +11,7 @@ Editable shot fields: action, framing, camera, view, hold, size (wide/medium/clo
 
 Make action, pose, motion and camera mutually consistent. 'Back to camera' is the required end pose, not an automatic 360-degree turn. Describe left/right relative to the character or image explicitly. A visual instruction cannot change the audio or invent a solo that is not in the song. Do not paste the instruction into the video prompt.
 
-Return JSON {changes:[{shotId,after: COMPLETE updated shot object}],conflicts:[string]}. Return at least one chosen shot (unchanged if already compliant), or conflicts explaining why no edit can be made.`
+Return JSON {changes:[{shotId,after: the COMPLETE updated shot - the contents of its data, without id, groupId, start, end or ruleIds}],conflicts:[string]}. Return at least one chosen shot (unchanged if already compliant), or conflicts explaining why no edit can be made.`
 
 /** The response envelope is constrained; per-shot protected fields and identity enums are checked by code as well. */
 export function directionPrompt(input: unknown): AskOptions {
