@@ -29,7 +29,6 @@ import {textOf, messageOf} from '../text.ts'
 /** What the look is made from: the run, the story and the cast, and what the casting took from the library. */
 export type LookRun = {
     project: ProjectStore
-    projectId: string
     args: {review: boolean}
     style: string
     storySummary: string
@@ -42,7 +41,7 @@ export type LookRun = {
 }
 
 export async function planLook(run: LookRun) {
-    const {project, projectId, args, style, storySummary, cast, casted, castChanged, castTexts, propPictures} = run
+    const {project, args, style, storySummary, cast, casted, castChanged, castTexts, propPictures} = run
     /////////// DESIGNING THE LOOK - invented from the story, or extending the director's style.txt
     const lookBrief = await reviewed(
         project,
@@ -204,7 +203,7 @@ export async function planLook(run: LookRun) {
         )
         if (redo.length)
             log.warn(
-                `${CASTING_FILE} changed since the plan was made - it is made with the library's texts again by: bun index.ts ${projectId} --redo=${redo.join(',')}`,
+                `${CASTING_FILE} changed since the plan was made - it is made with the library's texts again by: bun index.ts ${project.id} --redo=${redo.join(',')}`,
             )
     }
     for (const [id, {layout, views}] of Object.entries(locationLayouts)) log.box(`${id} · layout`, [layout, ...views.map((v, n) => `${n}: ${v}`)].join('\n'))

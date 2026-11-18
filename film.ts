@@ -105,7 +105,7 @@ const {values: args, positionals} = (() => {
             },
         })
     } catch (e) {
-        return log.usageError(e instanceof Error ? e.message : String(e), usage)
+        return log.usageError(messageOf(e), usage)
     }
 })()
 // a word more than it takes is said before any work (#938)
@@ -116,7 +116,7 @@ const {render, refresh, only, retake, until} = (() => {
     try {
         return readRunOptions(args, FILM_RENDER, !!(process.stdin.isTTY && process.stdout.isTTY), positionals[0])
     } catch (e) {
-        return log.usageError((e as Error).message, usage)
+        return log.usageError(messageOf(e), usage)
     }
 })()
 if (until && (render.size || args.retake || args['dry-run']))
@@ -364,9 +364,7 @@ try {
         scriptNotes = await film.step('scriptNotes', `3c · READING THE REPAIRED SCRIPT (round ${round + 1})`, readScript)
     }
 } catch (e) {
-    log.warn(
-        `the script could not be checked for contradictions (${e instanceof Error ? e.message : String(e)}) - the film goes on without; --redo=scriptNotes tries again`,
-    )
+    log.warn(`the script could not be checked for contradictions (${messageOf(e)}) - the film goes on without; --redo=scriptNotes tries again`)
 }
 for (const note of scriptNotes) log.warn(`script: ${note}`)
 if (scriptNotes.length)

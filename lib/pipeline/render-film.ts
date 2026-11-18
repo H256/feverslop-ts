@@ -228,6 +228,4 @@ export async function renderFilm(run: FilmRenderRun) {
         const {next} = await filmStatus(film.id).catch(() => ({next: undefined}))
         if (next?.command) log.next(next.command)
     }
-
-    return {}
 }

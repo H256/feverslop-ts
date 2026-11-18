@@ -2,7 +2,7 @@ import {noProject} from './lib/usage.ts'
 import {extraArgument} from './lib/command-schema.ts'
 import {cli} from './lib/cli.ts'
 import {toSlug} from './lib/slug.ts'
-import {existsSync} from 'node:fs'
+import {existsSync, mkdirSync, readdirSync} from 'node:fs'
 import {parseArgs} from 'node:util'
 import {formatDuration, keepLogIn, log, runLogFile, runWarnings, setOutput, styles} from './lib/log.ts'
 import {MUSIC_RENDER, readRunOptions, RUN_OPTIONS} from './lib/run-options.ts'
@@ -19,20 +19,18 @@ import {chooseSingers} from './lib/pipeline/singers-choice.ts'
 import {projectStatus} from './lib/status.ts'
 import {keepTimingsIn, runTimings} from './lib/timings.ts'
 import {ask, askJson, configureLlm} from './lib/llm.ts'
-import {mkdirSync, readdirSync} from 'node:fs'
 import {join} from 'node:path'
-import {type Character, type Location, ProjectStore, type PropStem, STEP_NAMES, type StepName} from './lib/project.ts'
+import {type Character, dropBeatPlans, type Location, ProjectStore, type PropStem, STEP_NAMES, type StepName} from './lib/project.ts'
 import {unknownIds} from './lib/batch.ts'
 import {directionNotTaken} from './lib/direction/service.ts'
 import {lockProject} from './lib/lock.ts'
 import {beginRun} from './lib/run-record-view.ts'
-import {separateInstrumentStems, stemActivity} from './lib/music.ts'
+import {projectLyricSections, separateInstrumentStems, stemActivity} from './lib/music.ts'
 import {groupMemberId, pictureAsset} from './lib/compose.ts'
 import {takeOwnDescription} from './lib/own-picture.ts'
 import {type PictureJob, Renderer} from './lib/render.ts'
 import {languageName, loadProjectConfig} from './lib/config.ts'
 import {sungLines} from './lib/lyrics.ts'
-import {projectLyricSections} from './lib/music.ts'
 import {archiveFiles, versionStamp} from './lib/archive.ts'
 import {clipRequestsDir, clipRequestsIn} from './lib/previous-output.ts'
 import {writeGallery} from './lib/gallery.ts'
@@ -49,18 +47,12 @@ import {stopAfter} from './lib/stages.ts'
 import {applyLibraryText, castFromLibrary, copyKey} from './lib/casting.ts'
 import {type LibraryAsset, libraryDir} from './lib/library.ts'
 import {type AssetKind} from './lib/asset-import.ts'
-import {dropBeatPlans} from './lib/project.ts'
-import {askLayers, stemQuestion, withStems} from './lib/cast-stems.ts'
+import {askLayers, STEM_NAMES, stemQuestion, withStems} from './lib/cast-stems.ts'
 import {castPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt} from './lib/prompts.ts'
 import {messageOf} from './lib/text.ts'
 import {castProps, propPictureJob} from './lib/props.ts'
 cli('plan')
 
-// any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
-// as one of these) gets the same tidy red box as a bad --flag, instead of Bun's raw stack-trace dump
-
-// bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002]
-//              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again] [--preview] [--retake=slot-007:3.2-5.0]
              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--llm-parallel=2] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
              [--refresh=pictures,clips] [--beats=beat-05,beat-07] [--strict] [--debug] [--review] [--until=story|cast|look] [--dry-run [--json]] [-v|--verbose] [--show=story,cast,clips]   (--debug: the stack trace of a failure · --review: stop after story, cast, look and beats to accept, edit or redo them · --until: plan up to this stage and stop, the next run goes on from it · --dry-run: what the run would redo and render, nothing is done · -v: every detail as before · --show: the details of these cached steps, clips = the prompts · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
@@ -93,7 +85,7 @@ const {values: args, positionals} = (() => {
             },
         })
     } catch (e) {
-        return log.usageError(e instanceof Error ? e.message : String(e), usage)
+        return log.usageError(messageOf(e), usage)
     }
 })()
 // a word more than it takes is said before any work (#938)
@@ -105,7 +97,7 @@ const {render, refresh, only, retake, until} = (() => {
     try {
         return readRunOptions(args, MUSIC_RENDER, !!(process.stdin.isTTY && process.stdout.isTTY), positionals[0])
     } catch (e) {
-        return log.usageError((e as Error).message, usage)
+        return log.usageError(messageOf(e), usage)
     }
 })()
 if (until && ([...render].some(r => r !== 'images') || args.retake || args.gallery || args.export || args['dry-run']))
@@ -168,7 +160,6 @@ if (!args.gallery && !args['dry-run']) {
     beginRun(project.dir, 'index.ts')
 }
 if (args.gallery) {
-    if (!existsSync(project.dir)) throw new Error(`No project "${project.id}" in projects/`)
     const {file, counts} = await writeGallery(project.dir, project.id, project.data)
     log.step(
         'Gallery',
@@ -195,7 +186,6 @@ if (replanBeats.length) {
 // the steps named, but with --beats not shotMoments as a whole: just the shot plans of those beats go
 const redoWhole = replanBeats.length ? redoSteps.filter(step => step !== 'shotMoments') : redoSteps
 
-const toId = toSlug
 const readInput = (name: string) => readInputFile(project.input(name))
 
 /////////// GET LYRICS, STORY IDEA, STYLE AND CONFIG
@@ -371,7 +361,7 @@ if (sectionsChanged(project.data.music, lyricSections)) project.invalidate('musi
 for (const step of lostStems(project)) project.invalidate(step)
 
 // the song heard: its sections and energy, the stems, the lyrics aligned to the vocals (lib/pipeline/song.ts)
-const {music, stems, lyricsTiming} = await hearSong({project, projectId, config, songFile, lyrics, lyricSections, language, idea})
+const {music, stems, lyricsTiming} = await hearSong({project, config, songFile, lyrics, lyricSections, language, idea})
 
 ////////// CRAFT A STORY FOR THE LYRICS
 const storyBase = await reviewed(
@@ -410,11 +400,9 @@ const cast = await reviewed(
                     const given = extracted.characters.filter(c => candidates.some(a => a.name === c.name) && c.propStem)
                     if (given.length) log.step('Layers', styles.muted(given.map(c => `${c.name}: ${c.propStem}`).join(', ')))
                 } catch (error) {
-                    log.warn(
-                        `the layer of the song of ${candidates.map(c => c.name).join(', ')} could not be asked: ${error instanceof Error ? error.message : String(error)}`,
-                    )
+                    log.warn(`the layer of the song of ${candidates.map(c => c.name).join(', ')} could not be asked: ${messageOf(error)}`)
                 }
-            const stemNames = new Set(['drums', 'bass', 'other', 'guitar', 'piano'])
+            const stemNames = new Set<string>(STEM_NAMES)
             const takenCharacters = new Set<string>()
             const takenLocations = new Set<string>()
             const uniqueId = (base: string, taken: Set<string>) => {
@@ -423,14 +411,14 @@ const cast = await reviewed(
                 taken.add(id)
                 return id
             }
-            const locations = extracted.locations.map(l => ({...l, id: uniqueId(toId(l.name), takenLocations)}))
+            const locations = extracted.locations.map(l => ({...l, id: uniqueId(toSlug(l.name), takenLocations)}))
             // the place a prop stands in, by the name the answer gives it - the only place when there is just one
             const placeOf = (name: string | undefined) =>
-                locations.find(l => l.name === name || l.id === toId(name ?? ''))?.id ?? (locations.length === 1 ? locations[0]!.id : undefined)
+                locations.find(l => l.name === name || l.id === toSlug(name ?? ''))?.id ?? (locations.length === 1 ? locations[0]!.id : undefined)
             return {
                 // "A B" and "A-B" give the same slug: a second one gets its own id instead of overwriting the first one's look
                 characters: extracted.characters.map(c => ({
-                    id: uniqueId(toId(c.name), takenCharacters),
+                    id: uniqueId(toSlug(c.name), takenCharacters),
                     name: c.name,
                     role: c.role,
                     ...(c.isGroup === true ? {isGroup: true} : {}),
@@ -576,7 +564,6 @@ stopAfter(until, 'cast', project.file, `bun index.ts ${projectId}`)
 // the look of the whole, of the cast and of the places (lib/pipeline/look.ts)
 const {lookBrief, characterLooks, characterDescriptions, locationLooks, locationDescriptions, locationAnchors, locationLayouts} = await planLook({
     project,
-    projectId,
     args,
     style,
     storySummary,
