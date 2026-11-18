@@ -7,6 +7,7 @@ import {ask, askJson, llmMap} from '../llm.ts'
 import {log, styles} from '../log.ts'
 import {mapBeatsToSlots, splitFightSlots} from '../music.ts'
 import {playingCases, playingIssues} from '../playing-check.ts'
+import {handsCases, handsIssues} from '../hands-check.ts'
 import {type BeatShots, type Blocking, type ShotPlan} from '../project.ts'
 import {readTokens, resolveUnknownTokens} from '../refs.ts'
 import {LOCATION_VIEWS} from '../sequenceSheet.ts'
@@ -352,8 +353,15 @@ export async function planShots(run: ShotRun) {
                                         return []
                                     })
                                   : []
+                              // a prop in one hand and the other on somebody: the model draws the person twice (lib/hands-check.ts)
+                              const busy = read
+                                  ? await handsIssues(handsCases(read.plan.shots, cast.characters)).catch((e: unknown) => {
+                                        log.warn(`${beat.id}: the check of the hands failed (${messageOf(e)}) - they stay unchecked`)
+                                        return []
+                                    })
+                                  : []
                               if (read)
-                                  for (const issue of idle) {
+                                  for (const issue of [...idle, ...busy]) {
                                       read.issues.push(issue)
                                       read.problems.push(issue.message)
                                   }
