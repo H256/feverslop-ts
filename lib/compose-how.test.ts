@@ -62,6 +62,13 @@ describe('propActivityPerBeat - how the instrument is heard in each shot', () =>
         expect(gtr!.howPerShot).toEqual([{articulation: 'sustained', leads: true}, {articulation: 'sustained'}])
     })
 
+    // tides-261115, 1:56-2:08: the solo bled into "other" as loud as into the guitar stem, and the guitar never led
+    test('a stem nobody plays does not count against the one who carries the part', () => {
+        const stems = {guitar: stem(t => (t < 4 ? 1e-2 : 1e-3), db(1e-3)), other: stem(t => (t < 4 ? 1e-2 : 1e-3), db(1e-3))}
+        const [gtr] = propActivityPerBeat(base, propActivity, stems).b1!
+        expect(gtr!.howPerShot![0]).toEqual({articulation: 'sustained', leads: true})
+    })
+
     test('without the stems nothing is said - a project without them plans as before', () => {
         const [gtr] = propActivityPerBeat(base, propActivity).b1!
         expect(gtr!.howPerShot).toBeUndefined()

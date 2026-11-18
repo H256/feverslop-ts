@@ -432,6 +432,10 @@ describe('the rules a beat needs (#825)', () => {
         ])
             expect(instructions).toContain(rule)
     })
+    // tides-261115: in the guitar solo Kael stood with his head bowed, "a slow, gentle pull across the strings", Sera in front
+    test('a shot where somebody leads is about them, their whole body playing the part', () => {
+        expect(planInstructions).toContain('A shot where somebody leads is about them: they are in it, in front and sharp, and their whole body plays the part')
+    })
     test('with everything needed the rules are the whole set', () => {
         expect(planInstructionsFor(ALL_NEEDS)).toBe(planInstructions)
     })

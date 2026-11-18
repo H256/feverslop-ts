@@ -419,6 +419,7 @@ export function propActivityPerBeat(
     const {beats, characters} = input
     const windows = shotWindowsPerBeat(input)
     const propped = characters.filter((c): c is Character & {prop: string; propStem: PropStem} => Boolean(c.prop && c.propStem && activity[c.propStem]?.length))
+    const playerStems = new Set<string>(propped.map(c => c.propStem))
     const result: Record<string, ShotProps> = {}
     for (const beat of beats) {
         const onScreen = propped.filter(c => beat.characterIds.includes(c.id))
@@ -442,8 +443,12 @@ export function propActivityPerBeat(
                     ? beatWindows.map((w, j): ShotHow | undefined => {
                           if (!activePerShot[j]) return undefined
                           const mine = own(w)!
+                          // who carries the part, among the stems somebody plays: a stem of nobody ("other") holds the bleed
+                          // of a separated guitar - in the solo of tides-261115 it rose with the guitar, and the guitar never led
                           const rel = Object.fromEntries(
-                              Object.entries(stems).map(([name, s]) => [name, howStemPlays(s.power, s.hopSec, s.loudDb, w.start, w.end).relDb]),
+                              Object.entries(stems)
+                                  .filter(([name]) => playerStems.has(name))
+                                  .map(([name, s]) => [name, howStemPlays(s.power, s.hopSec, s.loudDb, w.start, w.end).relDb]),
                           )
                           const leads = leadOf(rel) === c.propStem
                           return {articulation: mine.articulation, ...(leads ? {leads} : {}), ...(mine.relDb < QUIET_DB ? {quiet: true} : {})}
