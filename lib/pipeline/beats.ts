@@ -3,7 +3,7 @@ import {formatTime} from '../frames.ts'
 import {ask, askJson, llmMap} from '../llm.ts'
 import {log, styles} from '../log.ts'
 import {buildTimeline} from '../music.ts'
-import {type Fact, type StoryBeat} from '../project.ts'
+import {type Fact, KEPT_FACT_KINDS, type StoryBeat} from '../project.ts'
 import {characterDescriptionPrompt, characterVariantLookPrompt} from '../prompts.ts'
 import {pictureProp, propMissing} from '../prop-check.ts'
 import {resolveUnknownTokens} from '../refs.ts'
@@ -126,14 +126,7 @@ export async function planBeats(run: BeatsRun) {
                         entrance: beat.entrance === true,
                         // each fact with whether it is one of the place and the earlier facts it ends; a plain string (the model
                         // forgot the object) is read as written. A fact without words is kept when it ends earlier ones.
-                        stateAfter: (Array.isArray(beat.stateAfter) ? beat.stateAfter : [])
-                            .map((f: unknown): Fact => {
-                                if (!f || typeof f !== 'object') return {fact: String(f), place: false}
-                                const raw = f as Record<string, unknown>
-                                const ends = (Array.isArray(raw.ends) ? raw.ends : []).map(textOf).filter(e => e.trim())
-                                return {fact: textOf(raw.fact), place: raw.place === true, ...(ends.length ? {ends} : {})}
-                            })
-                            .filter(f => f.fact.trim() || f.ends?.length),
+                        stateAfter: (Array.isArray(beat.stateAfter) ? beat.stateAfter : []).map(parseFact).filter(f => f.fact.trim() || f.ends?.length),
                         ...(Object.keys(groupSize).length ? {groupSize} : {}),
                     }
                 })
@@ -251,3 +244,17 @@ export async function planBeats(run: BeatsRun) {
 
 /** Whether the looks of a group before the redo start with the ones asked so far - then the next one was asked from the same input. */
 export const sameStart = (before: string[] | undefined, now: string[]) => !!before && before.length > now.length && now.every((look, n) => before[n] === look)
+
+/**
+ * One fact of a beat's "stateAfter" as the planner wrote it: whether it is of the place, the earlier facts it ends. A plain
+ * string (the model forgot the object) is read as written. A fact of where someone is, what they do or a sound is not kept
+ * (its words are dropped), it may still end earlier ones; a fact from before "kind" says "place" itself.
+ */
+export function parseFact(f: unknown): Fact {
+    if (!f || typeof f !== 'object') return {fact: String(f), place: false}
+    const raw = f as Record<string, unknown>
+    const ends = (Array.isArray(raw.ends) ? raw.ends : []).map(textOf).filter(e => e.trim())
+    const kind = typeof raw.kind === 'string' ? raw.kind : undefined
+    const kept = kind === undefined || KEPT_FACT_KINDS.includes(kind)
+    return {fact: kept ? textOf(raw.fact) : '', place: kind === undefined ? raw.place === true : kind === 'place', ...(ends.length ? {ends} : {})}
+}
