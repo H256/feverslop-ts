@@ -27,9 +27,26 @@ const shots: ShotPlan[] = [
 describe('playingCases', () => {
     test('every heard player with a phrase - not the unheard, not a bare "yes", not who has no instrument', () => {
         expect(playingCases(shots, props, characters)).toEqual([
-            {shot: 0, name: 'Kael', prop: 'guitar', plays: 'strums hard downstrokes', motion: 'steps forward'},
-            {shot: 0, name: 'Mara', prop: 'drum kit', plays: 'both wrists locked overhead, sticks held rigid', motion: 'holds pose'},
+            {shot: 0, name: 'Kael', prop: 'guitar', plays: 'strums hard downstrokes', motion: 'steps forward', heard: 'through the whole shot'},
+            {
+                shot: 0,
+                name: 'Mara',
+                prop: 'drum kit',
+                plays: 'both wrists locked overhead, sticks held rigid',
+                motion: 'holds pose',
+                heard: 'through the whole shot',
+            },
         ])
+    })
+    // tides-261115: "one tight pluck, stillness until the next hit" was taken for not playing a part of single hits
+    test('each case says how the instrument is heard in its shot; a still one is not checked', () => {
+        const how = [
+            {characterId: 'kael', prop: 'guitar', activePerShot: [true, false], howPerShot: [{articulation: 'hits' as const}]},
+            {characterId: 'mara', prop: 'drum kit', activePerShot: [true, true], howPerShot: [{articulation: 'still' as const}]},
+        ]
+        expect(playingCases(shots, how, characters).map(c => [c.name, c.heard])).toEqual([['Kael', 'in single hits with silence between']])
+        const part = [{characterId: 'kael', prop: 'guitar', activePerShot: [true, false], heardPerShot: [[{start: 0, end: 1}]]}]
+        expect(playingCases(shots, part, characters)[0]!.heard).toBe('for part of the shot')
     })
     test('without instrument activity there is nothing to check', () => {
         expect(playingCases(shots, undefined, characters)).toEqual([])
