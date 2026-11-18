@@ -28,9 +28,10 @@ export type MusicRenderRun = {
     project: ProjectStore
     config: ProjectConfig
     settings: Settings
-    args: {only: string; again: boolean; preview: boolean; strict: boolean; 'picture-anchor'?: string}
+    args: {again: boolean; preview: boolean; strict: boolean; 'picture-anchor'?: string}
     render: Set<string>
-    refreshKinds: Set<string>
+    refresh: Set<string>
+    only: Set<string>
     retake?: RetakeAsk
     clips: ClipRequest[]
     pictures: PictureJob[]
@@ -44,12 +45,11 @@ export type MusicRenderRun = {
 }
 
 export async function renderAndAssemble(run: MusicRenderRun) {
-    const {project, config, settings, args, render, refreshKinds, retake, clips, pictures, stemFiles, songFile, exportFormats, from, renderPictures} = run
+    const {project, config, settings, args, render, refresh, only, retake, clips, pictures, stemFiles, songFile, exportFormats, from, renderPictures} = run
     ////////// RENDERING WITH COMFYUI
     if (render.has('images') || render.has('videos') || retake) {
-        const only = new Set(args.only.split(',').filter(Boolean))
         using renderer = new Renderer(project.id, project.dir, config, settings.comfy)
-        renderer.refresh = refreshKinds
+        renderer.refresh = refresh
         log.section('13 · RENDERING WITH COMFYUI')
         log.step(
             'Config',
@@ -58,7 +58,7 @@ export async function renderAndAssemble(run: MusicRenderRun) {
             ),
         )
         log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
-        if (args.again || refreshKinds.size || retake || args['picture-anchor']) await renderer.serversFirst()
+        if (args.again || refresh.size || retake || args['picture-anchor']) await renderer.serversFirst()
 
         if (retake) {
             const clip = clips.find(c => c.id === retake.clip)
