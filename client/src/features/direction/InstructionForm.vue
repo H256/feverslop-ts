@@ -124,3 +124,10 @@ defineExpose({edit, clear, editing})
     <p class="muted small">Saved, nothing changes yet: <b>Preview changes</b> asks the language model.</p>
   </fieldset>
 </template>
+
+<style scoped>
+/* an instruction is a sentence for a person, not a prompt: the text face, not the code face (#1146) */
+textarea {
+  font: var(--text-m)/1.5 var(--sans);
+}
+</style>

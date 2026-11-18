@@ -165,8 +165,29 @@ const ACTIVITY_FLOOR_DB = -50
 export const STEM_FRAME_SEC = ACTIVITY_HOP_SEC
 
 /** The mean square of a stem per frame of STEM_FRAME_SEC - what the activity and the instrument parts (lib/instrument-parts.ts) are made of. */
+// the power of a stem file decoded once per process (#1158) - the activity of the props, of the shots and the players' power all
+// read the same stems; a file written anew (its time or size) is decoded again. The time is enough here, unlike for a picture's
+// fingerprint (lib/provenance.ts): a stem is only written by a separation, minutes before it is read, never in the same tick
+const framePowers = new Map<string, Promise<number[]>>()
+let decodes = 0
+
+/** The power per frame of a stem (ACTIVITY_HOP_SEC): ffmpeg decodes it once per process and file. Nobody may change the list. */
 export async function stemFramePower(stemFile: string): Promise<number[]> {
-    const raw = join(tmpdir(), `activity-${process.pid}-${basename(stemFile)}.f32`)
+    const {mtimeMs, size} = statSync(stemFile)
+    const key = `${stemFile}:${mtimeMs}:${size}`
+    let power = framePowers.get(key)
+    if (!power) {
+        power = decodeFramePower(stemFile)
+        // a failed decode is not kept: the next one tries again
+        power.catch(() => framePowers.delete(key))
+        framePowers.set(key, power)
+    }
+    return power
+}
+
+async function decodeFramePower(stemFile: string): Promise<number[]> {
+    // its own name: stems with the same file name in two folders are decoded at the same time
+    const raw = join(tmpdir(), `activity-${process.pid}-${++decodes}-${basename(stemFile)}.f32`)
     await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', stemFile, '-ac', '1', '-ar', String(ACTIVITY_SAMPLE_RATE), '-f', 'f32le', raw], {
         timeoutMs: SHORT_PROCESS_TIMEOUT_MS,
         errorMessage: err => `ffmpeg failed to decode ${stemFile}:\n${err}`,
