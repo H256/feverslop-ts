@@ -1211,7 +1211,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     const face = shot.singers.includes(s) && !p?.faceHidden ? ', the face clearly visible' : ''
                     if (!shot.plan) return `${who}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${face}`
                     // somebody in the picture the planner gave no entry of their own: the shot's "rest" says what they do
-                    if (!p) return `${who}, in the frame${face}`
+                    // A fixed place of theirs (#1119) is where they are: "The audience, in the frame" put the crowd on the stage between
+                    // the band in a wide shot of everyone (tides-261115, slot-040)
+                    const spot = s.stationary || s.isGroup ? placeSet?.spots[s.id]?.replace(/[.\s]+$/, '') : undefined
+                    if (!p) return `${who}, ${spot ? `in their fixed place: ${spot}` : 'in the frame'}${face}`
                     return `${who}, ${
                         // compact: the movement is told by the shot's action - told again here, the two differed in detail (#824)
                         [p.state, p.frame, input.clipPrompt === 'compact' && shot.plan.action ? undefined : p.motion]

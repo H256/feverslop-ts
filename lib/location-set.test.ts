@@ -122,6 +122,13 @@ describe('the set in a clip', () => {
         expect(prompt).not.toContain(': Left')
     })
 
+    // tides-261115, slot-040: "The audience, in the frame" - the crowd stood on the stage between the band
+    test('somebody in a shot without an entry of their own is in their fixed place', () => {
+        const prompt = buildClipRequests(input(['vex', 'kael', 'crowd']))[0]!.prompt
+        expect(prompt).toContain('The audience, in their fixed place: At the near end, facing the band')
+        expect(prompt).not.toMatch(/The audience, in the frame/)
+    })
+
     test('a clip without them says nothing of the set', () => {
         expect(buildClipRequests(input(['kael']))[0]!.prompt).not.toContain('Fixed places')
     })

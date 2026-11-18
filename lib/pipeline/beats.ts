@@ -91,6 +91,8 @@ export async function planBeats(run: BeatsRun) {
                         story: storyBase,
                         performance,
                         stretches,
+                        // the picture's look next to the role: a role that keeps the story's "black wet hair" no longer wins
+                        looks: characterDescriptions,
                     }),
                 )
 
