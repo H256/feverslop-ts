@@ -45,7 +45,8 @@ test('a dry run counts the clips --render would render and what the final video 
 
 // #1150: the run and the dry run redo the music and the stems by the same rules
 test('the music is heard again when the lyrics tag other sections, a stem is separated again when a file is gone', async () => {
-    const {sectionsChanged, lostStems} = await import('./dry-run.ts')
+    const {sectionsChanged} = await import('./dry-run.ts')
+    const {lostStems} = await import('../inputs.ts')
     const music = {bpm: 120, durationSec: 60, downbeats: [], barEnergy: [], sections: [{label: 'verse', start: 0, end: 30, energy: 1}]}
     expect(sectionsChanged(music, [{label: 'verse'}])).toBe(false)
     expect(sectionsChanged(music, [{label: 'chorus'}])).toBe(true)

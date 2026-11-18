@@ -15,6 +15,7 @@ import {log, styles} from '../log.ts'
 import {type PictureAsk, renderPictures} from './pictures.ts'
 import {sayStaleClips, serverNames, startRenderer} from './render-steps.ts'
 import {clipFailureRisks} from '../render-state.ts'
+import {eachFileOnce} from '../provenance.ts'
 import {runEvent} from '../run-events.ts'
 import {filmStatus} from '../status.ts'
 import {readTimings} from '../timings.ts'
@@ -139,7 +140,7 @@ export async function renderFilm(run: FilmRenderRun) {
         // a clip made from another picture, workflow or start frame than the plan has now is still a clip: said here, an error only with --strict
         const filmConfig = filmRenderConfig(config)
         sayStaleClips(
-            selected.filter(r => filmClipFreshness(r, film.dir, filmConfig) === 'stale').map(r => r.id),
+            eachFileOnce(() => selected.filter(r => filmClipFreshness(r, film.dir, filmConfig) === 'stale').map(r => r.id)),
             args.strict,
         )
         const result = await assembleFilm({clips: filmAssemblyClips(film.dir, selected), projectDir: film.dir, target, levelMatching: config.levelMatching})
@@ -225,7 +226,7 @@ export async function renderFilm(run: FilmRenderRun) {
 
     // the next step, as bun run status says it - so that following only the "Next" lines leads to a film (#828)
     {
-        const {next} = await filmStatus(film.id).catch(() => ({next: undefined}))
+        const {next} = await filmStatus(film.id, {store: film, config, settings}).catch(() => ({next: undefined}))
         if (next?.command) log.next(next.command)
     }
 }

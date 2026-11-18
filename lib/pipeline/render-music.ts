@@ -13,7 +13,7 @@ import {type PictureAsk, renderPictures} from './pictures.ts'
 import {sayStaleClips, serverNames, startRenderer} from './render-steps.ts'
 import {archiveClip, archivePreview} from '../film/archive.ts'
 import type {ProjectStore} from '../project.ts'
-import {freshness} from '../provenance.ts'
+import {eachFileOnce, freshness} from '../provenance.ts'
 import {clipFingerprint, type PictureJob, Renderer} from '../render.ts'
 import {clipEstimate, clipFailureRisks} from '../render-state.ts'
 import type {RetakeAsk} from '../retake.ts'
@@ -131,7 +131,9 @@ export async function renderAndAssemble(run: MusicRenderRun) {
         const target = join(project.dir, `${project.id}.mp4`)
         // a clip made from another request than the plan has now is still a clip: said here, an error only with --strict
         sayStaleClips(
-            clips.filter(c => freshness(join(project.dir, 'videos', `${c.id}.mp4`), clipFingerprint(c, project.dir, config)) === 'stale').map(c => c.id),
+            eachFileOnce(() =>
+                clips.filter(c => freshness(join(project.dir, 'videos', `${c.id}.mp4`), clipFingerprint(c, project.dir, config)) === 'stale').map(c => c.id),
+            ),
             args.strict,
         )
         const result = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target})

@@ -10,7 +10,7 @@ import {MUSIC_RENDER, readRunOptions} from './lib/run-options.ts'
 import {renderAndAssemble} from './lib/pipeline/render-music.ts'
 import {renderPictures} from './lib/pipeline/pictures.ts'
 import {serverNames, sourceNote, startRenderer} from './lib/pipeline/render-steps.ts'
-import {dryRun, lostStems, redoReasons, sectionsChanged} from './lib/pipeline/dry-run.ts'
+import {dryRun, redoReasons, sectionsChanged} from './lib/pipeline/dry-run.ts'
 import {buildRequests} from './lib/pipeline/requests.ts'
 import {hearSong} from './lib/pipeline/song.ts'
 import {planBeats} from './lib/pipeline/beats.ts'
@@ -42,7 +42,7 @@ import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from './lib/style
 import {listProjects, projectExists, validProjectId} from './lib/project-setup.ts'
 import * as clack from '@clack/prompts'
 import {pictureProp, propMissing} from './lib/prop-check.ts'
-import {projectInputs, songFileOf, readInputFile} from './lib/inputs.ts'
+import {lostStems, projectInputs, songFileOf, readInputFile} from './lib/inputs.ts'
 import {reviewed} from './lib/review.ts'
 import {stopAfter} from './lib/stages.ts'
 import {castFromLibrary, copyKey} from './lib/casting.ts'
@@ -747,7 +747,7 @@ if (warned.size) {
 log.step('Log', runLogFile() ?? '')
 // the next step, as bun run status says it - so that following only the "Next" lines leads to a video (#828)
 {
-    const {next} = await projectStatus(project.id).catch(() => ({next: undefined}))
+    const {next} = await projectStatus(project.id, {store: project, config, settings}).catch(() => ({next: undefined}))
     if (next?.command) log.next(next.command)
 }
 

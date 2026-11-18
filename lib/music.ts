@@ -166,7 +166,8 @@ export const STEM_FRAME_SEC = ACTIVITY_HOP_SEC
 
 /** The mean square of a stem per frame of STEM_FRAME_SEC - what the activity and the instrument parts (lib/instrument-parts.ts) are made of. */
 // the power of a stem file decoded once per process (#1158) - the activity of the props, of the shots and the players' power all
-// read the same stems; a file written anew (its time or size) is decoded again
+// read the same stems; a file written anew (its time or size) is decoded again. The time is enough here, unlike for a picture's
+// fingerprint (lib/provenance.ts): a stem is only written by a separation, minutes before it is read, never in the same tick
 const framePowers = new Map<string, Promise<number[]>>()
 let decodes = 0
 

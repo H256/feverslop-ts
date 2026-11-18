@@ -1,3 +1,5 @@
+import {existsSync, statSync} from 'node:fs'
+
 // The loudness of a sound file over time - for the Timing page and for the alignment of the lyrics.
 
 /**
@@ -19,6 +21,25 @@ export function peaks(samples: Int16Array, buckets: number): number[] {
 
 /** The loudness at a fixed rate (values per second) - fine enough to see where a word starts, for the Timing page. */
 export async function readFineWaveform(file: string, perSecond: number): Promise<number[] | undefined> {
+    if (!existsSync(file)) return undefined
+    // once per process and file (#1159): the lyrics timing and the requests of a plan run read the same vocals - by the file's time and
+    // size, as the stems (lib/music.ts stemFramePower): written by a separation minutes before
+    const {mtimeMs, size} = statSync(file)
+    const key = `${file}:${mtimeMs}:${size}:${perSecond}`
+    let wave = fineWaveforms.get(key)
+    if (!wave) {
+        wave = decodeFineWaveform(file, perSecond)
+        wave.then(
+            peaks => peaks ?? fineWaveforms.delete(key),
+            () => fineWaveforms.delete(key),
+        )
+        fineWaveforms.set(key, wave)
+    }
+    return wave
+}
+const fineWaveforms = new Map<string, Promise<number[] | undefined>>()
+
+async function decodeFineWaveform(file: string, perSecond: number): Promise<number[] | undefined> {
     const rate = 8000
     const proc = Bun.spawn(['ffmpeg', '-v', 'error', '-i', file, '-vn', '-ac', '1', '-ar', String(rate), '-f', 's16le', '-'], {
         stdout: 'pipe',

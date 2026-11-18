@@ -4,7 +4,7 @@ import {basename, join} from 'node:path'
 import type {ClipRequest} from './compose.ts'
 import type {ProjectConfig, RenderConfig} from './config.ts'
 import {describePrediction, predictJobs, type RenderJob} from './predict.ts'
-import {freshness} from './provenance.ts'
+import {eachFileOnce, freshness} from './provenance.ts'
 import {clipFingerprint, type PictureJob, pictureFingerprint, renderedFrames, workflowHash} from './render.ts'
 import {SEQUENCE_FRAMES} from './sequenceSheet.ts'
 import {readTimings, type Timing} from './timings.ts'
@@ -97,7 +97,8 @@ export async function renderStateOf<C extends {id: string}>(
     const clips = await readClipRequests<C>(projectDir)
     const videoOf = (clip: C) => join(projectDir, 'videos', `${clip.id}.mp4`)
     const there = (p: PictureJob) => existsSync(join(projectDir, p.file))
-    return {
+    // the clips name the same pictures: each read once in this pass
+    return eachFileOnce(() => ({
         pictures,
         missingPictures: pictures.filter(p => !there(p)),
         stalePictures: pictures.filter(p => there(p) && freshness(join(projectDir, p.file), pictureFingerprint(p, projectDir, config)) === 'stale'),
@@ -107,7 +108,7 @@ export async function renderStateOf<C extends {id: string}>(
         finalVideo,
         // the id is the name of the final video: <id>.mp4
         finalState: projectFinalState(projectDir, basename(finalVideo, '.mp4'), finalVideo, clips),
-    }
+    }))
 }
 
 /** The time estimate of rendering these pictures, from the measured timings. */
