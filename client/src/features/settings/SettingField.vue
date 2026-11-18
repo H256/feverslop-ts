@@ -71,7 +71,7 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
   grid-template-columns: minmax(140px, 22%) minmax(0, 1fr);
   gap: var(--space-1) var(--space-3);
   align-items: start;
-  padding: 18px 20px;
+  padding: var(--space-3) var(--space-4);
   min-width: 0;
   border-left: 3px solid transparent;
   border-radius: var(--radius-s);
