@@ -734,6 +734,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     description,
                     count,
                     companions: [] as string[],
+                    // the group's members without a picture in this clip, in words
+                    others: [] as string[],
                     companionOf: undefined as string | undefined,
                 }
             })
@@ -795,6 +797,21 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     })
                     s.companions.push(`<Subject ${n}>`)
                 }
+            }
+            // a group with more members than pictures in the clip: the members without a picture here are said in words, by the
+            // first sentence of their description (who they are, not the costume they share). With one picture, one person
+            // described and "keep their face from the picture", a crowd of 20 came out as 20 copies of her (tides-261115, slot-014)
+            for (const s of base) {
+                const members = s.kind === 'character' ? (memberCounts[s.id] ?? 1) : 1
+                if (s.kind !== 'character' || !s.isGroup || s.alike || members < 2 || (s.count !== undefined && s.count <= s.companions.length + 1)) continue
+                const first = slot.index % members
+                s.others = Array.from(
+                    {length: members - 1 - s.companions.length},
+                    (_, m) => characterDescriptionVariants?.[s.id]?.[(first + s.companions.length + 1 + m) % members],
+                )
+                    .map(d => (d?.split(/(?<=\.)\s/)[0] ?? '').trim().replace(/\.$/, ''))
+                    .map(d => d.charAt(0).toLowerCase() + d.slice(1))
+                    .filter(d => d)
             }
             const subjects = [...base, ...propSubjects, ...companions]
             const locationSubject = subjects.find(s => s.kind === 'location')
@@ -1407,14 +1424,14 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                           : s.companionOf
                             ? `${s.label} is another one of ${s.name} (the group ${s.companionOf}), the individual in ${s.picture}, clearly a different person from the others of the group; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
                             : s.isGroup && s.companions.length
-                              ? `${s.label} is ${s.name}, a group of ${s.count} different individuals (${s.label} is the one in ${s.picture}, ${joinAnd(s.companions.map(c => `${c} the one in ${c.replace('Subject', 'Picture')}`))}${s.count! > s.companions.length + 1 ? `; each of the others looks clearly different from these and from each other - another face, hair, build and clothing` : ''}; there are ${s.count} of them in all, never more); keep their build, skin, face, costume and colors from the pictures, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
+                              ? `${s.label} is ${s.name}, a group of ${s.count} different individuals (${s.label} is the one in ${s.picture}, ${joinAnd(s.companions.map(c => `${c} the one in ${c.replace('Subject', 'Picture')}`))}${s.count! > s.companions.length + 1 ? `; each of the others looks clearly different from these and from each other - another face, hair, build and clothing${s.others.length ? `; among the others are ${joinAnd(s.others)}` : ''}` : ''}; there are ${s.count} of them in all, never more); keep their build, skin, face, costume and colors from the pictures, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
                               : // role ("plays warped rusted guitar behind the vocalist") describes behavior, not
                                 // appearance - a subject definition that says a character "plays" something reads as a
                                 // standing trait to the video model, and it keeps them miming that action even in shots
                                 // that explicitly stage them as idle. Only look/identity belongs here; role stays out.
                                 s.isGroup
                                 ? // several individuals, not one: a group is never described as a single person
-                                  `${s.label} is ${s.name}, a group of ${s.count && s.count > 1 ? `${s.count}` : 'several'}${s.alike ? '' : ' different individuals'} (${s.alike ? `every one of them looks like the one in ${s.picture}` : `${s.picture} shows one of them; each of the others looks clearly different from it and from each other - another face, hair, build and clothing - and they share only the general style of the group`}${s.count && s.count > 1 ? `; there are ${s.count} of them in all, never more` : ''}); keep their build, skin, face, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
+                                  `${s.label} is ${s.name}, a group of ${s.count && s.count > 1 ? `${s.count}` : 'several'}${s.alike ? '' : ' different individuals'} (${s.alike ? `every one of them looks like the one in ${s.picture}` : `${s.picture} shows one of them; each of the others looks clearly different from it and from each other - another face, hair, build and clothing - and they share only the general style of the group${s.others.length ? `; among the others are ${joinAnd(s.others)}` : ''}`}${s.count && s.count > 1 ? `; there are ${s.count} of them in all, never more` : ''}); ${s.alike ? 'keep their build, skin, face, costume and colors from the picture' : 'keep the style and colors of their clothing from the picture, each with a face, hair and build of their own'}, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
                                 : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}${s.kind === 'character' && s.stationary ? ` In the video ${s.label} is only ever at the ${s.stationary}, where it stands, to ${s.propStem ? 'play' : 'use'} it - one person, never also a standing figure like the one in ${s.picture}.` : ''}`.trim(),
                 ),
                 ...(framePicture
