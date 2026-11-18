@@ -95,8 +95,6 @@ const {values: args, positionals} = (() => {
                 redo: {type: 'string', default: ''},
                 'fix-script': {type: 'boolean', default: false},
                 'allow-import-gaps': {type: 'boolean', default: false},
-                // read by failRun (lib/log.ts) from the raw arguments - declared here so parseArgs accepts it
-                debug: {type: 'boolean', default: false},
                 scenes: {type: 'string', default: ''},
                 comfy: {type: 'string'},
                 'llm-url': {type: 'string'},

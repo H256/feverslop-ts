@@ -75,12 +75,9 @@ const {values: args, positionals} = (() => {
                 // skips step 11b and spreads/reuses beat.moments across shots the old way - a fallback while 11b is new
                 'legacy-moments': {type: 'boolean', default: false},
                 'debug-audio': {type: 'boolean', default: false},
-                // read by failRun (lib/log.ts) from the raw arguments - declared here so parseArgs accepts it
-                debug: {type: 'boolean', default: false},
                 gallery: {type: 'boolean', default: false},
                 export: {type: 'string', default: ''},
-                // the terminal shows a cached step as one line; -v everything, --show=story,clips the details of those
-                verbose: {type: 'boolean', short: 'v', default: false},
+                // the terminal shows a cached step as one line; --show=story,clips the details of those (-v, everything, is read by cli())
                 show: {type: 'string', default: ''},
             },
         })
@@ -91,7 +88,7 @@ const {values: args, positionals} = (() => {
 // a word more than it takes is said before any work (#938)
 const extra = extraArgument(positionals, ['a project id'])
 if (extra) log.usageError(extra, usage)
-setOutput({verbose: undefined, show: args.show.split(',').filter(Boolean)})
+setOutput({show: args.show.split(',').filter(Boolean)})
 // the options of a run both pipelines take (lib/run-options.ts) - "song" is never part of --render=all, it has to be asked for
 const {render, refresh, only, retake, until} = (() => {
     try {
