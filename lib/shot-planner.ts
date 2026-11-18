@@ -572,10 +572,13 @@ export function beatsPrompt({
     story,
     performance,
     stretches = [],
+    looks = {},
 }: {
     durationSec: number
     beatCount: number
     characters: Character[]
+    /** how each character looks in their picture (characterDescriptions) - what the role or the story says of it may differ */
+    looks?: Record<string, string>
     locations: Location[]
     lyrics: string
     story: string
@@ -615,7 +618,7 @@ Every character in "summary", "moments" and the facts of "stateAfter" is written
   A walk goes somewhere in the place: name where to ("toward the far end of the corridor", "out through the side door"), never only "forward" or "ahead" - which side the camera sees is decided per shot, and a walker whose face is wanted while "forward" points away from the lens is rendered walking backwards.
   Eyes and attention follow the scene, not the lens: say what a character or creature is looking at (the person it's reaching for, the weapon coming at it, the ground as it falls) - never leave it staring into the camera, and never describe a "look" or "stare" without naming its target, since an untargeted one defaults to a straight-into-camera stare that breaks the scene.
   Faces react too: name the visible facial reaction the moment produces (jaw clenching, eyes widening, a grin, brows drawing together, a grimace) whenever the action calls for one - a beat with no facial reaction described tends to render with a flat, unchanging expression throughout.
-  Never describe how a character looks - no hair, skin, eye or costume colors, no clothes: their look is drawn elsewhere, and a beat that gave the singer "black wet hair" and "deep blue robes" turned her silver-white hair black in the video.
+  Never describe how a character looks - no hair, skin, eye or costume colors, no clothes: their look is drawn elsewhere, and a beat that gave the singer "black wet hair" and "deep blue robes" turned her silver-white hair black in the video.${Object.keys(looks).length ? ` How someone looks is their "looks" in the character list below, from their picture: where their "role" or the story gives them other hair, skin or clothes, that is not how they look in this video - it is left out of every field.` : ''}
   ${filmableRules}
 - "locationId": exactly one of the location ids below.
 - "characterIds": ids of the characters on screen, only from the list below.
@@ -629,7 +632,7 @@ Every character in "summary", "moments" and the facts of "stateAfter" is written
 Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, make it a real dramatic encounter, not a tableau: show fear (flinching, turning a shoulder to it, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear). Characters should not simply stand and stare at the threat. In combat, name the actual weapon each side is using in every strike (matching their "prop" where they have one) - don't let a sword turn into a hammer or an axe from one moment to the next.
 ${performance}Answer only with JSON: {"beats": [...]}
 ---
-characters: ${JSON.stringify(characters.map(c => ({id: c.id, name: c.name, role: c.role, ...(c.prop ? {prop: castProp(c, locations)} : {}), ...(c.isGroup ? {isGroup: true} : {})})))}
+characters: ${JSON.stringify(characters.map(c => ({id: c.id, name: c.name, role: c.role, ...(looks[c.id] ? {looks: looks[c.id]} : {}), ...(c.prop ? {prop: castProp(c, locations)} : {}), ...(c.isGroup ? {isGroup: true} : {})})))}
 locations: ${JSON.stringify(locations.map(l => l.id))}
 lyrics:
 ${lyrics}

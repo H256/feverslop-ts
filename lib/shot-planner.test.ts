@@ -364,6 +364,16 @@ describe('musicStretches - the music along the way for the beats', () => {
         expect(input).toContain('never its colors, material or look before')
         expect(input).toContain('Never describe how a character looks')
     })
+
+    // tides-261115: the cast's role kept the story's "black wet hair", the picture has silver-white hair - the beats copied the role
+    test('the picture look goes with each character, and it wins over the role', () => {
+        const args = {durationSec: 60, beatCount: 2, locations: [{id: 'hall', name: 'Hall'}], lyrics: '', story: 'She sings.', performance: ''}
+        const characters = [{id: 'maren', name: 'Maren', role: 'a singer with black wet hair'}]
+        const input = beatsPrompt({...args, characters, looks: {maren: 'long silver-white hair'}}).input
+        expect(input).toContain('"looks":"long silver-white hair"')
+        expect(input).toContain('that is not how they look in this video - it is left out of every field')
+        expect(beatsPrompt({...args, characters}).input).not.toContain('that is not how they look in this video')
+    })
 })
 
 describe('the rules a beat needs (#825)', () => {
