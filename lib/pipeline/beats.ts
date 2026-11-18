@@ -124,19 +124,21 @@ export async function planBeats(run: BeatsRun) {
                         weight: Math.max(1, Number(beat.weight) || 1),
                         continuous: beat.continuous === true,
                         entrance: beat.entrance === true,
-                        // each fact with whether it is one of the place; a plain string (the model forgot the object) is read as written
+                        // each fact with whether it is one of the place and the earlier facts it ends; a plain string (the model
+                        // forgot the object) is read as written. A fact without words is kept when it ends earlier ones.
                         stateAfter: (Array.isArray(beat.stateAfter) ? beat.stateAfter : [])
-                            .map((f: unknown): Fact =>
-                                f && typeof f === 'object'
-                                    ? {fact: textOf((f as Record<string, unknown>).fact), place: (f as Record<string, unknown>).place === true}
-                                    : {fact: String(f), place: false},
-                            )
-                            .filter(f => f.fact.trim()),
+                            .map((f: unknown): Fact => {
+                                if (!f || typeof f !== 'object') return {fact: String(f), place: false}
+                                const raw = f as Record<string, unknown>
+                                const ends = (Array.isArray(raw.ends) ? raw.ends : []).map(textOf).filter(e => e.trim())
+                                return {fact: textOf(raw.fact), place: raw.place === true, ...(ends.length ? {ends} : {})}
+                            })
+                            .filter(f => f.fact.trim() || f.ends?.length),
                         ...(Object.keys(groupSize).length ? {groupSize} : {}),
                     }
                 })
                 // a token that is nobody of the cast ({Aldric} for "Aldric Thorne") is mapped by one short call, not by matching words
-                const texts = built.flatMap(b => [b.summary, ...b.moments, ...b.stateAfter.map(f => f.fact)])
+                const texts = built.flatMap(b => [b.summary, ...b.moments, ...b.stateAfter.flatMap(f => [f.fact, ...(f.ends ?? [])])])
                 const {texts: fixed, mapped} = await resolveUnknownTokens(texts, cast.characters)
                 if (Object.keys(mapped).length)
                     log.step(
@@ -150,7 +152,11 @@ export async function planBeats(run: BeatsRun) {
                     ...b,
                     summary: fixed[next++]!,
                     moments: b.moments.map(() => fixed[next++]!),
-                    stateAfter: b.stateAfter.map(f => ({...f, fact: fixed[next++]!})),
+                    stateAfter: b.stateAfter.map(f => ({
+                        ...f,
+                        fact: fixed[next++]!,
+                        ...(f.ends ? {ends: f.ends.map(() => fixed[next++]!)} : {}),
+                    })),
                 }))
             }),
         beats => {
