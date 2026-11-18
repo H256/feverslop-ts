@@ -23,13 +23,14 @@ import {filmPictures, filmRenderConfig, statePictureId} from './lib/film/picture
 import {takeOwnDescription} from './lib/own-picture.ts'
 import {filmRenderState} from './lib/film/render.ts'
 import {filmInputs, filmMode, filmStepUsed} from './lib/film/inputs.ts'
-import {clipEstimate, clipFailureRisks, pictureEstimate} from './lib/render-state.ts'
-import {keepTimingsIn, readTimings} from './lib/timings.ts'
+import {sayRenders} from './lib/pipeline/dry-run.ts'
+import {serverNames} from './lib/pipeline/render-steps.ts'
+import {keepTimingsIn} from './lib/timings.ts'
 import {formatSlotRanges} from './lib/assemble.ts'
 import {reviewed} from './lib/review.ts'
 import {stopAfter} from './lib/stages.ts'
 import {versionStamp} from './lib/archive.ts'
-import {onlyClips, unknownIds} from './lib/batch.ts'
+import {unknownIds} from './lib/batch.ts'
 import type {AssetKind} from './lib/asset-import.ts'
 import {applyLibraryText, castFromLibrary, copyKey} from './lib/casting.ts'
 import {libraryDir} from './lib/library.ts'
@@ -780,32 +781,12 @@ async function dryRun() {
 
     if (render.has('images') || render.has('videos') || render.has('final')) {
         const renderConfig = filmRenderConfig(config)
-        const state = await filmRenderState(film.dir, film.id, renderConfig)
-        const servers = settings.comfy.map(s => s.name)
-        if (redone.length || missing.length) warn('the renders below are counted from the requests of the last plan run - the steps redone now can change them')
-        if (render.has('images')) {
-            const stale = refresh.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
-            const estimate = state.missingPictures.length ? await pictureEstimate(state.missingPictures.length, renderConfig, servers) : undefined
-            found.pictures = {count: state.missingPictures.length, estimate: estimate && said(estimate)}
-            log.step('Pictures', estimate ? `${estimate}${stale}` : styles.muted('all rendered'))
-        }
-        if (render.has('videos')) {
-            const selected = onlyClips(state.clips, only)
-            const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refresh.has('clips') && state.staleClips.includes(c)))
-            for (const risk of clipFailureRisks(readTimings(), todo, renderConfig.videoWorkflow, servers)) warn(risk)
-            const estimate = todo.length ? await clipEstimate(todo, renderConfig, servers) : undefined
-            found.clips = {ids: todo.map(c => c.id), estimate: estimate && said(estimate)}
-            log.step('Clips', estimate ? `${estimate} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}` : styles.muted('all rendered'))
-        }
-        if (render.has('final')) {
-            found.final = {missingClips: state.missingClips.length}
-            log.step(
-                'Film',
-                state.missingClips.length
-                    ? styles.warning(`needs every clip - ${state.missingClips.length} missing`)
-                    : styles.muted('assembled from the clips'),
-            )
-        }
+        await sayRenders(
+            found,
+            await filmRenderState(film.dir, film.id, renderConfig),
+            {render, refresh, only, again: args.again},
+            {config: renderConfig, servers: serverNames(settings), finalLabel: 'Film', changes: redone.length > 0 || missing.length > 0},
+        )
     }
     if (jsonOutput()) log.json(found)
 }
