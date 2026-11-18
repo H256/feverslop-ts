@@ -2,7 +2,7 @@
 import {computed} from 'vue'
 import AppIcon from '../../components/AppIcon.vue'
 import {RouterLink} from 'vue-router'
-import {plural} from '../../lib/format'
+import {nextSaid, plural} from '../../lib/format'
 import {useAsk} from '../../services/ask'
 import {useToasts} from '../../services/toasts'
 import {stageDoes, stageName} from '../plan/stages'
@@ -26,8 +26,6 @@ const preproduction = computed(() => {
   const next = project.value.plan.next
   return !songFirst.value && next && next !== 'plan' ? next : undefined
 })
-// "22 step(s) to generate: songStyle, music, …" as "22 step(s) to generate" - the step names are in the title, asked for by pointing (#834)
-const said = (why: string) => why.replace(/: [\w-]+(, [\w-]+)+…?$/, '')
 
 const runNext = toasts.guard(async () => {
   const next = status.value?.next
@@ -54,7 +52,9 @@ const runNext = toasts.guard(async () => {
   <div v-if="status" class="ns-bar" aria-label="Next step">
     <template v-if="status.next.command || status.next.page">
       <span class="ns-label">Next</span>
-      <span class="ns-why" :title="[status.next.why, status.next.command, status.next.estimate].filter(Boolean).join('\n')">{{ said(status.next.why) }}</span>
+      <span class="ns-why" :title="[status.next.why, status.next.command, status.next.estimate].filter(Boolean).join('\n')">{{
+        nextSaid(status.next.why)
+      }}</span>
       <span v-if="status.next.estimate" class="ns-estimate muted">{{ status.next.estimate }}</span>
       <RouterLink v-if="status.next.page" class="btn mini primary" :to="`${root}/${status.next.page}`">Open {{ status.next.page }}</RouterLink>
       <!-- the preproduction is planned stage by stage (#526): the stage next, looked at before the next one is built on it -->

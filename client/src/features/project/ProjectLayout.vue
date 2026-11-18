@@ -129,6 +129,7 @@ const stopOpening = watch(project, p => {
 }
 /* a phase: its tabs side by side, its name small above them - no width of its own (#941) */
 .top .tabs .pl-group {
+  --pl-pad: 11px;
   position: relative;
   display: flex;
   align-self: stretch;
@@ -136,11 +137,12 @@ const stopOpening = watch(project, p => {
 /* the name of the phase above, the tab's name a little lower: both readable in the bar's height */
 .top .tabs .pl-tab {
   padding-top: var(--space-2);
+  padding-inline: var(--pl-pad);
 }
 .top .tabs .pl-group-name {
   position: absolute;
   top: 2px;
-  left: 11px;
+  left: var(--pl-pad);
   font-size: var(--text-xs);
   line-height: 1;
   letter-spacing: 0.06em;
@@ -186,15 +188,20 @@ const stopOpening = watch(project, p => {
   flex: 1 1 360px;
   min-width: 0;
 }
-/* a narrow window: the tabs closer together, so that the last one is not cut off */
+/* a narrower window: the tabs closer together, so that the last control of the bar is not cut off (#1139) */
+@media (max-width: 1500px) {
+  .top .tabs .pl-group {
+    --pl-pad: 8px;
+  }
+}
 @media (max-width: 1300px) {
-  .top .tabs .pl-tab {
-    padding-inline: 7px;
+  .top .tabs .pl-group {
+    --pl-pad: 6px;
   }
 }
 @media (max-width: 1200px) {
-  .top .tabs .pl-tab {
-    padding-inline: 5px;
+  .top .tabs .pl-group {
+    --pl-pad: 4px;
   }
 }
 .ns-label {
