@@ -7,8 +7,8 @@ import {ask, askJson, llmMap} from '../llm.ts'
 import {log, styles} from '../log.ts'
 import {mapBeatsToSlots, splitFightSlots} from '../music.ts'
 import {playingCases, playingIssues} from '../playing-check.ts'
-import {type BeatShots, type Blocking} from '../project.ts'
-import {resolveUnknownTokens} from '../refs.ts'
+import {type BeatShots, type Blocking, type ShotPlan} from '../project.ts'
+import {readTokens, resolveUnknownTokens} from '../refs.ts'
 import {LOCATION_VIEWS} from '../sequenceSheet.ts'
 import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from '../shot-plan.ts'
 import {blockingPrompt, filmableRules, type PlanContext, plannerCalls, planPrompt} from '../shot-planner.ts'
@@ -295,6 +295,8 @@ export async function planShots(run: ShotRun) {
               }
 
               const result: Record<string, BeatShots> = {...plannedBefore}
+              // the shots still too full for their framing after the second answer, with the ids that leave them
+              const crowded: {beatId: string; j: number; leave: string[]}[] = []
               // the step runs only when the blocking step above ran or was cached
               const blocked = blockings ?? {}
 
@@ -389,6 +391,9 @@ export async function planShots(run: ShotRun) {
                   }
                   // what the code repaired or only noted costs no further call - a line in the log, nothing else
                   for (const r of reads) for (const note of r.read?.notes ?? []) log.line(styles.muted(`        · ${r.beat.id}, ${note}`))
+                  // a shot still fuller than its framing holds is rewritten without who leaves it, below
+                  for (const issue of reads[0]?.read?.issues ?? [])
+                      if (issue.shot !== undefined && issue.leave?.length) crowded.push({beatId: beat.id, j: issue.shot, leave: issue.leave})
                   return reads[0]?.read?.plan
               }
               // the beats with a blocking at once; one without goes on from the plan before it, so those wait for theirs
@@ -436,6 +441,7 @@ export async function planShots(run: ShotRun) {
                       })
                   } else log.warn('the rewrite did not come back with one entry per moment - the moments stay as they are')
               }
+              await thinOut(crowded, result, cast.characters)
               return result
           })
     if (shotMoments)
@@ -534,4 +540,73 @@ export async function planShots(run: ShotRun) {
         await project.save()
     }
     return {clipSlots, mapping, locationView, directedPlan, shotViews}
+}
+
+/**
+ * A shot that still shows more people than its framing holds after the second answer (four of a band in a medium shot): the
+ * video model squeezed them together, pulled a drummer from her kit and merged two people. Which ids leave it is the check's
+ * (crowdedShot: who sings, whose instrument is heard, who the action names first stay); the words without them are the
+ * model's - one call for all such shots. A rewrite that still names someone who leaves keeps the shot as it was.
+ */
+export async function thinOut(crowded: {beatId: string; j: number; leave: string[]}[], result: Record<string, BeatShots>, characters: Character[]) {
+    const shots = crowded.filter(c => result[c.beatId]?.shots[c.j])
+    if (!shots.length) return
+    const nameOf = (id: string) => characters.find(c => c.id === id)?.name ?? id
+    log.warn(`${shots.length} shot(s) still show more people than their framing holds - rewriting them without who leaves`)
+    const asked = shots.map(c => {
+        const shot = result[c.beatId]!.shots[c.j]!
+        return {action: shot.action, rest: shot.rest ?? '', leaves: c.leave.map(id => `{${nameOf(id)}}`)}
+    })
+    const answer = await askJson<{shots: {action: string; rest: string}[]}>({
+        input: `Each of these music video shots shows more people than its framing can hold. Rewrite its "action" and its "rest" without the people in "leaves": they are not in this shot - not named, not seen, not described; whatever they sing or play is heard off screen. Keep everything else exactly as it is: the same other people, place, camera, action, emotions, singing and playing. Every name in braces ({Kara}) stays exactly as it is, in its braces. "rest" stays "" when it is "".
+Answer only with JSON: {"shots": [{"action": "...", "rest": "..."}, ...]} - exactly ${asked.length} entries, in the same order.
+---
+${JSON.stringify(asked)}`,
+        instructions: 'You are a music video director who corrects shot descriptions. Answer only with JSON.',
+        schema: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['shots'],
+            properties: {
+                shots: {
+                    type: 'array',
+                    minItems: asked.length,
+                    maxItems: asked.length,
+                    items: {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['action', 'rest'],
+                        properties: {action: {type: 'string'}, rest: {type: 'string'}},
+                    },
+                },
+            },
+        },
+    }).catch((e: unknown) => {
+        log.warn(`the rewrite of the overfull shots is unusable (${messageOf(e)}) - they stay as they are`)
+        return undefined
+    })
+    if (answer?.shots?.length !== shots.length) return
+    const {texts} = await resolveUnknownTokens(
+        answer.shots.flatMap(s => [String(s.action ?? ''), String(s.rest ?? '')]),
+        characters,
+    )
+    shots.forEach((c, k) => {
+        const thinned = withoutLeaving(result[c.beatId]!.shots[c.j]!, c.leave, texts[2 * k]!, texts[2 * k + 1]!, characters)
+        if (thinned) result[c.beatId]!.shots[c.j] = thinned
+        else log.warn(`${c.beatId}, shot ${c.j + 1}: the rewrite still names ${c.leave.map(nameOf).join(', ')} - the shot stays as it was`)
+    })
+}
+
+/** The shot with the rewritten words and without the ids that leave it - undefined when the words still name one of them. */
+export function withoutLeaving(shot: ShotPlan, leave: string[], action: string, rest: string, characters: Character[]): ShotPlan | undefined {
+    if (!action.trim() || [action, rest].some(t => readTokens(t, characters).ids.some(id => leave.includes(id)))) return undefined
+    const {rest: _rest, people, characters: ids, ...kept} = shot
+    const left = Object.fromEntries(Object.entries(people ?? {}).filter(([id]) => !leave.includes(id)))
+    return {
+        ...kept,
+        action,
+        ...(rest.trim() ? {rest} : {}),
+        ...(ids ? {characters: ids.filter(id => !leave.includes(id))} : {}),
+        ...(Object.keys(left).length ? {people: left} : {}),
+    }
 }
