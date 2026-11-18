@@ -3,32 +3,8 @@ import {parseUntil, type UntilStage} from './stages.ts'
 
 // The options of one run that both pipelines take (#841): what is rendered and how - --render, --only, --again, --preview,
 // --retake, --refresh, --strict, the own picture of --picture-anchor - and how far it goes: --until, --review, --dry-run [--json].
-// Declared and checked here once; each pipeline adds its own (--redo, --beats, --scenes, --export, ...) and its own checks
+// Declared once in lib/pipeline-commands.ts, checked here once; each pipeline adds its own (--redo, --beats, --scenes, --export, ...) and its own checks
 // of how they go together. The planning stays in each pipeline.
-
-/** For parseArgs: spread into a pipeline's options. */
-export const RUN_OPTIONS = {
-    render: {type: 'string', default: ''},
-    only: {type: 'string', default: ''},
-    again: {type: 'boolean', default: false},
-    preview: {type: 'boolean', default: false},
-    retake: {type: 'string', default: ''},
-    'new-anchor': {type: 'boolean', default: false},
-    'picture-prompt': {type: 'string', default: ''},
-    'picture-anchor': {type: 'string', default: ''},
-    'picture-description': {type: 'string', default: ''},
-    'describe-picture': {type: 'boolean', default: false},
-    refresh: {type: 'string', default: ''},
-    strict: {type: 'boolean', default: false},
-    // stop after a step that was just generated: accept, edit, again, stop - in a terminal
-    review: {type: 'boolean', default: false},
-    // plan up to this stage and stop - the story, the cast or the look (lib/stages.ts)
-    until: {type: 'string', default: ''},
-    // says what --redo, changed inputs and --render would do, and does nothing
-    'dry-run': {type: 'boolean', default: false},
-    // with --dry-run: what it says as JSON, for the workspace (#836)
-    json: {type: 'boolean', default: false},
-} as const
 
 export type RunOptionValues = {
     render: string

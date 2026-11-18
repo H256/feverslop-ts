@@ -1,11 +1,12 @@
 import {noProject} from './lib/usage.ts'
-import {extraArgument} from './lib/command-schema.ts'
 import {cli} from './lib/cli.ts'
+import {extraArgument, parseArgsOptions, usageArgs} from './lib/command-schema.ts'
+import {planCommand} from './lib/pipeline-commands.ts'
 import {toSlug} from './lib/slug.ts'
 import {existsSync, mkdirSync, readdirSync} from 'node:fs'
 import {parseArgs} from 'node:util'
 import {formatDuration, keepLogIn, log, runLogFile, runWarnings, setOutput, styles} from './lib/log.ts'
-import {MUSIC_RENDER, readRunOptions, RUN_OPTIONS} from './lib/run-options.ts'
+import {MUSIC_RENDER, readRunOptions} from './lib/run-options.ts'
 import {renderAndAssemble} from './lib/pipeline/render-music.ts'
 import {renderPictures} from './lib/pipeline/pictures.ts'
 import {serverNames, sourceNote, startRenderer} from './lib/pipeline/render-steps.ts'
@@ -53,33 +54,14 @@ import {messageOf} from './lib/text.ts'
 import {castProps, propPictureJob} from './lib/props.ts'
 cli('plan')
 
-const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again] [--preview] [--retake=slot-007:3.2-5.0]
-             [--llm-url=…] [--llm-key=…] [--llm-model=…] [--llm-parallel=2] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
-             [--refresh=pictures,clips] [--beats=beat-05,beat-07] [--strict] [--debug] [--review] [--until=story|cast|look] [--dry-run [--json]] [-v|--verbose] [--show=story,cast,clips]   (--debug: the stack trace of a failure · --review: stop after story, cast, look and beats to accept, edit or redo them · --until: plan up to this stage and stop, the next run goes on from it · --dry-run: what the run would redo and render, nothing is done · -v: every detail as before · --show: the details of these cached steps, clips = the prompts · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
-bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
-bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
+// the options of a plan run: lib/pipeline-commands.ts
+const usage = `bun index.ts ${usageArgs(planCommand)}`
 const {values: args, positionals} = (() => {
     try {
         return parseArgs({
             args: Bun.argv.slice(2),
             allowPositionals: true,
-            options: {
-                ...RUN_OPTIONS,
-                redo: {type: 'string', default: ''},
-                beats: {type: 'string', default: ''},
-                'llm-url': {type: 'string'},
-                'llm-key': {type: 'string'},
-                'llm-model': {type: 'string'},
-                'llm-parallel': {type: 'string'},
-                comfy: {type: 'string'},
-                // skips step 11b and spreads/reuses beat.moments across shots the old way - a fallback while 11b is new
-                'legacy-moments': {type: 'boolean', default: false},
-                'debug-audio': {type: 'boolean', default: false},
-                gallery: {type: 'boolean', default: false},
-                export: {type: 'string', default: ''},
-                // the terminal shows a cached step as one line; --show=story,clips the details of those (-v, everything, is read by cli())
-                show: {type: 'string', default: ''},
-            },
+            options: parseArgsOptions(planCommand.options),
         })
     } catch (e) {
         return log.usageError(messageOf(e), usage)
