@@ -77,6 +77,8 @@ describe('the look without the prop (#944)', () => {
             expect(prompt).not.toContain('"prop"')
             expect(prompt).not.toContain('"inHand"')
             expect(prompt).not.toContain('It is in use in the picture')
+            // tides-261115: Kael's picture had a sword at his hip, and the guitar became it in a clip
+            expect(prompt).toContain('they carry no other weapon, tool or instrument either')
         }
     })
 
