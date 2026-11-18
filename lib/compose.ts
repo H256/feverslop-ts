@@ -18,7 +18,7 @@ import type {
     StoryBeat,
     TimedWord,
 } from './project.ts'
-import {handsOf, type LocationSet} from './project.ts'
+import {factText, handsOf, type LocationSet} from './project.ts'
 import {CONTEXT_SETTLE, formatTimestamp, FPS, frameAt, round} from './frames.ts'
 import {MISSING_WORD_LEAD, voiceLead} from '../shared/timing-fit.ts'
 import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from '../comfy/helpers.ts'
@@ -217,6 +217,13 @@ const blockingPattern = ['single', 'single', 'pair', 'group'] as const
 
 // the most facts a clip's "Continuity from earlier scenes" lists
 const MAX_CONTINUITY_FACTS = 6
+
+// a quoted fact matched to the one it quotes: case, spaces and the closing stop do not count - the words do
+const sameFact = (fact: string) =>
+    fact
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .replace(/^[\s"']+|[\s"'.]+$/g, '')
 
 // Picks who's in frame for a shot: `required` (e.g. the singers of this shot) always stays in, `named` (a
 // character the story moment calls out by name) takes it alone when nobody must be kept in frame, otherwise a
@@ -524,7 +531,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     const requests: ClipRequest[] = []
     // continuity facts in story order, with the beat and place they came from - see continuityFor
     // place: whether the fact is one of the place (undefined: a beat from before the facts said so), ids: whom it names
-    const stateSoFar: {fact: string; beatId: string; locationId: string; place?: boolean; ids: string[]}[] = []
+    let stateSoFar: {fact: string; beatId: string; locationId: string; place?: boolean; ids: string[]}[] = []
     // C + D: blocking and camera state, carried across every shot of the whole song (not reset per clip or beat)
     let blockingCursor = 0
     let lastCamera: string | undefined
@@ -571,12 +578,17 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 ),
             )
         })
+        // a fact that undoes earlier ones takes them out: a later clip got "lifted" and "lowered" both and drew either
+        const ended = new Set(beat.stateAfter.flatMap(f => (typeof f === 'string' ? [] : (f.ends ?? []).map(sameFact))))
+        if (ended.size) stateSoFar = stateSoFar.filter(s => !ended.has(sameFact(s.fact)))
         stateSoFar.push(
-            ...beat.stateAfter.map(fact =>
-                typeof fact === 'string'
-                    ? {fact, beatId: beat.id, locationId: beat.locationId, ids: []}
-                    : {fact: fact.fact, beatId: beat.id, locationId: beat.locationId, place: fact.place, ids: idsIn(fact.fact, true)},
-            ),
+            ...beat.stateAfter
+                .filter(fact => factText(fact).trim())
+                .map(fact =>
+                    typeof fact === 'string'
+                        ? {fact, beatId: beat.id, locationId: beat.locationId, ids: []}
+                        : {fact: fact.fact, beatId: beat.id, locationId: beat.locationId, place: fact.place, ids: idsIn(fact.fact, true)},
+                ),
         )
     }
     return requests
