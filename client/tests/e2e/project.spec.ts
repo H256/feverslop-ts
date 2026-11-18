@@ -61,6 +61,9 @@ test('timeline: the clip at the playhead, its tabs, and a render asked before it
 
 test('story: a changed story is saved after the question, and leaving with changes asks first', async ({page}) => {
   await page.goto(`${base}/p/music/demo/story`)
+  // the story opens as a page (#1169); the text field is one click away
+  await expect(page.getByRole('article', {name: 'Story'})).toContainText('Once upon a time')
+  await page.getByRole('group', {name: 'Story view'}).getByRole('button', {name: 'Edit'}).click()
   const text = page.getByRole('textbox', {name: 'Story'})
   await expect(text).toHaveValue('Once upon a time')
   await expect(page.getByRole('button', {name: 'Save the story'})).toBeDisabled()
@@ -170,6 +173,8 @@ test('the story of a film: the screenplay told anew waits next to it, and is tak
 
 test('look: one text changed and one written anew, saved together', async ({page}) => {
   await page.goto(`${base}/p/music/demo/look`)
+  // the description is folded under its look (#1171)
+  await page.getByText('Description - what the clip prompts say of it', {exact: true}).click()
   await page.getByLabel('Description - what the clip prompts say of it').fill('a tall woman')
   await page.getByLabel('Write anew').check()
   await expect(page.getByText('1 text changed · 1 to write anew')).toBeVisible()
@@ -915,6 +920,9 @@ test('a later read of the project that fails keeps the page and what was typed, 
     failing ? route.fulfill({status: 500, json: {error: 'the disk is gone', kind: 'failed'}}) : route.fallback(),
   )
   await page.goto(`${base}/p/music/demo/story`)
+  // the story opens as a page (#1169); the text field is one click away
+  await expect(page.getByRole('article', {name: 'Story'})).toContainText('Once upon a time')
+  await page.getByRole('group', {name: 'Story view'}).getByRole('button', {name: 'Edit'}).click()
   const text = page.getByRole('textbox', {name: 'Story'})
   await expect(text).toHaveValue('Once upon a time')
   await text.fill('Once upon a night')

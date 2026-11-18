@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed} from 'vue'
+import {computed, ref} from 'vue'
 import type {LookElement} from '../../../../shared/workspace'
 import {mediaUrl} from '../../api/urls'
 import DisclosureBox from '../../components/DisclosureBox.vue'
@@ -14,11 +14,12 @@ import {LOOK_FIELDS, type LookEdits} from './lookEdits'
 const props = defineProps<{element: LookElement; edits: LookEdits}>()
 const {project, roots, root} = useProject()
 const picture = computed(() => project.value.pictures.find(p => p.id === props.element.id && p.exists))
-// a description that says what the look says is folded away (#1143): it is one more text to read, and it is there to open. Read from the
-// saved texts, so that typing in it does not fold it
+// the description is derived from the look: folded under it (#1171), open when it was changed here - a change is never hidden. Whether it
+// says what the look says is read from the saved texts, so that typing in it does not change its title
 const sameAsLook = computed(
   () => props.element.look !== undefined && props.element.description !== undefined && sameText(props.element.description, props.element.look),
 )
+const descriptionOpen = ref(props.edits.valueOf(props.element, 'description') !== (props.element.description ?? ''))
 const changed = computed(() => props.edits.isChanged(props.element))
 </script>
 
@@ -48,10 +49,16 @@ const changed = computed(() => props.edits.isChanged(props.element))
       <div class="lk-texts">
         <p v-if="element.look === undefined" class="muted">Not written yet - plan the look.</p>
         <template v-for="{field, label, rows} in LOOK_FIELDS" :key="field">
-          <DisclosureBox v-if="field === 'description' && sameAsLook" title="Description - the same as the look" quiet small>
+          <DisclosureBox
+            v-if="field === 'description' && element.description !== undefined"
+            v-model:open="descriptionOpen"
+            :title="sameAsLook ? 'Description - the same as the look' : label"
+            quiet
+            small
+          >
             <label class="lk-field">
-              <span>{{ label }}</span>
               <textarea
+                :aria-label="label"
                 :rows="rows"
                 :value="edits.valueOf(element, field)"
                 :readonly="!!element.library"
