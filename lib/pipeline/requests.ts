@@ -33,6 +33,19 @@ import type {PictureJob} from '../render.ts'
 // prompt, its pictures and its audio cut from the stems - written to output/ with the picture jobs, checked, and compared with the
 // run before.
 
+/**
+ * The lines whose singing is heard well before their first word, with how long: the timing most likely lost a word there (#738).
+ * Not a line placed by hand - it was checked on the Timing page already: tides-261115 had all 27 by hand and 7 of them warned
+ * about, each right after the line before (most likely its last word held on, which the clips follow anyway).
+ */
+export function earlyLines(timing: LyricsTiming, vocalPeaks: number[]): string[] {
+    return timing.lines.flatMap((line, n) => {
+        if (line.byHand) return []
+        const lead = voiceLead(line.words, vocalPeaks, timing.lines[n - 1]?.end ?? 0)
+        return lead >= MISSING_WORD_LEAD ? [`"${line.text}" (${lead.toFixed(1)} s)`] : []
+    })
+}
+
 /** What the requests are built from: everything the planning made. */
 export type RequestsRun = {
     project: ProjectStore
@@ -103,10 +116,7 @@ export async function buildRequests(run: RequestsRun) {
     const vocalPeaks = stems && singing ? await readFineWaveform(join(project.dir, stems.vocals), RATE).catch(() => undefined) : undefined
     // singing heard well before a line's first word: the clips follow the sound, but the timing most likely lost a word there (#738)
     if (vocalPeaks && lyricsTiming) {
-        const early = lyricsTiming.lines.flatMap((line, n) => {
-            const lead = voiceLead(line.words, vocalPeaks, lyricsTiming.lines[n - 1]?.end ?? 0)
-            return lead >= MISSING_WORD_LEAD ? [`"${line.text}" (${lead.toFixed(1)} s)`] : []
-        })
+        const early = earlyLines(lyricsTiming, vocalPeaks)
         if (early.length)
             log.warn(
                 `${early.length} line(s) are heard before their first word - a word may be missing in their timing: ${early.join(', ')}. Check them on the workspace's Timing page`,
