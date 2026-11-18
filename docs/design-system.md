@@ -54,7 +54,10 @@ Measured with the WCAG 2.x formula on the token values (4.5 : 1 for text, 3 : 1 
 | `--accent-text` on `--accent` (a primary button) | 10.5 |
 | `--accent` on `--bg` / `--surface` / `--accent-soft` (a link, the current tab, a ring) | 10.7 / 9.6 / 7.2 |
 | `--ok`, `--stale`, `--danger`, `--plan`, `--finish` on `--surface` | 11.3, 9.7, 6.6, 7.4, 9.2 |
+| `--lane-voice`, `--lane-band` on `--surface` / `--bg` (a lane of the timeline, a mark: 3 : 1 asked) | 7.5, 7.6 / 8.3, 8.4 |
 | `--line` on `--surface` (the border of a card or a field) | 1.6 |
+
+The two lane colours in the light theme: 6.1 and 5.5 on `--surface`, 5.5 and 5.0 on `--bg`.
 
 Every text pair is above 4.5 : 1, in the light theme too (`--text` 17.4, `--muted` on `--bg` 5.5, `--accent-text` on `--accent` 6.5, `--ok` 6.7). The borders are the weak point: 1.6 : 1 is below the 3 : 1 that WCAG asks of the edge of a control. A field is told apart by its fill (`--bg` inside a `--surface` card) and by the accent ring on focus, not by its border alone.
 
