@@ -126,37 +126,44 @@ export async function planShots(run: ShotRun) {
         propActivity,
         shotMoments: plannedBefore ?? project.data.shotMoments,
     }
-    // how each instrument is heard in each shot (#1024): single hits with silence between, who carries the part - only with a band on screen
-    const stemPowers =
-        propActivity && cast.characters.some(c => c.propStem)
-            ? await playerStemPowers(project.dir, {...project.data.stems, ...project.data.instrumentStems}, [...STEM_NAMES], music)
-            : undefined
-    const beatProps = propActivity ? propActivityPerBeat({...cutsInput, singing}, propActivity, stemPowers) : undefined
-    const beatSinging = singingPerBeat({...cutsInput, singing, lyricsTiming})
-    const shotCounts = countShotsPerBeat(cutsInput)
-    // the first shot of each clip of a beat
-    const clipOpens = Object.fromEntries([...shotsOfClips(cutsInput)].map(([beatId, clips]) => [beatId, clips.flatMap(c => c.shots.slice(0, 1))]))
     // the director's edits (direction.json): a plan made again keeps to them - the code enforces them on it as well (applyDirectionOverlay)
     const directionTarget = {id: project.id, dir: project.dir, kind: 'music' as const}
     const directionNotes = directionPlanNotes(directionTarget, project.data)
     // the rules each beat gets as notes: a beat planned now has them in its shots, a preview need not write them again (#960)
     const directionRules = directionPlanRules(directionTarget, project.data)
     const plannedNow: string[] = []
-    const planContext: PlanContext = {
-        characters: cast.characters,
-        locations: cast.locations,
-        characterDescriptions,
-        locationDescriptions,
-        locationLayouts,
-        continuity: config.continuity,
-        slots: clipSlots,
-        mapping,
-        shotCounts,
-        clipOpens,
-        beatProps,
-        beatSinging,
-        filmLook: lookBrief,
-        ...(Object.keys(directionNotes).length ? {direction: directionNotes} : {}),
+    // what the blocking and the shots are planned from - measured once, and only when one of those steps runs (#1158): a run with
+    // both cached decodes no stem for them
+    let planning: ReturnType<typeof measurePlanning> | undefined
+    const shotPlanning = () => (planning ??= measurePlanning())
+    async function measurePlanning() {
+        // how each instrument is heard in each shot (#1024): single hits with silence between, who carries the part - only with a band on screen
+        const stemPowers =
+            propActivity && cast.characters.some(c => c.propStem)
+                ? await playerStemPowers(project.dir, {...project.data.stems, ...project.data.instrumentStems}, [...STEM_NAMES], music)
+                : undefined
+        const beatProps = propActivity ? propActivityPerBeat({...cutsInput, singing}, propActivity, stemPowers) : undefined
+        const beatSinging = singingPerBeat({...cutsInput, singing, lyricsTiming})
+        const shotCounts = countShotsPerBeat(cutsInput)
+        // the first shot of each clip of a beat
+        const clipOpens = Object.fromEntries([...shotsOfClips(cutsInput)].map(([beatId, clips]) => [beatId, clips.flatMap(c => c.shots.slice(0, 1))]))
+        const planContext: PlanContext = {
+            characters: cast.characters,
+            locations: cast.locations,
+            characterDescriptions,
+            locationDescriptions,
+            locationLayouts,
+            continuity: config.continuity,
+            slots: clipSlots,
+            mapping,
+            shotCounts,
+            clipOpens,
+            beatProps,
+            beatSinging,
+            filmLook: lookBrief,
+            ...(Object.keys(directionNotes).length ? {direction: directionNotes} : {}),
+        }
+        return {beatProps, beatSinging, shotCounts, planContext}
     }
     // The blocking, beat after beat - short calls: the floor plan, where everybody starts and ends. Each beat starts where the
     // one before it ends, so this is the only part that has to go in order. A step of its own: --redo=shotMoments plans the shots
@@ -166,6 +173,7 @@ export async function planShots(run: ShotRun) {
         args['legacy-moments'] || project.data.shotMoments !== undefined
             ? undefined
             : await project.step('blocking', '11a · BLOCKING THE BEATS', async () => {
+                  const {planContext} = await shotPlanning()
                   const blockings: Record<string, Blocking> = {}
                   for (const [i, beat] of beats.entries()) {
                       const prev = beats[i - 1]
@@ -196,6 +204,7 @@ export async function planShots(run: ShotRun) {
     const shotMoments = args['legacy-moments']
         ? undefined
         : await project.step('shotMoments', '11b · REFINING MOMENTS PER SHOT', async () => {
+              const {planContext, shotCounts, beatProps, beatSinging} = await shotPlanning()
               type Beat = (typeof beats)[number]
               const MOMENT_SHOTS_PER_CALL = 4
               // the shots of a beat, MOMENT_SHOTS_PER_CALL at a time: each call sees the staging and the shots written so far.

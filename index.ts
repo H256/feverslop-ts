@@ -486,13 +486,15 @@ const stemFiles: Record<string, string> = {
 const propActivity =
     stems && neededStems.length
         ? await project.step('propActivity', '5c · DETECTING INSTRUMENT ACTIVITY', async () => {
-              const result: NonNullable<typeof project.data.propActivity> = {}
-              for (const stemName of neededStems) {
+              // the stems are decoded side by side - local ffmpeg runs, in the order of the stems in project.json
+              const measured = neededStems.flatMap(stemName => {
                   const stemFile = allStems[stemName]
-                  if (!stemFile) continue
+                  if (!stemFile) return []
                   log.step('Analyzing', styles.muted(stemFile))
-                  result[stemName] = await stemActivity(join(project.dir, stemFile), music.bpm)
-              }
+                  return [[stemName, stemActivity(join(project.dir, stemFile), music.bpm)] as const]
+              })
+              const result: NonNullable<typeof project.data.propActivity> = {}
+              for (const [stemName, activity] of measured) result[stemName] = await activity
               return result
           })
         : undefined
@@ -632,11 +634,13 @@ const plannedShots = project.data.shotMoments !== undefined || project.data.part
 const shotActivity =
     propActivity && (project.data.shotActivity !== undefined || !plannedShots)
         ? await project.step('shotActivity', '5e · MEASURING THE ACTIVITY FOR THE SHOTS', async () => {
-              const result: NonNullable<typeof project.data.shotActivity> = {}
-              for (const stemName of Object.keys(propActivity) as (keyof typeof propActivity)[]) {
+              // the stems the props were measured from are decoded once a run (stemFramePower): this costs no second decode
+              const measured = (Object.keys(propActivity) as (keyof typeof propActivity)[]).map(stemName => {
                   const stemFile = allStems[stemName]
-                  result[stemName] = stemFile ? await stemActivity(join(project.dir, stemFile), music.bpm) : propActivity[stemName]
-              }
+                  return [stemName, stemFile ? stemActivity(join(project.dir, stemFile), music.bpm) : propActivity[stemName]] as const
+              })
+              const result: NonNullable<typeof project.data.shotActivity> = {}
+              for (const [stemName, activity] of measured) result[stemName] = await activity
               return result
           })
         : propActivity
