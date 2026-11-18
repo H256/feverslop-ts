@@ -1,4 +1,5 @@
 import {countShotsPerBeat, propActivityPerBeat, shotsOfClips, singingPerBeat} from '../compose.ts'
+import {STEM_NAMES} from '../cast-stems.ts'
 import {playerStemPowers} from './stem-power.ts'
 import {applyDirectionOverlay, directionNotTaken, directionPlanNotes, directionPlanRules, dropStaleEdits, recordPlannedDirection} from '../direction/service.ts'
 import {directionViewCache} from '../direction/views.ts'
@@ -128,12 +129,7 @@ export async function planShots(run: ShotRun) {
     // how each instrument is heard in each shot (#1024): single hits with silence between, who carries the part - only with a band on screen
     const stemPowers =
         propActivity && cast.characters.some(c => c.propStem)
-            ? await playerStemPowers(
-                  project.dir,
-                  {...project.data.stems, ...project.data.instrumentStems},
-                  ['drums', 'bass', 'other', 'guitar', 'piano'],
-                  music,
-              )
+            ? await playerStemPowers(project.dir, {...project.data.stems, ...project.data.instrumentStems}, [...STEM_NAMES], music)
             : undefined
     const beatProps = propActivity ? propActivityPerBeat({...cutsInput, singing}, propActivity, stemPowers) : undefined
     const beatSinging = singingPerBeat({...cutsInput, singing, lyricsTiming})
@@ -548,7 +544,7 @@ export async function planShots(run: ShotRun) {
  * (crowdedShot: who sings, whose instrument is heard, who the action names first stay); the words without them are the
  * model's - one call for all such shots. A rewrite that still names someone who leaves keeps the shot as it was.
  */
-export async function thinOut(crowded: {beatId: string; j: number; leave: string[]}[], result: Record<string, BeatShots>, characters: Character[]) {
+async function thinOut(crowded: {beatId: string; j: number; leave: string[]}[], result: Record<string, BeatShots>, characters: Character[]) {
     const shots = crowded.filter(c => result[c.beatId]?.shots[c.j])
     if (!shots.length) return
     const nameOf = (id: string) => characters.find(c => c.id === id)?.name ?? id
