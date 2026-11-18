@@ -421,6 +421,46 @@ describe('a fact goes with whom it is about, or stays at its place', () => {
         expect(clips[2]!.prompt).toContain('Continuity from earlier scenes: the fire burns low.')
         expect(clips[2]!.prompt).not.toContain('drum is torn')
     })
+
+    test('a fact that ends an earlier one takes it out; an empty one only ends it', () => {
+        const later = [
+            at(
+                'b1',
+                'forge',
+                ['shaman'],
+                [
+                    {fact: "{Shaman}'s drum is torn", place: false},
+                    {fact: 'the fire burns low', place: true},
+                ],
+            ),
+            at(
+                'b2',
+                'forge',
+                ['shaman'],
+                [
+                    {fact: "{Shaman}'s drum is mended", place: false, ends: ["{shaman}'s drum is torn."]},
+                    {fact: '', place: true, ends: ['the fire burns low']},
+                ],
+            ),
+            at('b3', 'forge', ['shaman']),
+        ]
+        const prompt = buildClipRequests({
+            slots: later.map((b, n) => ({id: `slot-00${n + 1}`, index: n, section: 'A', start: n * 4, end: n * 4 + 4, bars: 2, energy: 0.5, lyrics: []})),
+            mapping: later.map((b, n) => ({slotId: `slot-00${n + 1}`, beatId: b.id})),
+            beats: later,
+            characters,
+            locations: [{id: 'forge', name: 'Forge'}],
+            characterDescriptions: {shaman: 'A stocky shaman.', runa: 'A small grey cat.'},
+            locationDescriptions: {forge: 'A forge.'},
+            lookBrief: '',
+            music: {bpm: 120, durationSec: 12, downbeats: [0, 2, 4, 6, 8, 10], barEnergy: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5], sections: []},
+            language: 'English',
+            stemsAvailable: false,
+        })[2]!.prompt
+        expect(prompt).toContain("Continuity from earlier scenes: <Subject 2>'s drum is mended.")
+        expect(prompt).not.toContain('torn')
+        expect(prompt).not.toContain('burns low')
+    })
 })
 
 describe('singingPerBeat', () => {

@@ -46,8 +46,19 @@ export type Location = {id: string; name: string}
 export type LocationSet = {stage: string; spots: Record<string, string>}
 export type LocationLayout = {layout: string; views: string[]; set?: LocationSet}
 
-/** A continuity fact of a beat: of the place it happened in, or of the characters its {Name} tokens name. */
-export type Fact = {fact: string; place: boolean}
+/**
+ * A continuity fact of a beat: of the place it happened in, or of the characters its {Name} tokens name. `ends` quotes the facts
+ * of earlier beats it undoes (the gate shut again after "broken open", the armor back after "turned white"): without it a later
+ * clip got both and drew either. An empty `fact` only ends earlier ones.
+ */
+export type Fact = {fact: string; place: boolean; ends?: string[]}
+/**
+ * What the beats planner says a fact is about. Only a fact of the place and one on a character go on to later clips; the others
+ * are asked for so the planner has somewhere to put them: told only "never where they are, never how they hold the instrument",
+ * it still wrote "{Kael} holds his guitar at his side, not playing", and every later clip of Kael stopped his guitar.
+ */
+export const FACT_KINDS = ['place', 'on them', 'where', 'doing', 'sound'] as const
+export const KEPT_FACT_KINDS: readonly string[] = ['place', 'on them']
 export const factText = (fact: string | Fact) => (typeof fact === 'string' ? fact : fact.fact)
 
 // A story beat has no timing - it is stretched onto the music later

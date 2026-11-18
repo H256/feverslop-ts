@@ -18,7 +18,7 @@ export default function frameInterpolate(opts: InterpolationWorkflowOptions): Wo
         skip_first_frames: 0,
         select_every_nth: 1,
     })
-    const model = wf.FrameInterpolationModelLoader({model_name: opts.model})
+    const model = wf.FrameInterpolationModelLoader({model_name: dyn(opts.model)})
 
     // per piece: its interpolated frames, then its last frame held up to the cut - all in one batch, in order (autogrow
     // slots images.image0, images.image1, ... of BatchImagesNode; ImageBatch with two inputs is deprecated)
