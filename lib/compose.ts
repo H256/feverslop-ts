@@ -1253,9 +1253,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                       : ''
                 // config.propPictures: the prop of everybody in the frame is the one of its picture - drawn from the words alone, it came out
                 // another guitar, another kit in every clip (#944)
+                // the same object in every frame: Kael's picture has a sword at his hip, and the guitar he lowered became it (tides-261115)
                 const shownProps = shot.focus.flatMap(s => propSubjects.filter(p => p.label === s.propLabel))
                 const propPictureClause = shownProps.length
-                    ? ` In the shot: ${shownProps.map(p => `${p.label}, ${the(p.name)} of ${p.owner}, exactly as in ${p.picture}`).join('; ')}.`
+                    ? ` In the shot: ${shownProps.map(p => `${p.label}, ${the(p.name)} of ${p.owner}, exactly as in ${p.picture}`).join('; ')} - ${shownProps.length > 1 ? 'each the same object' : 'the same object'} in every frame, never turned into anything else ${shownProps.length > 1 ? 'they carry' : `${shownProps[0]!.owner} carries`}.`
                     : ''
                 const inFrame = shot.focus.length
                     ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${behind}${propPictureClause}${holdClause}`
