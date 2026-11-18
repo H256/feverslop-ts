@@ -1,4 +1,4 @@
-import {CASTING_FILE} from '../casting.ts'
+import {applyLibraryText, CASTING_FILE, copyKey} from '../casting.ts'
 import {ask, askJson, type AskOptions, llmMap} from '../llm.ts'
 import {log, styles} from '../log.ts'
 import {type Character, handsOf, type LocationLayout, type LocationSet, redoAfter} from '../project.ts'
@@ -33,15 +33,48 @@ export type LookRun = {
     style: string
     storySummary: string
     cast: {characters: Character[]; locations: Location[]}
-    casted: (kind: AssetKind, id: string) => LibraryAsset | undefined
-    castChanged: Set<StepName>
-    castTexts: <T>(step: StepName, kind: AssetKind, values: Record<string, T>, pick: (asset: LibraryAsset) => T | undefined) => void
+    /** the library assets the casting chose, by copyKey(kind, id) */
+    castLibrary: Map<string, LibraryAsset>
     // config.propPictures: every prop has a picture of its own - the characters and the places are drawn without them (#944)
     propPictures: boolean
 }
 
 export async function planLook(run: LookRun) {
-    const {project, args, style, storySummary, cast, casted, castChanged, castTexts, propPictures} = run
+    const {project, args, style, storySummary, cast, castLibrary, propPictures} = run
+    const casted = (kind: AssetKind, id: string) => castLibrary.get(copyKey(kind, id))
+    // the steps below that a library asset stands in for: its texts replace theirs, also in a step kept from an earlier run
+    // (the entry was changed since) - what was planned with the old ones is named at the end
+    const castChanged = new Set<StepName>()
+    function castTexts<T>(step: StepName, kind: AssetKind, values: Record<string, T>, pick: (asset: LibraryAsset) => T | undefined) {
+        for (const [key, asset] of castLibrary) {
+            if (!key.startsWith(`${kind}:`)) continue
+            if (applyLibraryText(values, key.slice(kind.length + 1), pick(asset))) castChanged.add(step)
+        }
+    }
+    /**
+     * A step asked once per character or place, as many at once as llm.parallel allows (#1156): the library's text where the casting
+     * chose an asset, else the answer; one without an answer is left out. The library's texts are taken into a step kept from before too.
+     */
+    async function perEntity<T>(
+        step: StepName,
+        title: string,
+        kind: AssetKind,
+        pick: (asset: LibraryAsset) => T | undefined,
+        askOne: (entity: Character | Location) => Promise<T | undefined>,
+    ): Promise<Record<string, T>> {
+        const entities: (Character | Location)[] = kind === 'character' ? cast.characters : cast.locations
+        const label = kind === 'character' ? 'Character' : 'Location'
+        const values = (await project.step(step, title, async () => {
+            const answers = await llmMap(entities, async (entity, i) => {
+                log.step(`${label} ${i + 1}/${entities.length}`, styles.name(entity.id))
+                const asset = casted(kind, entity.id)
+                return (asset && pick(asset)) || askOne(entity)
+            })
+            return Object.fromEntries(entities.flatMap((entity, i) => (answers[i] === undefined ? [] : [[entity.id, answers[i]]]))) as never
+        })) as Record<string, T>
+        castTexts(step, kind, values, pick)
+        return values
+    }
     /////////// DESIGNING THE LOOK - invented from the story, or extending the director's style.txt
     const lookBrief = await reviewed(
         project,
@@ -100,69 +133,66 @@ export async function planLook(run: LookRun) {
 
     ////////// DESCRIBING THE CHARACTERS - the look prompt without the reference sheet (pose, grey background, studio light)
     // one call per character, independent of each other - as many at once as llm.parallel allows
-    const characterDescriptions = await project.step('characterDescriptions', '7b · DESCRIBING THE CHARACTERS FOR THE CLIPS', async () => {
-        const descriptions = await llmMap(cast.characters, async (char, i) => {
-            log.step(`Character ${i + 1}/${cast.characters.length}`, styles.name(char.id))
-            const fromLibrary = casted('character', char.id)
-            if (fromLibrary) return fromLibrary.description
+    const characterDescriptions = await perEntity(
+        'characterDescriptions',
+        '7b · DESCRIBING THE CHARACTERS FOR THE CLIPS',
+        'character',
+        asset => asset.description,
+        char => {
             const options = characterDescriptionPrompt(characterLooks[char.id] ?? '')
             return project.each('characterDescriptions', char.id, options, () => ask(options))
-        })
-        return Object.fromEntries(cast.characters.map((char, i) => [char.id, descriptions[i]!]))
-    })
-    castTexts('characterDescriptions', 'character', characterDescriptions, asset => asset.description)
+        },
+    )
     for (const [id, description] of Object.entries(characterDescriptions)) log.box(id, description)
 
     ////////// CRAFTING LOCATION LOOKS
     // unlike the characters, the places are not contrasted with each other - asked at once, up to llm.parallel
-    const locationLooks = await project.step('locationLooks', '8 · CRAFTING LOCATION LOOKS', async () => {
-        const looks = await llmMap(cast.locations, async (location, i) => {
-            log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-            const fromLibrary = casted('location', location.id)
-            if (fromLibrary) return fromLibrary.description
+    const locationLooks = await perEntity(
+        'locationLooks',
+        '8 · CRAFTING LOCATION LOOKS',
+        'location',
+        asset => asset.description,
+        location => {
             const {kept, standing} = propsOfPlace(cast.characters, location.id, propPictures)
             const options = locationLookPrompt(lookBrief, storySummary, location.name, kept, standing)
             return project.each('locationLooks', location.id, options, () => ask(options))
-        })
-        return Object.fromEntries(cast.locations.map((location, i) => [location.id, looks[i]!]))
-    })
-    castTexts('locationLooks', 'location', locationLooks, asset => asset.description)
+        },
+    )
     for (const [id, look] of Object.entries(locationLooks)) log.box(id, look)
 
     ////////// DESCRIBING THE LOCATIONS - the look prompt without the establishing shot (camera, "empty", medium)
-    const locationDescriptions = await project.step('locationDescriptions', '8b · DESCRIBING THE LOCATIONS FOR THE CLIPS', async () => {
-        const descriptions = await llmMap(cast.locations, async (location, i) => {
-            log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-            const fromLibrary = casted('location', location.id)
-            if (fromLibrary) return fromLibrary.description
+    const locationDescriptions = await perEntity(
+        'locationDescriptions',
+        '8b · DESCRIBING THE LOCATIONS FOR THE CLIPS',
+        'location',
+        asset => asset.description,
+        location => {
             const options = locationDescriptionPrompt(locationLooks[location.id] ?? '')
             return project.each('locationDescriptions', location.id, options, () => ask(options))
-        })
-        return Object.fromEntries(cast.locations.map((location, i) => [location.id, descriptions[i]!]))
-    })
-    castTexts('locationDescriptions', 'location', locationDescriptions, asset => asset.description)
+        },
+    )
     for (const [id, description] of Object.entries(locationDescriptions)) log.box(id, description)
 
     ////////// THE BACKGROUND OF EACH PLACE - the fixed features every shot with people in it keeps behind them
-    const locationAnchors = await project.step('locationAnchors', '8c · NAMING THE BACKGROUND OF EACH PLACE', async () => {
-        const anchors = await llmMap(cast.locations, async (location, i) => {
-            log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-            const fromLibrary = casted('location', location.id)?.anchors
-            if (fromLibrary) return fromLibrary
+    const locationAnchors = await perEntity(
+        'locationAnchors',
+        '8c · NAMING THE BACKGROUND OF EACH PLACE',
+        'location',
+        asset => asset.anchors,
+        async location => {
             const options = locationAnchorPrompt(locationDescriptions[location.id] ?? '')
             return (await project.each('locationAnchors', location.id, options, () => ask(options))).replace(/^["']|["'.\s]+$/g, '')
-        })
-        return Object.fromEntries(cast.locations.map((location, i) => [location.id, anchors[i]!]))
-    })
-    castTexts('locationAnchors', 'location', locationAnchors, asset => asset.anchors)
+        },
+    )
     for (const [id, anchor] of Object.entries(locationAnchors)) log.step(id, styles.muted(anchor))
 
     ////////// THE LAYOUT OF EACH PLACE - one floor plan per place: every beat there is staged in it, not in a room of its own
-    const locationLayouts = await project.step('locationLayouts', '8d · LAYING OUT EACH PLACE', async () => {
-        const answers = await llmMap(cast.locations, async (location, i) => {
-            log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-            const fromLibrary = casted('location', location.id)?.layout
-            if (fromLibrary) return fromLibrary
+    const locationLayouts = await perEntity<LocationLayout>(
+        'locationLayouts',
+        '8d · LAYING OUT EACH PLACE',
+        'location',
+        asset => asset.layout,
+        async location => {
             const options = locationLayoutPrompt(
                 location.name,
                 locationLooks[location.id] ?? '',
@@ -185,14 +215,8 @@ export async function planLook(run: LookRun) {
             if (!answer) return undefined
             const set = setOf(answer.set, cast.characters)
             return {layout: textOf(answer.layout).trim(), views: LOCATION_VIEWS.map((_, n) => textOf(answer!.views?.[n]).trim()), ...(set ? {set} : {})}
-        })
-        const layouts: Record<string, LocationLayout> = {}
-        cast.locations.forEach((location, i) => {
-            if (answers[i]) layouts[location.id] = answers[i]
-        })
-        return layouts
-    })
-    castTexts('locationLayouts', 'location', locationLayouts, asset => asset.layout)
+        },
+    )
     if (castChanged.size) {
         await project.save()
         // a changed casting.json after the plan was made: what was made from the old texts is named, not redone (it costs)

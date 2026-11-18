@@ -45,8 +45,8 @@ import {pictureProp, propMissing} from './lib/prop-check.ts'
 import {projectInputs, songFileOf, readInputFile} from './lib/inputs.ts'
 import {reviewed} from './lib/review.ts'
 import {stopAfter} from './lib/stages.ts'
-import {applyLibraryText, castFromLibrary, copyKey} from './lib/casting.ts'
-import {type LibraryAsset, libraryDir} from './lib/library.ts'
+import {castFromLibrary, copyKey} from './lib/casting.ts'
+import {libraryDir} from './lib/library.ts'
 import {type AssetKind} from './lib/asset-import.ts'
 import {askLayers, STEM_NAMES, stemQuestion, withStems} from './lib/cast-stems.ts'
 import {castPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt} from './lib/prompts.ts'
@@ -453,17 +453,6 @@ const casted = (kind: AssetKind, id: string) => castLibrary.get(copyKey(kind, id
             log.warn(`${entry.id}: library:${entry.libraryId} does not name the role's prop "${shown}" - the clips may show the picture's prop, or none`)
     }
 }
-// the steps below that a library asset stands in for: its texts replace theirs, also in a step kept from an earlier run
-// (the entry was changed since) - what was planned with the old ones is named at the end
-const castChanged = new Set<StepName>()
-function castTexts<T>(step: StepName, kind: AssetKind, values: Record<string, T>, pick: (asset: LibraryAsset) => T | undefined) {
-    for (const [key, asset] of castLibrary) {
-        if (!key.startsWith(`${kind}:`)) continue
-        const id = key.slice(kind.length + 1)
-        const value = pick(asset)
-        if (applyLibraryText(values, id, value)) castChanged.add(step)
-    }
-}
 
 ////////// THE PROPS AS THINGS OF THEIR OWN - config.propPictures: each character's prop gets a picture, laid into the clips its owner
 // is in (#944). Built by code from the cast's prop words, no question to the language model
@@ -547,9 +536,7 @@ const {lookBrief, characterLooks, characterDescriptions, locationLooks, location
     style,
     storySummary,
     cast,
-    casted,
-    castChanged,
-    castTexts,
+    castLibrary,
     propPictures: config.propPictures,
 })
 
