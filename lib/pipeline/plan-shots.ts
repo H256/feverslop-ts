@@ -205,89 +205,85 @@ export async function planShots(run: ShotRun) {
               // made again, each with its own problems; the other calls keep their first answer. A problem of the whole beat (its
               // shot count) asks every call again - the shots of the calls after it would no longer line up.
               type RawBeat = {staging?: string; ends?: Record<string, string>; shots: Record<string, unknown>[]}
-              const askBlock = async (
-                  block: Beat[],
+              const askBeat = async (
+                  beat: Beat,
                   finished: {beat: Beat; plan: BeatShots} | undefined,
                   after: Beat | undefined,
-                  before?: {moments: Record<string, RawBeat>; issues: Record<string, Issue[]>},
+                  before?: {raw: RawBeat; issues: Issue[]},
                   blocking?: Blocking,
-              ) => {
-                  const moments: Record<string, RawBeat> = {}
-                  for (const beat of block) {
-                      const total = shotCounts[beat.id] ?? 1
-                      const raw: RawBeat = {shots: []}
-                      const previous = before?.moments[beat.id]
-                      const calls = plannerCalls(
-                          total,
-                          MOMENT_SHOTS_PER_CALL,
-                          previous ? {issues: before!.issues[beat.id] ?? [], previousShots: previous.shots.length} : undefined,
-                      )
-                      for (const {from, to, keep, problems: own} of calls) {
-                          if (keep) {
-                              if (from === 0) raw.staging = blocking?.staging ?? previous!.staging
-                              raw.shots.push(...previous!.shots.slice(from, to))
-                              if (to === total) raw.ends = blocking?.ends ?? previous!.ends
-                              continue
-                          }
-                          let chunk: ReturnType<typeof parseShotLines> | undefined
-                          // the beats run at once - the label says which beat and which shots a line of the log is about
-                          const label = `${beat.id} · shots ${from + 1}-${to} of ${total}`
-                          for (let attempt = 1; attempt <= 2 && !chunk; attempt++) {
-                              log.step('Shots', styles.name(label))
-                              const parsed = parseShotLines(
-                                  await ask({
-                                      ...planPrompt(planContext, [beat], from === 0 ? finished : undefined, after, own, {
-                                          from,
-                                          to,
-                                          total,
-                                          written: raw.shots,
-                                          staging: raw.staging,
-                                          blocking,
-                                      }),
-                                      label,
+              ): Promise<RawBeat> => {
+                  const total = shotCounts[beat.id] ?? 1
+                  const raw: RawBeat = {shots: []}
+                  const previous = before?.raw
+                  const calls = plannerCalls(
+                      total,
+                      MOMENT_SHOTS_PER_CALL,
+                      previous ? {issues: before!.issues, previousShots: previous.shots.length} : undefined,
+                  )
+                  for (const {from, to, keep, problems: own} of calls) {
+                      if (keep) {
+                          if (from === 0) raw.staging = blocking?.staging ?? previous!.staging
+                          raw.shots.push(...previous!.shots.slice(from, to))
+                          if (to === total) raw.ends = blocking?.ends ?? previous!.ends
+                          continue
+                      }
+                      let chunk: ReturnType<typeof parseShotLines> | undefined
+                      // the beats run at once - the label says which beat and which shots a line of the log is about
+                      const label = `${beat.id} · shots ${from + 1}-${to} of ${total}`
+                      for (let attempt = 1; attempt <= 2 && !chunk; attempt++) {
+                          log.step('Shots', styles.name(label))
+                          const parsed = parseShotLines(
+                              await ask({
+                                  ...planPrompt(planContext, [beat], from === 0 ? finished : undefined, after, own, {
+                                      from,
+                                      to,
+                                      total,
+                                      written: raw.shots,
+                                      staging: raw.staging,
+                                      blocking,
                                   }),
-                              )
-                              if (parsed.shots.length) chunk = parsed
-                              else
-                                  log.warn(
-                                      `${beat.id}, shots ${from + 1}-${to}: no shot in the answer${attempt < 2 ? ' - asking again' : ' - the beat is short of them'}`,
-                                  )
-                          }
-                          if (!chunk) break
-                          // with a blocking, the staging and the ends are the blocking's
-                          if (from === 0) raw.staging = blocking?.staging ?? chunk.staging
-                          raw.shots.push(...chunk.shots.slice(0, to - from))
-                          if (to === total) raw.ends = blocking?.ends ?? chunk.ends
-                      }
-                      // tokens of nobody of the cast ({Aldric} for "Aldric Thorne") are mapped by one short call - cheaper than asking the
-                      // planner again, and nothing reads the words
-                      const slots: {get: () => unknown; set: (v: string) => void}[] = [
-                          {get: () => raw.staging, set: (v: string) => (raw.staging = v)},
-                          ...Object.keys(raw.ends ?? {}).map(who => ({get: () => raw.ends![who], set: (v: string) => (raw.ends![who] = v)})),
-                          ...raw.shots.flatMap(shot => [
-                              ...['action', 'view', 'camera', 'rest'].map(key => ({get: () => shot[key], set: (v: string) => (shot[key] = v)})),
-                              ...Object.values((shot.people ?? {}) as Record<string, Record<string, unknown>>).flatMap(person =>
-                                  ['state', 'frame', 'motion'].map(key => ({get: () => person[key], set: (v: string) => (person[key] = v)})),
-                              ),
-                          ]),
-                      ].filter(slot => typeof slot.get() === 'string')
-                      const {texts: fixed, mapped} = await resolveUnknownTokens(
-                          slots.map(slot => slot.get() as string),
-                          cast.characters,
-                      )
-                      if (Object.keys(mapped).length) {
-                          log.line(
-                              styles.muted(
-                                  `        · ${beat.id}, names: ${Object.entries(mapped)
-                                      .map(([token, name]) => `{${token}} → ${name ? `{${name}}` : 'nobody of the cast'}`)
-                                      .join(', ')}`,
-                              ),
+                                  label,
+                              }),
                           )
-                          slots.forEach((slot, n) => slot.set(fixed[n]!))
+                          if (parsed.shots.length) chunk = parsed
+                          else
+                              log.warn(
+                                  `${beat.id}, shots ${from + 1}-${to}: no shot in the answer${attempt < 2 ? ' - asking again' : ' - the beat is short of them'}`,
+                              )
                       }
-                      moments[beat.id] = raw
+                      if (!chunk) break
+                      // with a blocking, the staging and the ends are the blocking's
+                      if (from === 0) raw.staging = blocking?.staging ?? chunk.staging
+                      raw.shots.push(...chunk.shots.slice(0, to - from))
+                      if (to === total) raw.ends = blocking?.ends ?? chunk.ends
                   }
-                  return {moments}
+                  // tokens of nobody of the cast ({Aldric} for "Aldric Thorne") are mapped by one short call - cheaper than asking the
+                  // planner again, and nothing reads the words
+                  const slots: {get: () => unknown; set: (v: string) => void}[] = [
+                      {get: () => raw.staging, set: (v: string) => (raw.staging = v)},
+                      ...Object.keys(raw.ends ?? {}).map(who => ({get: () => raw.ends![who], set: (v: string) => (raw.ends![who] = v)})),
+                      ...raw.shots.flatMap(shot => [
+                          ...['action', 'view', 'camera', 'rest'].map(key => ({get: () => shot[key], set: (v: string) => (shot[key] = v)})),
+                          ...Object.values((shot.people ?? {}) as Record<string, Record<string, unknown>>).flatMap(person =>
+                              ['state', 'frame', 'motion'].map(key => ({get: () => person[key], set: (v: string) => (person[key] = v)})),
+                          ),
+                      ]),
+                  ].filter(slot => typeof slot.get() === 'string')
+                  const {texts: fixed, mapped} = await resolveUnknownTokens(
+                      slots.map(slot => slot.get() as string),
+                      cast.characters,
+                  )
+                  if (Object.keys(mapped).length) {
+                      log.line(
+                          styles.muted(
+                              `        · ${beat.id}, names: ${Object.entries(mapped)
+                                  .map(([token, name]) => `{${token}} → ${name ? `{${name}}` : 'nobody of the cast'}`)
+                                  .join(', ')}`,
+                          ),
+                      )
+                      slots.forEach((slot, n) => slot.set(fixed[n]!))
+                  }
+                  return raw
               }
 
               const result: Record<string, BeatShots> = {...plannedBefore}
@@ -315,82 +311,70 @@ export async function planShots(run: ShotRun) {
                       written: [],
                       blocking,
                   })
-                  const plan = await project.eachFound('shotMoments', beat.id, {instructions, input}, () => planShots(beat, blocking, after, handover))
+                  const plan = await project.eachFound('shotMoments', beat.id, {instructions, input}, () => planBeatShots(beat, blocking, after, handover))
                   // a beat without a plan falls back to the legacy spread
                   if (plan) {
                       result[beat.id] = plan
                       plannedNow.push(beat.id)
                   }
               }
-              const planShots = async (
+              const planBeatShots = async (
                   beat: Beat,
                   blocking: Blocking | undefined,
                   after: Beat | undefined,
                   handover: {beat: Beat; plan: BeatShots} | undefined,
               ): Promise<BeatShots | undefined> => {
-                  const block = [beat]
                   // what can be counted is read by the code; whether a heard player's hand phrase plays at all is read by one short
                   // call per beat (lib/playing-check.ts) - its "no" is a problem of that shot like the others
-                  const read = (answer: Awaited<ReturnType<typeof askBlock>>) =>
-                      Promise.all(
-                          block.map(async beat => {
-                              const read = readBeatPlan(
-                                  answer.moments?.[beat.id],
-                                  beat,
-                                  cast.characters,
-                                  shotCounts[beat.id] ?? 1,
-                                  beatSinging[beat.id],
-                                  beatProps?.[beat.id],
-                              )
-                              const idle = read
-                                  ? await playingIssues(playingCases(read.plan.shots, beatProps?.[beat.id], cast.characters)).catch((e: unknown) => {
-                                        log.warn(`${beat.id}: the check of the hand phrases failed (${messageOf(e)}) - they stay unchecked`)
-                                        return []
-                                    })
-                                  : []
-                              if (read)
-                                  for (const issue of idle) {
-                                      read.issues.push(issue)
-                                      read.problems.push(issue.message)
-                                  }
-                              return {beat, read}
-                          }),
-                      )
+                  const readAnswer = async (answer: RawBeat) => {
+                      const read = readBeatPlan(answer, beat, cast.characters, shotCounts[beat.id] ?? 1, beatSinging[beat.id], beatProps?.[beat.id])
+                      const idle = read
+                          ? await playingIssues(playingCases(read.plan.shots, beatProps?.[beat.id], cast.characters)).catch((e: unknown) => {
+                                log.warn(`${beat.id}: the check of the hand phrases failed (${messageOf(e)}) - they stay unchecked`)
+                                return []
+                            })
+                          : []
+                      if (read)
+                          for (const issue of idle) {
+                              read.issues.push(issue)
+                              read.problems.push(issue.message)
+                          }
+                      return read
+                  }
                   // a long answer now and then cannot be read at all: asked again, twice at most, then the beat falls back to the
-                  // legacy spread (a warning says so) instead of the run failing after the beats that worked
-                  let first: Awaited<ReturnType<typeof read>> | undefined
-                  let firstAnswer: Awaited<ReturnType<typeof askBlock>> | undefined
-                  for (let attempt = 1; attempt <= 3 && !first; attempt++) {
+                  // legacy spread (a warning says so) instead of the run failing after the beats that worked. An answer that is read
+                  // without a plan is not asked again - it is the beat's answer
+                  let firstAnswer: RawBeat | undefined
+                  let read: Awaited<ReturnType<typeof readAnswer>>
+                  for (let attempt = 1; attempt <= 3 && !firstAnswer; attempt++) {
                       try {
-                          firstAnswer = await askBlock(block, handover, after, undefined, blocking)
-                          first = await read(firstAnswer)
+                          const answer = await askBeat(beat, handover, after, undefined, blocking)
+                          read = await readAnswer(answer)
+                          firstAnswer = answer
                       } catch (e) {
                           log.warn(`the answer for ${beat.id} is unusable (${messageOf(e)})${attempt < 3 ? ' - asking again' : ' - it keeps its beat moments'}`)
                       }
                   }
-                  if (!first) return undefined
-                  let reads = first
+                  if (!firstAnswer) return undefined
                   // what can be counted (a name that is not in the cast, a singing shot without a singer, a shot that names someone it does not show) is asked once more
-                  const problems = reads.flatMap(r => (r.read?.problems ?? []).map(p => `${r.beat.id}, ${p}`))
+                  const problems = (read?.problems ?? []).map(p => `${beat.id}, ${p}`)
                   if (problems.length) {
                       log.warn(`${problems.length} problem(s) in the staged shots of ${beat.id} - asking once more`)
                       for (const p of problems) log.line(styles.muted(`        · ${p}`))
-                      const issues = Object.fromEntries(
-                          reads.map(r => [r.beat.id, (r.read?.issues ?? []).map(i => ({...i, message: `${r.beat.id}, ${i.message}`}))]),
-                      )
-                      const again = await askBlock(block, handover, after, {moments: firstAnswer!.moments, issues}, blocking).then(read, (e: unknown) => {
+                      const issues = (read?.issues ?? []).map(i => ({...i, message: `${beat.id}, ${i.message}`}))
+                      const again = await askBeat(beat, handover, after, {raw: firstAnswer, issues}, blocking).then(readAnswer, (e: unknown) => {
                           log.warn(`the second answer is unusable (${messageOf(e)}) - the first one stays`)
-                          return reads
+                          return read
                       })
-                      reads = reads.map((r, n) => (again[n]!.read && (!r.read || again[n]!.read!.problems.length <= r.read.problems.length) ? again[n]! : r))
-                      for (const r of reads) for (const p of r.read?.problems ?? []) log.warn(`${r.beat.id}, ${p}`)
+                      if (again && (!read || again.problems.length <= read.problems.length)) read = again
+                      for (const p of read?.problems ?? []) log.warn(`${beat.id}, ${p}`)
                   }
                   // what the code repaired or only noted costs no further call - a line in the log, nothing else
-                  for (const r of reads) for (const note of r.read?.notes ?? []) log.line(styles.muted(`        · ${r.beat.id}, ${note}`))
+                  for (const note of read?.notes ?? []) log.line(styles.muted(`        · ${beat.id}, ${note}`))
                   // a shot still fuller than its framing holds is rewritten without who leaves it, below
-                  for (const issue of reads[0]?.read?.issues ?? [])
+                  for (const issue of read?.issues ?? [])
                       if (issue.shot !== undefined && issue.leave?.length) crowded.push({beatId: beat.id, j: issue.shot, leave: issue.leave})
-                  return reads[0]?.read?.plan
+                  return read?.plan
               }
               // the beats with a blocking at once; one without goes on from the plan before it, so those wait for theirs
               await llmMap(

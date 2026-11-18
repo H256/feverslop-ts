@@ -680,8 +680,6 @@ const {clips, outputDir, pictures} = await buildRequests({
     locationAnchors,
     locationLayouts,
     beats,
-    memberCounts,
-    characterLookVariants,
     characterDescriptionVariants,
     timeline,
     clipSlots,
@@ -689,7 +687,7 @@ const {clips, outputDir, pictures} = await buildRequests({
     locationView,
     directedPlan,
     shotViews,
-    pictureJobs,
+    pictures: pictureJobs(memberCounts, characterLookVariants, characterDescriptionVariants),
 })
 
 // the pictures and clips asked for, the final video, the timeline for an editor (lib/pipeline/render-music.ts)

@@ -66,8 +66,6 @@ export type RequestsRun = {
     locationAnchors: Record<string, string>
     locationLayouts: Record<string, LocationLayout>
     beats: StoryBeat[]
-    memberCounts: Record<string, number>
-    characterLookVariants: Record<string, string[]>
     characterDescriptionVariants: Record<string, string[]>
     timeline: Timeline
     clipSlots: Slot[]
@@ -75,7 +73,8 @@ export type RequestsRun = {
     locationView: number | 'auto'
     directedPlan: Project
     shotViews: Record<string, number[]> | undefined
-    pictureJobs: (memberCounts: Record<string, number>, lookVariants: Record<string, string[]>, descriptionVariants: Record<string, string[]>) => PictureJob[]
+    /** the pictures of the cast, the places and the props - written to output/assets.json with the requests */
+    pictures: PictureJob[]
 }
 
 export async function buildRequests(run: RequestsRun) {
@@ -98,8 +97,6 @@ export async function buildRequests(run: RequestsRun) {
         locationAnchors,
         locationLayouts,
         beats,
-        memberCounts,
-        characterLookVariants,
         characterDescriptionVariants,
         timeline,
         clipSlots,
@@ -107,7 +104,7 @@ export async function buildRequests(run: RequestsRun) {
         locationView,
         directedPlan,
         shotViews,
-        pictureJobs,
+        pictures,
     } = run
     ////////// BUILDING THE MINIMAX H3 REQUESTS
     // Deterministic from the data above, so it is rebuilt on every run instead of being cached
@@ -189,7 +186,6 @@ export async function buildRequests(run: RequestsRun) {
         }
     }
 
-    const pictures = pictureJobs(memberCounts, characterLookVariants, characterDescriptionVariants)
     await Bun.write(join(outputDir, 'assets.json'), JSON.stringify(pictures, null, 2))
 
     await Bun.write(
