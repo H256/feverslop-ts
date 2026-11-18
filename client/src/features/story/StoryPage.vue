@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import AppIcon from '../../components/AppIcon.vue'
 import CalloutBox from '../../components/CalloutBox.vue'
-import {computed} from 'vue'
+import {computed, ref} from 'vue'
 import PageBar from '../../components/PageBar.vue'
 import ResourceState from '../../components/ResourceState.vue'
+import SegmentedControl from '../../components/SegmentedControl.vue'
 import {useDraft} from '../../composables/useDraft'
 import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
 import {listSteps, stepNames} from '../../lib/format'
+import {blocksOf} from '../../lib/markdown'
 import {useAsk} from '../../services/ask'
 import {useToasts} from '../../services/toasts'
 import {usePageData} from '../project/usePageData'
@@ -22,6 +24,14 @@ const film = computed(() => project.value.kind === 'film')
 const name = computed(() => (film.value ? 'Screenplay' : 'Story'))
 const draft = useDraft(() => book.value?.text)
 useUnsavedChanges(() => draft.dirty.value, 'changes to the story')
+// the story of a music video is read as a page, and changed in its text field (#1169); a film's screenplay is not Markdown
+const VIEWS = [
+  {value: 'read', label: 'Read'},
+  {value: 'edit', label: 'Edit'},
+] as const
+const view = ref<'read' | 'edit'>('read')
+const reading = computed(() => !film.value && view.value === 'read')
+const blocks = computed(() => blocksOf(draft.text.value ?? ''))
 const builtOn = computed(() => book.value?.builtOn ?? [])
 
 const save = toasts.guard(async () => {
@@ -137,15 +147,35 @@ const drop = toasts.guard(async () => {
           <p class="muted">The film follows the script as it is. Repair it here, or change the script in input/ and plan again.</p>
           <button class="btn" @click="repair">Repair the script…</button>
         </div>
-        <div class="section"><textarea v-model="draft.text.value" class="book" rows="24" :aria-label="name" :readonly="!book.editable" /></div>
-        <div v-if="book.editable" class="section btn-row">
+        <div v-if="!film" class="section sp-column"><SegmentedControl v-model="view" :options="VIEWS" label="Story view" /></div>
+        <article v-if="reading" class="section sp-column sp-read" :aria-label="name">
+          <template v-for="(block, i) in blocks" :key="i">
+            <hr v-if="block.type === 'rule'" />
+            <component :is="`h${block.level + 1}`" v-else-if="block.type === 'heading'">
+              <template v-for="(run, j) in block.runs" :key="j"
+                ><strong v-if="run.strong">{{ run.text }}</strong
+                ><em v-else-if="run.em">{{ run.text }}</em
+                ><template v-else>{{ run.text }}</template></template
+              >
+            </component>
+            <p v-else>
+              <template v-for="(run, j) in block.runs" :key="j"
+                ><strong v-if="run.strong">{{ run.text }}</strong
+                ><em v-else-if="run.em">{{ run.text }}</em
+                ><template v-else>{{ run.text }}</template></template
+              >
+            </p>
+          </template>
+        </article>
+        <div v-else class="section sp-column"><textarea v-model="draft.text.value" class="book" rows="24" :aria-label="name" :readonly="!book.editable" /></div>
+        <div v-if="book.editable" class="section btn-row sp-column">
           <button class="btn primary" :disabled="!draft.dirty.value" @click="save"><AppIcon name="save" />Save the story</button>
           <button class="btn" @click="writeAgain"><AppIcon name="repeat" />Write it again</button>
           <button class="btn" title="The same story with the cast as the Casting page has it now - a proposal next to this one" @click="adapt">
             Tell it anew for the cast
           </button>
         </div>
-        <p v-if="book.editable && builtOn.length" class="muted">
+        <p v-if="book.editable && builtOn.length" class="muted sp-column">
           Saving a changed story drops what is built on it: <span :title="stepNames(builtOn)">{{ listSteps(builtOn, project.kind) }}</span
           >. The next plan run makes those again.
         </p>
@@ -155,6 +185,40 @@ const drop = toasts.guard(async () => {
 </template>
 
 <style scoped>
+/* a story is read in a column of about 70 characters of its serif, as a page is (#1141) */
+.sp-column {
+  max-width: 40rem;
+}
+/* the switch is as wide as its words, not as the column */
+.sp-column .seg {
+  width: fit-content;
+}
+/* the story as a page: the serif of the text field, headings of the UI face's weight, a thin rule between scenes */
+.sp-read {
+  font: var(--text-l)/1.75 var(--serif);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+}
+.sp-read p {
+  margin: 0 0 var(--space-3);
+}
+.sp-read h2 {
+  font-size: var(--text-xl);
+  line-height: 1.3;
+  margin: 0 0 var(--space-4);
+}
+.sp-read h3,
+.sp-read h4 {
+  font-size: var(--text-l);
+  margin: var(--space-4) 0 var(--space-2);
+}
+.sp-read hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: var(--space-5) 0;
+}
 .sp-notes ul {
   margin: var(--space-1) 0;
   padding-left: var(--space-4);
