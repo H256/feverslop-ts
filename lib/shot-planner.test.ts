@@ -425,6 +425,8 @@ describe('the rules a beat needs (#825)', () => {
             '"castProps" below lists',
             'A cast entry with "group": true',
             'In a shot with three or more people',
+            // tides-261115 slot-040: a wide shot from the side wall put the band among the audience
+            'A shot of the crowd together with the band looks along the line between them',
         ])
             expect(instructions).toContain(rule)
     })
