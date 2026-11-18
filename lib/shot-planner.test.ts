@@ -432,6 +432,12 @@ describe('the rules a beat needs (#825)', () => {
         ])
             expect(instructions).toContain(rule)
     })
+    // stille-im-spiegel 037/038: a guitar in one hand and the other on a friend's shoulder - the player drawn twice, or with three hands
+    test('the hands do one thing: who plays touches nobody, who touches has the prop out of the hands', () => {
+        expect(planInstructions).toContain(
+            'Their hands do one thing at a time: whoever plays or uses their prop in a shot touches nobody and nothing else with those hands',
+        )
+    })
     test('with everything needed the rules are the whole set', () => {
         expect(planInstructionsFor(ALL_NEEDS)).toBe(planInstructions)
     })
