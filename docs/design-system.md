@@ -21,7 +21,10 @@ The workspace's tokens live in `:root` of `client/src/styles/tokens.css`. A styl
 | `--text-xs` | 11 px | labels on the timeline, captions |
 | `--text-s` | 12 px | notes, secondary text, small buttons |
 | `--text-m` | 13 px | body text, the page's default |
-| `--text-l` | 15 px | headings of a page or a dialog |
+| `--text-l` | 15 px | headings of a card or a dialog, the story text |
+| `--text-xl` | 20 px | the title of a page (`PageBar`) |
+
+`--serif` is the one other face besides `--sans` and `--mono`: it is for text that is read, not operated - the story on the Story page (a column of about 40 rem, line height 1.75).
 
 ## What a colour means
 
@@ -34,6 +37,7 @@ The workspace's tokens live in `:root` of `client/src/styles/tokens.css`. A styl
 | `--stale` (amber) | made from an older state, needs doing again | |
 | `--ok` (lime in the dark theme, green in the light one) | done, reachable | the main action: that is `--accent` |
 | `--text`, underlined | a link (`.link`, a `RouterLink` in text) | |
+| `--lane-voice` (pink), `--lane-band` (steel blue) | data: who sings and who plays on the timeline's cast lanes | a button, a state - they are neither the accent nor `--ok`, so a lane is never read as an action or as "done" |
 
 The dark theme is a dark green: `--bg` is the page, `--surface` a card, `--raised` a button or a quiet part, `--hover` a button under the pointer, `--head` the title bar of a card (a step lighter than `--surface`, so the edges of a card read at a glance), `--line` a border. The accent is mint there and `--ok` a yellowish lime, so that a "done" mark is never read as the main action; in the light theme both keep their old colours.
 

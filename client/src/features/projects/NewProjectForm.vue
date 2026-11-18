@@ -2,6 +2,7 @@
 import {computed, ref} from 'vue'
 import type {LibrarySongEntry} from '../../../../shared/workspace'
 import {workspace} from '../../api/workspace'
+import DisclosureBox from '../../components/DisclosureBox.vue'
 import FormField from '../../components/FormField.vue'
 import {errorText} from '../../lib/format'
 import {idProblem, LANGUAGES, languageLabel, suggestedId, type NewProjectDraft} from './newProject'
@@ -52,14 +53,24 @@ const typePath = () => {
   props.draft.sent = undefined
   props.draft.song = ''
 }
+// what the chosen way to start means, in a line (#1145)
+const explain = computed(
+  () =>
+    ({
+      song: 'You give the audio file and its lyrics.',
+      library: 'Its lyrics, stems and timing come with it; the plan starts at the story.',
+      idea: 'You describe it: the lyrics are written from the idea, and the song is made from them.',
+    })[props.draft.from],
+)
 const language = computed(() => languageLabel(props.draft.language))
 </script>
 
 <template>
   <div class="np-form">
+    <h3 class="np-head">Name</h3>
     <div class="np-pair">
       <FormField label="Name"><input :value="draft.name" type="text" placeholder="Well of Youth" @input="setName(($event.target as HTMLInputElement).value)" /></FormField>
-      <FormField label="Project id - the folder's name" :note="idSaid" :class="{'np-wrong': idSaid}">
+      <FormField label="Project id (required)" :note="idSaid" :class="{'np-wrong': idSaid}">
         <input
           :value="draft.id"
           type="text"
@@ -70,11 +81,13 @@ const language = computed(() => languageLabel(props.draft.language))
         />
       </FormField>
     </div>
+    <h3 class="np-head">Song</h3>
     <div class="np-seg" role="group" aria-label="The song">
       <button type="button" :aria-pressed="draft.from === 'song'" @click="draft.from = 'song'">A song I have</button>
       <button v-if="songs.length" type="button" :aria-pressed="draft.from === 'library'" @click="draft.from = 'library'">A song of the library</button>
       <button type="button" :aria-pressed="draft.from === 'idea'" @click="draft.from = 'idea'">A song to be made</button>
     </div>
+    <p class="muted np-explain">{{ explain }}</p>
     <template v-if="draft.from === 'song'">
       <div class="np-song">
         <span class="np-label">The song (.wav, .mp3, .flac)</span>
@@ -107,16 +120,19 @@ const language = computed(() => languageLabel(props.draft.language))
     </template>
     <template v-else>
       <FormField label="Song idea"><textarea v-model="draft.idea" rows="3" placeholder="What the song is about, its mood, its genre" /></FormField>
-      <FormField label="Lyrics of your own (optional - else they are written from the idea)"><textarea v-model="draft.lyrics" rows="4" /></FormField>
-      <FormField label="Musical style (optional - genre, mood, instruments; the LLM invents one if empty)">
-        <textarea v-model="draft.musicStyle" rows="2" placeholder="dark synthwave, female vocals, slow, 80s drum machine" />
-      </FormField>
-      <FormField label="Song length in seconds (optional)">
-        <input v-model="draft.songLength" type="text" inputmode="numeric" placeholder="the workflow's own" />
-      </FormField>
+      <DisclosureBox title="More about the song (optional)" quiet>
+        <div class="np-form np-more">
+          <FormField label="Lyrics of your own (else they are written from the idea)"><textarea v-model="draft.lyrics" rows="4" /></FormField>
+          <FormField label="Musical style (genre, mood, instruments; the LLM invents one if empty)">
+            <textarea v-model="draft.musicStyle" rows="2" placeholder="dark synthwave, female vocals, slow, 80s drum machine" />
+          </FormField>
+          <FormField label="Song length in seconds">
+            <input v-model="draft.songLength" type="text" inputmode="numeric" placeholder="the workflow's own" />
+          </FormField>
+        </div>
+      </DisclosureBox>
     </template>
-    <FormField label="Story idea (optional)"><textarea v-model="draft.storyIdea" rows="2" placeholder="What the video shows" /></FormField>
-    <FormField label="Visual style (optional - picked from the examples if empty)"><textarea v-model="draft.style" rows="2" /></FormField>
+    <h3 class="np-head">Singing</h3>
     <FormField :label="draft.from === 'idea' ? 'Who sings the song' : 'Who sings in the song (the story casts to match)'">
       <select v-model="draft.voice" aria-label="Who sings the song">
         <option value="auto">{{ draft.from === 'idea' ? 'Leave it to the LLM' : 'Leave it open' }}</option>
@@ -140,6 +156,12 @@ const language = computed(() => languageLabel(props.draft.language))
         </datalist>
       </FormField>
     </div>
+    <DisclosureBox title="More about the video (optional)" quiet>
+      <div class="np-form np-more">
+        <FormField label="Story idea"><textarea v-model="draft.storyIdea" rows="2" placeholder="What the video shows" /></FormField>
+        <FormField label="Visual style (picked from the examples if empty)"><textarea v-model="draft.style" rows="2" /></FormField>
+      </div>
+    </DisclosureBox>
     <p class="muted np-note">
       The same as <code>bun run init &lt;id&gt; --song=… --lyrics=…</code> (or <code>--library-song=…</code>, <code>--idea=…</code>). The render settings start at their defaults
       and are changed on the Settings page. Nothing is planned or rendered by creating it.
@@ -153,20 +175,50 @@ const language = computed(() => languageLabel(props.draft.language))
   gap: var(--space-3);
   min-width: 0;
 }
+/* a part of the form: said in its name, set off by a line above it */
+.np-head {
+  margin: var(--space-2) 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+  font-size: var(--text-m);
+  font-weight: 600;
+}
+.np-head:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+/* the ways to start as one pressed control, the chosen one raised */
 .np-seg {
   display: flex;
-  gap: var(--space-2);
+  gap: var(--space-half);
+  padding: var(--space-half);
+  border-radius: var(--radius-m);
+  background: var(--raised);
 }
 .np-seg button {
   flex: 1;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
+  padding: var(--space-1) var(--space-3);
+  border: 0;
   border-radius: var(--radius-m);
-  background: var(--surface);
+  background: none;
+  color: var(--muted);
+}
+.np-seg button:hover {
+  color: var(--text);
 }
 .np-seg button[aria-pressed='true'] {
-  background: var(--raised);
-  border-color: var(--text);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow-card);
+}
+.np-explain {
+  margin: calc(var(--space-1) * -1) 0 0;
+  font-size: var(--text-s);
+}
+.np-more {
+  padding-top: var(--space-2);
 }
 .np-pair {
   display: grid;
@@ -174,7 +226,7 @@ const language = computed(() => languageLabel(props.draft.language))
   gap: var(--space-3);
 }
 .np-note {
-  font-size: var(--text-s);
+  font-size: var(--text-xs);
 }
 .np-song {
   display: grid;

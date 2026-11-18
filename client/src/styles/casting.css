@@ -88,7 +88,8 @@
 textarea.book {
   width: 100%;
   min-height: 50vh;
-  font: var(--text-l)/1.6 var(--sans);
+  padding: var(--space-4) var(--space-5);
+  font: var(--text-l)/1.75 var(--serif);
 }
 .twocol {
   display: grid;

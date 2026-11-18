@@ -26,7 +26,7 @@ const rendered = computed(() => props.project.clips ? props.project.rendered / p
       <span class="body">
         <span class="name" :title="project.id">{{ project.title }}</span>
         <span class="muted num"
-          >{{ project.rendered }} of {{ plural(project.clips, 'clip') }} rendered<template v-if="project.changed"> · changed {{ dateOf(project.changed) }}</template></span
+          >{{ project.rendered }} of {{ plural(project.clips, 'clip') }} rendered<template v-if="project.changed"> · <span class="pc-date">changed {{ dateOf(project.changed) }}</span></template></span
         >
         <span class="bar"><i :style="{width: `${rendered}%`}" /></span>
         <span class="row">
@@ -54,6 +54,10 @@ const rendered = computed(() => props.project.clips ? props.project.rendered / p
 </template>
 
 <style scoped>
+/* a date is not broken across two lines (#1146) */
+.pc-date {
+  white-space: nowrap;
+}
 /* the newest finished video, under the card: played on the Post-work page on a click (#832) */
 .pc-newest {
   display: block;
