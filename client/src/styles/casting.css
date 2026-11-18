@@ -46,6 +46,14 @@
   flex: 1 1 100%;
   min-width: 0;
 }
+/* the other ways to give a role a picture: quiet, under the choice (#1142) */
+.role .choice .link {
+  font: var(--text-s) var(--sans);
+  color: var(--muted);
+}
+.role .choice .link:hover {
+  color: var(--text);
+}
 .role.out {
   border-style: dashed;
 }
@@ -88,7 +96,8 @@
 textarea.book {
   width: 100%;
   min-height: 50vh;
-  font: var(--text-l)/1.6 var(--sans);
+  padding: var(--space-4) var(--space-5);
+  font: var(--text-l)/1.75 var(--serif);
 }
 .twocol {
   display: grid;

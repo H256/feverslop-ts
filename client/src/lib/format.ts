@@ -41,3 +41,14 @@ export function errorText(cause: unknown): string {
 }
 /** The words that are there, the empty ones left out. */
 export const joined = (parts: (string | false | undefined | null)[], by = ' · ') => parts.filter(Boolean).join(by)
+
+/**
+ * The next step of a project as one short sentence (#1140): what `bun run status` says without the names of the steps ("22 step(s) to
+ * generate: songStyle, music, …") and without the file names of a changed cast ("casting.json changed: maren is made by the project
+ * again, …" is "Cast changed: 4 changes"). The whole text stays for a title.
+ */
+export function nextSaid(why: string) {
+  const cast = /^casting\.json changed: (.*?)(?: - planned again: .*)?$/.exec(why)
+  if (cast) return `Cast changed: ${plural(cast[1]!.split(', ').length, 'change')}`
+  return why.replace(/: [\w-]+(, [\w-]+)+…?$/, '')
+}
