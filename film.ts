@@ -1,16 +1,17 @@
 import {planFilmShots} from './lib/pipeline/film-shots.ts'
-import {extraArgument} from './lib/command-schema.ts'
+import {cli} from './lib/cli.ts'
 import {renderFilm} from './lib/pipeline/render-film.ts'
 import {checkPrompts} from './lib/prompt-check.ts'
 import {noProject} from './lib/usage.ts'
-import {cli} from './lib/cli.ts'
+import {extraArgument, parseArgsOptions, usageArgs} from './lib/command-schema.ts'
+import {filmCommand} from './lib/pipeline-commands.ts'
 // The short-film pipeline: a story idea or a screenplay (any language) -> screenplay, cast, locations.
 // Separate from the music-video pipeline (index.ts) - it shares the LLM client, the settings and the helpers, nothing else.
 // usage: bun film.ts <film-id> [--redo=screenplay,cast]
 import {copyFileSync, existsSync, mkdirSync, readdirSync, rmSync} from 'node:fs'
 import {join} from 'node:path'
 import {parseArgs} from 'node:util'
-import {FILM_RENDER, readRunOptions, RUN_OPTIONS} from './lib/run-options.ts'
+import {FILM_RENDER, readRunOptions} from './lib/run-options.ts'
 import {languageName} from './lib/config.ts'
 import {MAX_CLIP_SEC, maxClipFor, secondsAt} from './lib/frames.ts'
 import {buildFilmClipRequests, clipOverrides} from './lib/film/compose.ts'
@@ -83,24 +84,15 @@ import {clipRequestsDir, clipRequestsIn, readRequests} from './lib/previous-outp
 import {messageOf} from './lib/text.ts'
 cli('film')
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--preview] [--retake=clip-007:3.2-5.0] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--debug] [--scenes=s6,s7] [--review] [--until=story|cast|look] [--dry-run [--json]] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+// the options of a film run: lib/pipeline-commands.ts
+const usage = `bun film.ts ${usageArgs(filmCommand)}
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
         return parseArgs({
             args: Bun.argv.slice(2),
             allowPositionals: true,
-            options: {
-                ...RUN_OPTIONS,
-                redo: {type: 'string', default: ''},
-                'fix-script': {type: 'boolean', default: false},
-                'allow-import-gaps': {type: 'boolean', default: false},
-                scenes: {type: 'string', default: ''},
-                comfy: {type: 'string'},
-                'llm-url': {type: 'string'},
-                'llm-key': {type: 'string'},
-                'llm-model': {type: 'string'},
-            },
+            options: parseArgsOptions(filmCommand.options),
         })
     } catch (e) {
         return log.usageError(messageOf(e), usage)
