@@ -8,6 +8,7 @@ import {formatDuration, keepLogIn, log, runLogFile, runWarnings, setOutput, styl
 import {MUSIC_RENDER, readRunOptions, RUN_OPTIONS} from './lib/run-options.ts'
 import {renderAndAssemble} from './lib/pipeline/render-music.ts'
 import {renderPictures} from './lib/pipeline/pictures.ts'
+import {serverNames, sourceNote, startRenderer} from './lib/pipeline/render-steps.ts'
 import {dryRun, redoReasons} from './lib/pipeline/dry-run.ts'
 import {buildRequests} from './lib/pipeline/requests.ts'
 import {hearSong} from './lib/pipeline/song.ts'
@@ -248,12 +249,11 @@ if (args['picture-anchor'] && !args['dry-run']) {
     })
 }
 // where a setting comes from: (settings), (project), (env), (flag), (default)
-const from = (source: string) => styles.muted(`(${source === 'file' ? 'settings' : source})`)
 // the model itself is checked on the first LLM call - a fully cached project needs no server
 log.step(
     'LLM',
     settings.llm.url
-        ? `${settings.llm.url} ${from(settings.sources.llmUrl)} · ${settings.llm.model ? `${styles.name(settings.llm.model)} ${from(settings.sources.llmModel)}` : styles.muted('the only model on the server')}`
+        ? `${settings.llm.url} ${sourceNote(settings.sources.llmUrl)} · ${settings.llm.model ? `${styles.name(settings.llm.model)} ${sourceNote(settings.sources.llmModel)}` : styles.muted('the only model on the server')}`
         : styles.muted('none configured - fine while every step is cached, else run: bun run setup llm'),
 )
 if (args['dry-run']) {
@@ -656,14 +656,12 @@ if (until === 'look') {
     if (groups.length) log.step('Groups', styles.muted(`${groups.map(g => g.name).join(', ')}: the pictures of their members come with the shot plan`))
     if (render.has('images')) {
         using renderer = new Renderer(project.id, project.dir, config, settings.comfy)
-        renderer.refresh = refresh
         log.section('8e · RENDERING THE CAST AND THE PLACES')
-        log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
-        if (args.again || refresh.size || retake || args['picture-anchor']) await renderer.serversFirst()
+        await startRenderer(renderer, settings, {refresh, again: args.again, retake, pictureAnchor: args['picture-anchor']})
         await renderPictures(renderer, lookPictures, {
             dir: project.dir,
             config,
-            servers: settings.comfy.map(s => s.name),
+            servers: serverNames(settings),
             render,
             only,
             args,
@@ -773,7 +771,6 @@ await renderAndAssemble({
     stemFiles,
     songFile,
     exportFormats,
-    from,
 })
 
 log.section('✔ DONE')
