@@ -109,7 +109,7 @@ function change(next: Partial<ListFilter>, replace = false) {
       <span v-if="data" class="muted num">{{ count }}</span>
       <div class="spacer" />
       <button class="btn" :title="machine.data.value ? machineSummary(checks) : 'What this machine has of what a video needs'" @click="showMachine">
-        Machine<span v-if="missing.length" class="chip bad pp-count">{{ missing.length }} missing</span>
+        <AppIcon name="system" />Machine<span v-if="missing.length" class="chip bad pp-count">{{ missing.length }} missing</span>
       </button>
       <button class="btn" @click="newFilm"><AppIcon name="add" />New film</button>
       <button class="btn primary" @click="newProject"><AppIcon name="add" />New music video</button>

@@ -29,8 +29,12 @@
   --plan-soft: light-dark(#efe8fc, #2a2142);
   --finish: light-dark(#0b6e78, #5fd0db);
   --finish-soft: light-dark(#dff3f5, #11303a);
+  /* the lanes of who is on screen (#1144): data, so neither the accent (an action), ok (done) nor the signal colours */
+  --lane-voice: light-dark(#b02a78, #f08ccf);
+  --lane-band: light-dark(#4d6b8a, #8fb2d6);
   --hatch: light-dark(#d6d5d0, #243529);
   --sans: 'Inter', 'Segoe UI Variable Text', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+  --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif; /* a story is read in it (#1141) */
   --mono: 'Cascadia Code', 'JetBrains Mono', ui-monospace, Consolas, monospace;
   /* scales (#838): no other gap, radius or font size in a stylesheet */
   --shadow-card: 0 1px 2px #0000000d;
@@ -50,6 +54,7 @@
   --text-s: 12px;
   --text-m: 13px;
   --text-l: 15px;
+  --text-xl: 20px; /* the title of a page (#1146) */
 }
 :root[data-theme='light'] {
   color-scheme: light;

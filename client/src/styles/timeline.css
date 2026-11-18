@@ -134,7 +134,7 @@
 }
 .tbody {
   display: grid;
-  grid-template-columns: 62px minmax(0, 1fr);
+  grid-template-columns: 88px minmax(0, 1fr);
 }
 .labels {
   border-right: 1px solid var(--line);
@@ -245,10 +245,10 @@
 }
 .cast.sings,
 .cast.speaks {
-  background: var(--accent);
+  background: var(--lane-voice);
 }
 .cast.plays {
-  background: var(--ok);
+  background: var(--lane-band);
 }
 /* the view toolbar under the lanes (#772): what is shown, and the zoom */
 .tfoot {
