@@ -9,6 +9,7 @@ import {finishCopy, interpolateClips} from '../final-pass.ts'
 import {finishOf} from '../finish.ts'
 import {FPS, secondsAt} from '../frames.ts'
 import {log, styles} from '../log.ts'
+import {type PictureAsk, renderPictures} from './pictures.ts'
 import type {ProjectStore} from '../project.ts'
 import {freshness} from '../provenance.ts'
 import {clipFingerprint, type PictureJob, Renderer} from '../render.ts'
@@ -28,7 +29,7 @@ export type MusicRenderRun = {
     project: ProjectStore
     config: ProjectConfig
     settings: Settings
-    args: {again: boolean; preview: boolean; strict: boolean; 'picture-anchor'?: string}
+    args: PictureAsk & {preview: boolean; strict: boolean}
     render: Set<string>
     refresh: Set<string>
     only: Set<string>
@@ -40,12 +41,10 @@ export type MusicRenderRun = {
     exportFormats: string[]
     /** where a setting comes from, in the words of the run */
     from: (source: string) => string
-    /** the pictures of the cast and the places, as the look stage renders them too */
-    renderPictures: (renderer: Renderer, pictures: PictureJob[]) => Promise<void>
 }
 
 export async function renderAndAssemble(run: MusicRenderRun) {
-    const {project, config, settings, args, render, refresh, only, retake, clips, pictures, stemFiles, songFile, exportFormats, from, renderPictures} = run
+    const {project, config, settings, args, render, refresh, only, retake, clips, pictures, stemFiles, songFile, exportFormats, from} = run
     ////////// RENDERING WITH COMFYUI
     if (render.has('images') || render.has('videos') || retake) {
         using renderer = new Renderer(project.id, project.dir, config, settings.comfy)
@@ -67,7 +66,8 @@ export async function renderAndAssemble(run: MusicRenderRun) {
         }
 
         // everything at once - the renderer runs one job per server and queues the rest
-        if (render.has('images')) await renderPictures(renderer, pictures)
+        if (render.has('images'))
+            await renderPictures(renderer, pictures, {dir: project.dir, config, servers: settings.comfy.map(s => s.name), render, only, args})
         // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
         if (render.has('videos')) {
             if (render.has('images')) await renderer.freeMemory()
