@@ -1,7 +1,7 @@
-import {archiveFiles, versionStamp} from '../archive.ts'
+import {versionStamp} from '../archive.ts'
 import {previewSources} from '../assemble.ts'
 import {clipChains, onlyClips, warnClipsGoingOn, warnFixedSeed} from '../batch.ts'
-import {archiveClip} from '../film/archive.ts'
+import {archiveClip, archivePreview} from '../film/archive.ts'
 import {addScore, assembleFilm, assembleSmoothFilm, SCORE_EXTENSIONS} from '../film/assemble.ts'
 import {askFilmJson as askJson} from '../film/json.ts'
 import {filmRenderConfig, renderAll} from '../film/pictures.ts'
@@ -13,6 +13,7 @@ import {finishOf} from '../finish.ts'
 import {FPS, secondsAt} from '../frames.ts'
 import {log, styles} from '../log.ts'
 import {type PictureAsk, renderPictures} from './pictures.ts'
+import {sayStaleClips, serverNames, startRenderer} from './render-steps.ts'
 import {clipFailureRisks} from '../render-state.ts'
 import {runEvent} from '../run-events.ts'
 import {filmStatus} from '../status.ts'
@@ -56,8 +57,6 @@ export async function renderFilm(run: FilmRenderRun) {
         const renderConfig = filmRenderConfig(config)
         // the project id is part of ComfyUI's folder - "film-" keeps it apart from a music video of the same name
         using renderer = new FilmRenderer(`film-${film.id}`, film.dir, renderConfig, settings.comfy)
-        // what was made from another request than the plan has now is rendered again - the old ones are kept (lib/provenance.ts)
-        renderer.refresh = refresh
         log.section('11 · RENDERING WITH COMFYUI')
         log.step(
             'Config',
@@ -65,15 +64,15 @@ export async function renderFilm(run: FilmRenderRun) {
                 `seed ${config.seed}, images ${config.imageResolution} (${renderConfig.imageWorkflow})${config.sequenceSheets ? `, sequence sheets (${renderConfig.sequenceWorkflow})` : ''}`,
             ),
         )
-        log.step('Servers', settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', '))
-        if (args.again || renderer.refresh.size || retake || args['picture-anchor']) await renderer.serversFirst()
+        // what was made from another request than the plan has now is rendered again - the old ones are kept (lib/provenance.ts)
+        await startRenderer(renderer, settings, {refresh, again: args.again, retake, pictureAnchor: args['picture-anchor']})
         if (retake) {
             const clip = requests.find(r => r.id === retake.clip)
             if (!clip) throw new Error(`--retake: no clip ${retake.clip} - the clips are ${requests.map(r => r.id).join(', ')}`)
             await renderer.renderFilmRetake(clip, retake)
         }
         if (render.has('images')) {
-            await renderPictures(renderer, pictures, {dir: film.dir, config: renderConfig, servers: settings.comfy.map(s => s.name), render, only, args})
+            await renderPictures(renderer, pictures, {dir: film.dir, config: renderConfig, servers: serverNames(settings), render, only, args})
         }
         // a sheet rendered just now gets its views read, and the clips their view, before they are rendered
         if (render.has('images') && render.has('videos') && config.sequenceSheets && !config.locationViews) requests = await replan()
@@ -86,7 +85,7 @@ export async function renderFilm(run: FilmRenderRun) {
                 readTimings(),
                 selected.filter(c => args.again || !existsSync(join(film.dir, 'videos', `${c.id}.mp4`))),
                 renderConfig.videoWorkflow,
-                settings.comfy.map(server => server.name),
+                serverNames(settings),
             ))
                 log.warn(risk)
             // a clip that starts on the last frame of the one before waits for it: those render one after the other, each chain next to the others
@@ -107,7 +106,7 @@ export async function renderFilm(run: FilmRenderRun) {
                 for (const clip of selected)
                     log.step(
                         'Again',
-                        `${clip.id} ${styles.muted(`- the old one is in ${args.preview ? archiveFiles(film.dir, `${clip.id}-preview-${stamp}`, [join('previews', `${clip.id}.mp4`), join('previews', `${clip.id}.mp4.json`)]) : archiveClip(film.dir, clip.id, stamp)}`)}`,
+                        `${clip.id} ${styles.muted(`- the old one is in ${(args.preview ? archivePreview : archiveClip)(film.dir, clip.id, stamp)}`)}`,
                     )
                 // a preview leaves no last frame behind - the clips after it are not affected
                 if (!args.preview) warnClipsGoingOn(selected, requests)
@@ -139,12 +138,10 @@ export async function renderFilm(run: FilmRenderRun) {
         log.step('Sound', styles.muted('the sound the model made for each clip, with a short fade at every cut'))
         // a clip made from another picture, workflow or start frame than the plan has now is still a clip: said here, an error only with --strict
         const filmConfig = filmRenderConfig(config)
-        const stale = selected.filter(r => filmClipFreshness(r, film.dir, filmConfig) === 'stale').map(r => r.id)
-        if (stale.length) {
-            const message = `${stale.length} clip(s) were made from another prompt, picture or start frame than the plan has now: ${stale.join(', ')} - render them again with --render=videos --refresh=clips`
-            if (args.strict) throw new Error(message)
-            log.warn(message)
-        }
+        sayStaleClips(
+            selected.filter(r => filmClipFreshness(r, film.dir, filmConfig) === 'stale').map(r => r.id),
+            args.strict,
+        )
         const result = await assembleFilm({clips: filmAssemblyClips(film.dir, selected), projectDir: film.dir, target, levelMatching: config.levelMatching})
 
         // a score in input/ is mixed under the film
