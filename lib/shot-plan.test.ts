@@ -293,6 +293,9 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
         expect(r.issues.map(i => i.shot)).toEqual([0, 1])
         expect(r.problems[0]).toContain('shot 1: 3 people (Anna, Bea, Cora) in a close shot, which holds at most 2')
         expect(r.problems[1]).toContain('in a medium shot, which holds at most 3')
+        // who leaves is part of the problem: a shot still overfull after the second answer is rewritten without them
+        expect(r.issues[0]!.leave).toHaveLength(1)
+        expect(r.issues[1]!.leave).toHaveLength(1)
     })
     test('an extreme close-up holds one person - two in it are asked again, one is fine (#339)', () => {
         const shot = (size: string, n: number) => ({

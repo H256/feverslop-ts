@@ -374,6 +374,22 @@ describe('musicStretches - the music along the way for the beats', () => {
         expect(input).toContain('that is not how they look in this video - it is left out of every field')
         expect(beatsPrompt({...args, characters}).input).not.toContain('that is not how they look in this video')
     })
+
+    // "{Vex} has both drumsticks lifted" and "{Vex}'s drumsticks are lowered" both went into slot-040 (tides-261115)
+    test('a fact quotes in "ends" the earlier facts it undoes, the schema asks for it', () => {
+        const args = {durationSec: 60, beatCount: 2, locations: [{id: 'hall', name: 'Hall'}], lyrics: '', story: 'They play.', performance: ''}
+        const prompt = beatsPrompt({...args, characters: [{id: 'kael', name: 'Kael', role: 'singer'}]})
+        expect(prompt.input).toContain('names that one in "ends", quoted exactly as written there')
+        expect(JSON.stringify(prompt.schema)).toContain('"required":["fact","kind","ends"]')
+    })
+
+    // "{Kael} holds his guitar at his side, not playing" despite "never where they are": a kind of its own to put it in
+    test('a fact says its kind, only a fact of the place and one on a character go on', () => {
+        const args = {durationSec: 60, beatCount: 2, locations: [{id: 'hall', name: 'Hall'}], lyrics: '', story: 'They play.', performance: ''}
+        const prompt = beatsPrompt({...args, characters: [{id: 'kael', name: 'Kael', role: 'singer'}]})
+        expect(prompt.input).toContain('Only "place" and "on them" go on to the later clips')
+        expect(JSON.stringify(prompt.schema)).toContain('"kind":{"enum":["place","on them","where","doing","sound"]}')
+    })
 })
 
 describe('the rules a beat needs (#825)', () => {

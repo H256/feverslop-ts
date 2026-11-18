@@ -15,21 +15,22 @@ const beat = {
     kind: 'hit',
     stateAfter: [],
 } as StoryBeat
+const clipInput = (groupSize: number, characters: Character[], extra: string[] = [], index = 0) => ({
+    slots: [{id: 'slot-001', index, section: 'Verse', start: 0, end: 4, bars: 2, energy: 0.8, lyrics: []}],
+    mapping: [{slotId: 'slot-001', beatId: 'b1'}],
+    beats: [{...beat, characterIds: ['orcs', ...extra], groupSize: {orcs: groupSize}}],
+    characters,
+    locations: [{id: 'pass', name: 'Pass'}],
+    characterDescriptions: {orcs: 'an orc'},
+    characterDescriptionVariants: {orcs: ['a scarred orc', 'a tall orc', 'a one-eyed orc']},
+    locationDescriptions: {},
+    lookBrief: '',
+    music: {bpm: 120, durationSec: 4, downbeats: [0, 2], barEnergy: [0.8, 0.8], sections: []},
+    language: 'English',
+    stemsAvailable: false,
+})
 const clip = (groupSize: number, characters: Character[], extra: string[] = [], index = 0) =>
-    buildClipRequests({
-        slots: [{id: 'slot-001', index, section: 'Verse', start: 0, end: 4, bars: 2, energy: 0.8, lyrics: []}],
-        mapping: [{slotId: 'slot-001', beatId: 'b1'}],
-        beats: [{...beat, characterIds: ['orcs', ...extra], groupSize: {orcs: groupSize}}],
-        characters,
-        locations: [{id: 'pass', name: 'Pass'}],
-        characterDescriptions: {orcs: 'an orc'},
-        characterDescriptionVariants: {orcs: ['a scarred orc', 'a tall orc', 'a one-eyed orc']},
-        locationDescriptions: {},
-        lookBrief: '',
-        music: {bpm: 120, durationSec: 4, downbeats: [0, 2], barEnergy: [0.8, 0.8], sections: []},
-        language: 'English',
-        stemsAvailable: false,
-    })[0]!
+    buildClipRequests(clipInput(groupSize, characters, extra, index))[0]!
 
 describe('group members together in one shot (#9)', () => {
     const orcs: Character = {id: 'orcs', name: 'Orcs', role: 'raiders', isGroup: true}
@@ -65,5 +66,24 @@ describe('group members together in one shot (#9)', () => {
         expect(c.assets.pictures).toHaveLength(MAX_REFERENCE_IMAGES)
         expect(c.assets.pictures.filter(p => p.id === 'orcs')).toHaveLength(2)
         expect(c.dropped).toBeUndefined()
+        // the third member has no picture left: it is said in words, the first sentence of its description
+        expect(c.prompt).toContain('another face, hair, build and clothing; among the others are a one-eyed orc; there are 3 of them')
+    })
+    // tides-261115, slot-014: one picture, one person described and "keep their face from the picture" - 20 copies of her
+    test('a crowd with one picture: the others in words, and only the clothing kept from the picture', () => {
+        const words = {orcs: ['A scarred orc with a shaved head. He wears a black cloak.', 'A tall orc with braids. She wears a black cloak.']}
+        const others: Character[] = Array.from({length: MAX_REFERENCE_IMAGES - 2}, (_, i) => ({id: `p${i}`, name: `P${i}`, role: 'fighter'}))
+        const c = buildClipRequests({
+            ...clipInput(
+                20,
+                [orcs, ...others],
+                others.map(o => o.id),
+            ),
+            characterDescriptionVariants: words,
+        })[0]!
+        expect(c.assets.pictures.filter(p => p.id === 'orcs')).toHaveLength(1)
+        expect(c.prompt).toContain('share only the general style of the group; among the others are a tall orc with braids; there are 20 of them')
+        expect(c.prompt).toContain('keep the style and colors of their clothing from the picture, each with a face, hair and build of their own')
+        expect(clip(3, [{...orcs, alike: true}]).prompt).toContain('keep their build, skin, face, costume and colors from the picture')
     })
 })
