@@ -531,7 +531,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     const requests: ClipRequest[] = []
     // continuity facts in story order, with the beat and place they came from - see continuityFor
     // place: whether the fact is one of the place (undefined: a beat from before the facts said so), ids: whom it names
-    let stateSoFar: {fact: string; beatId: string; locationId: string; place?: boolean; ids: string[]}[] = []
+    let stateSoFar: {fact: string; beatId: string; locationId: string; place?: boolean; ids: string[]; about?: string}[] = []
     // C + D: blocking and camera state, carried across every shot of the whole song (not reset per clip or beat)
     let blockingCursor = 0
     let lastCamera: string | undefined
@@ -579,15 +579,24 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             )
         })
         // a fact that undoes earlier ones takes them out: a later clip got "lifted" and "lowered" both and drew either
+        // and a new fact about the same thing replaces the one before, also where "ends" forgot it
         const ended = new Set(beat.stateAfter.flatMap(f => (typeof f === 'string' ? [] : (f.ends ?? []).map(sameFact))))
-        if (ended.size) stateSoFar = stateSoFar.filter(s => !ended.has(sameFact(s.fact)))
+        const renewed = new Set(beat.stateAfter.flatMap(f => (typeof f !== 'string' && f.about && f.fact.trim() ? [sameFact(f.about)] : [])))
+        if (ended.size || renewed.size) stateSoFar = stateSoFar.filter(s => !ended.has(sameFact(s.fact)) && !(s.about && renewed.has(s.about)))
         stateSoFar.push(
             ...beat.stateAfter
                 .filter(fact => factText(fact).trim())
                 .map(fact =>
                     typeof fact === 'string'
                         ? {fact, beatId: beat.id, locationId: beat.locationId, ids: []}
-                        : {fact: fact.fact, beatId: beat.id, locationId: beat.locationId, place: fact.place, ids: idsIn(fact.fact, true)},
+                        : {
+                              fact: fact.fact,
+                              beatId: beat.id,
+                              locationId: beat.locationId,
+                              place: fact.place,
+                              ids: idsIn(fact.fact, true),
+                              ...(fact.about ? {about: sameFact(fact.about)} : {}),
+                          },
                 ),
         )
     }

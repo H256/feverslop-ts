@@ -380,7 +380,7 @@ describe('musicStretches - the music along the way for the beats', () => {
         const args = {durationSec: 60, beatCount: 2, locations: [{id: 'hall', name: 'Hall'}], lyrics: '', story: 'They play.', performance: ''}
         const prompt = beatsPrompt({...args, characters: [{id: 'kael', name: 'Kael', role: 'singer'}]})
         expect(prompt.input).toContain('names that one in "ends", quoted exactly as written there')
-        expect(JSON.stringify(prompt.schema)).toContain('"required":["fact","kind","ends"]')
+        expect(JSON.stringify(prompt.schema)).toContain('"required":["fact","kind","about","ends"]')
     })
 
     // "{Kael} holds his guitar at his side, not playing" despite "never where they are": a kind of its own to put it in
