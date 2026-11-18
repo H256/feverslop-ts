@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {computed} from 'vue'
 import AppIcon from '../../components/AppIcon.vue'
 import PanelCard from '../../components/PanelCard.vue'
 import ResourceState from '../../components/ResourceState.vue'
@@ -72,6 +73,17 @@ const saveLooks = toasts.guard(async () => {
     }))
   if (now) await start({type: 'plan', until: 'look'})
 })
+// one save for the page (#1143): a changed look of the whole is saved first - it writes every look again, so the texts changed by hand
+// below go with it, and the question says so; else the looks changed by hand
+const dirty = computed(() => brief.dirty.value || edits.dirty.value)
+const save = () => (brief.dirty.value ? saveBrief() : saveLooks())
+const saveNote = computed(() =>
+  brief.dirty.value
+    ? `The look of the whole is changed: saving writes every look again${edits.dirty.value ? ', and the texts changed below go with it' : ''}.`
+    : edits.dirty.value
+      ? edits.pending.value
+      : 'Change a text by hand, or tick "Write anew" for the language model to write it again.',
+)
 </script>
 
 <template>
@@ -87,18 +99,12 @@ const saveLooks = toasts.guard(async () => {
           :bar="brief.dirty.value ? 'accent' : 'line'"
         >
           <textarea v-model="brief.text.value" rows="5" aria-label="The look of the whole" />
-          <template #foot>
-            <button class="btn" :disabled="!brief.dirty.value" @click="saveBrief"><AppIcon name="save" />Save the look of the whole</button>
-            <span v-if="brief.dirty.value" class="muted">Saving it writes every look below again.</span>
-          </template>
         </PanelCard>
 
-        <!-- one save for every look changed below, always in reach -->
+        <!-- one save for everything changed on the page, always in reach -->
         <div class="lk-bar">
-          <button class="btn primary" :disabled="!edits.dirty.value" @click="saveLooks"><AppIcon name="save" />Save the looks</button>
-          <span class="muted">{{
-            edits.dirty.value ? edits.pending.value : 'Change a text by hand, or tick "Write anew" for the language model to write it again.'
-          }}</span>
+          <button class="btn primary" :disabled="!dirty" @click="save"><AppIcon name="save" />Save the looks</button>
+          <span class="muted">{{ saveNote }}</span>
         </div>
 
         <section v-if="look.characters.length">

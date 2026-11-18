@@ -385,11 +385,16 @@ const shortText = (text: string) => {
     return flat.length > 70 ? `${flat.slice(0, 69)}…` : flat
 }
 /** The unresolved rules one per line, by scope and the start of their words, with what is wrong (#782). */
-function unresolvedLines(t: DirectionTarget, d: Data, s: State): string[] {
-    return unresolved(t, d, s).map(u => {
+function unresolvedLines(t: DirectionTarget, d: Data, s: State, found = unresolved(t, d, s)): string[] {
+    return found.map(u => {
         const r = s.rules.find(r => r.id === u.ruleId)!
         return `${scopeName(r)} "${shortText(r.text)}": ${u.message}`
     })
+}
+/** The rules not taken yet, and whether the plan waits for them - the open rules read once (#1159). */
+function pendingRules(t: DirectionTarget, d: Data, s: State) {
+    const open = openRules(t, d, s)
+    return {open, pending: open.length > 0 && (s.appliedRules !== hash(open) || !applied(t, d, s))}
 }
 /**
  * Whether the direction waits for a review before a run can build the clips (#782), read-only: the rules that have to be rebound
@@ -399,7 +404,7 @@ export function directionReview(t: DirectionTarget): {pending: boolean; unresolv
     if (!existsSync(file(t)) || !existsSync(join(t.dir, 'project.json'))) return undefined
     const d = source(t),
         s = state(t)
-    const pending = openRules(t, d, s).length > 0 && (s.appliedRules !== hash(openRules(t, d, s)) || !applied(t, d, s))
+    const {pending} = pendingRules(t, d, s)
     return {pending, unresolved: unresolvedLines(t, d, s)}
 }
 function applied(t: DirectionTarget, d: Data, s: State) {
@@ -804,15 +809,11 @@ export function dropStaleEdits(t: DirectionTarget, d: Data): string[] {
 export function directionNotTaken(t: DirectionTarget, d: Data): string[] {
     if (!existsSync(file(t))) return []
     const s = state(t)
-    const pending = openRules(t, d, s).length > 0 && (s.appliedRules !== hash(openRules(t, d, s)) || !applied(t, d, s))
+    const {open, pending} = pendingRules(t, d, s)
     if (!pending) return []
-    const stuck = new Set(unresolved(t, d, s).map(u => u.ruleId))
-    return [
-        ...unresolvedLines(t, d, s),
-        ...openRules(t, d, s)
-            .filter(r => !stuck.has(r.id))
-            .map(r => `${scopeName(r)} "${shortText(r.text)}": not previewed yet`),
-    ]
+    const found = unresolved(t, d, s)
+    const stuck = new Set(found.map(u => u.ruleId))
+    return [...unresolvedLines(t, d, s, found), ...open.filter(r => !stuck.has(r.id)).map(r => `${scopeName(r)} "${shortText(r.text)}": not previewed yet`)]
 }
 export function applyDirectionOverlay<T extends Data>(
     t: DirectionTarget,
@@ -822,7 +823,7 @@ export function applyDirectionOverlay<T extends Data>(
     } = {},
 ): T {
     const s = state(t)
-    const pending = openRules(t, d, s).length > 0 && (s.appliedRules !== hash(openRules(t, d, s)) || !applied(t, d, s))
+    const {pending} = pendingRules(t, d, s)
     if (pending && !options.allowPending) {
         const open = unresolvedLines(t, d, s)
         throw Error(

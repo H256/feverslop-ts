@@ -3,28 +3,22 @@ import {readFileSync} from 'node:fs'
 import {join} from 'node:path'
 import {helpDetails} from './cli-help.ts'
 import {FILM_STEP_NAMES} from './film/store.ts'
+import {filmCommand, planCommand} from './pipeline-commands.ts'
 import {STEP_NAMES} from './project.ts'
 
 const root = join(import.meta.dir, '..')
-// the options of a script's parseArgs call, from its source: the help cannot forget a new one
-const optionsOf = (file: string) => {
-    const source = readFileSync(join(root, file), 'utf8')
-    const block = source.slice(source.indexOf('options: {'), source.indexOf('} catch', source.indexOf('options: {')))
-    return [...block.matchAll(/^\s+'?([a-z-]+)'?: \{type:/gm)].map(match => match[1]!)
-}
-const common = ['verbose', 'debug', 'quiet', 'banner']
 
 describe.each([
-    ['plan', 'index.ts', STEP_NAMES as string[]],
-    ['film', 'film.ts', FILM_STEP_NAMES as string[]],
-] as const)('%s --help', (command, file, steps) => {
+    ['plan', 'index.ts', planCommand, STEP_NAMES as string[]],
+    ['film', 'film.ts', filmCommand, FILM_STEP_NAMES as string[]],
+] as const)('%s --help', (command, file, schema, steps) => {
+    // #1154: the script parses by its schema, and the help explains every option of it - one list for both
     test('explains every option of the script', () => {
-        const options = optionsOf(file)
+        expect(readFileSync(join(root, file), 'utf8')).toContain(`options: parseArgsOptions(${command}Command.options)`)
+        const options = Object.keys(schema.options)
         expect(options).toContain('redo')
-        const explained = options
-            .filter(option => !common.includes(option))
-            .filter(option => new RegExp(`^  --${option}(=\\S*)?\\s+\\S`, 'm').test(helpDetails(command)))
-        expect(explained).toEqual(options.filter(option => !common.includes(option)))
+        const explained = options.filter(option => new RegExp(`^  --${option}(=\\S*)?\\s+\\S`, 'm').test(helpDetails(command)))
+        expect(explained).toEqual(options)
     })
     test('names every step and only real ones', () => {
         const section = helpDetails(command).split('Steps for --redo:')[1]!.split('\n\n')[0]!

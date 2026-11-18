@@ -16,7 +16,6 @@ import {energyBar} from './energy-bar.ts'
 /** What the song is heard with: the run, the song file and its lyrics, and the language and idea of the project. */
 export type SongRun = {
     project: ProjectStore
-    projectId: string
     config: ProjectConfig
     songFile: string
     lyrics: string
@@ -26,7 +25,7 @@ export type SongRun = {
 }
 
 export async function hearSong(run: SongRun) {
-    const {project, projectId, config, songFile, lyrics, lyricSections, language, idea} = run
+    const {project, config, songFile, lyrics, lyricSections, language, idea} = run
     ////////// ANALYZE THE SONG
     if (!existsSync(songFile))
         throw new Error(
@@ -111,13 +110,13 @@ export async function hearSong(run: SongRun) {
         }
         // with known lyrics nothing is lost and nothing added (#738): every line once, placed, with its own words
         for (const p of lyricsProblems(alignedTiming!, lyricSections))
-            log.warn(`line ${p.line + 1} "${p.text}": ${p.problem} - check it on the Timing page (bun run timing ${projectId})`)
+            log.warn(`line ${p.line + 1} "${p.text}": ${p.problem} - check it on the Timing page (bun run timing ${project.id})`)
         const suggested = alignedTiming!.lines.filter(l => l.adlib && l.off)
         if (suggested.length)
             log.step(
                 'Ad-libs',
                 styles.muted(
-                    `${suggested.length} line(s) heard that lyrics.txt does not have - not sung until taken: ${suggested.map(l => `${l.line + 1} "${l.text}"`).join(', ')} (bun run timing ${projectId} --on=N)`,
+                    `${suggested.length} line(s) heard that lyrics.txt does not have - not sung until taken: ${suggested.map(l => `${l.line + 1} "${l.text}"`).join(', ')} (bun run timing ${project.id} --on=N)`,
                 ),
             )
         const unsure = lowConfidence(lyricsTiming)

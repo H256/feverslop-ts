@@ -1,12 +1,12 @@
 import {existsSync} from 'node:fs'
 import {join} from 'node:path'
-import {loadProjectConfig} from './config.ts'
-import {projectInputs, songFileOf, stepUsed} from './inputs.ts'
+import {loadProjectConfig, type ProjectConfig} from './config.ts'
+import {lostStems, projectInputs, songFileOf, stepUsed} from './inputs.ts'
 import {clipEstimate, pictureEstimate, type RenderState, renderState} from './render-state.ts'
 import {styles} from './log.ts'
 import {ProjectStore, STEP_NAMES, unplannedBeats} from './project.ts'
-import {loadSettings} from './settings.ts'
-import {loadFilmConfig} from './film/config.ts'
+import {loadSettings, type Settings} from './settings.ts'
+import {type LoadedFilmConfig, loadFilmConfig} from './film/config.ts'
 import {filmInputs, filmMode, filmStepUsed} from './film/inputs.ts'
 import {filmRenderConfig} from './film/pictures.ts'
 import {filmRenderState} from './film/render.ts'
@@ -145,18 +145,22 @@ export function withSongToMake(next: Next, songToMake: boolean, id: string): Nex
     return songToMake ? {command: `bun index.ts ${id} --render=song`, why: 'no song yet - generate it first, to listen to before anything is planned'} : next
 }
 
-export async function projectStatus(id: string): Promise<Status> {
-    const project = new ProjectStore(id)
-    await project.load()
-    const config = await loadProjectConfig(project.dir)
+/**
+ * What a run that ends hands its status (#1159): the project and the settings it has loaded - and its inputs it has just recorded
+ * (syncInputs), so none has changed. Without it the status reads them itself (bun run status).
+ */
+export type EndOfRun<S, C> = {store: S; config: C; settings: Settings}
+
+export async function projectStatus(id: string, run?: EndOfRun<ProjectStore, ProjectConfig>): Promise<Status> {
+    const project = run?.store ?? new ProjectStore(id)
+    if (!run) await project.load()
+    const config = run?.config ?? (await loadProjectConfig(project.dir))
     const data = project.data
 
     // what the next run will redo: changed inputs and settings, and stems whose files are gone - along the dependencies
-    const changed = project.changedInputs(await projectInputs(project.dir, config))
-    const lostStems = (['stems', 'instrumentStems'] as const).filter(
-        step => data[step] && Object.values(data[step]!).some(file => !existsSync(join(project.dir, file))),
-    )
-    const redo = new Set(project.redoneBy([...changed.flatMap(c => c.steps), ...lostStems]))
+    const changed = run ? [] : project.changedInputs(await projectInputs(project.dir, config))
+    const lost = lostStems(project)
+    const redo = new Set(project.redoneBy([...changed.flatMap(c => c.steps), ...lost]))
     // beats without a shot plan among planned ones: the next run plans just those
     const unplanned = unplannedBeats(data)
     if (unplanned.length) redo.add('shotMoments')
@@ -168,7 +172,7 @@ export async function projectStatus(id: string): Promise<Status> {
     // renders, from the requests of the last plan run
     const render = await renderState(project.dir, project.id, config)
 
-    const settings = await loadSettings({projectModel: config.llm.model})
+    const settings = run?.settings ?? (await loadSettings({projectModel: config.llm.model}))
     const servers = settings.comfy.map(s => s.name)
     // the song's style is written by --render=song only, never by a plan run: listing it as a step to generate sent a project
     // with a finished song.wav round in circles - the run generated nothing and the same "next" came back
@@ -193,7 +197,8 @@ export async function projectStatus(id: string): Promise<Status> {
         project.id,
     )
     // a song still to be made: nothing is planned before it is heard, so it is the first step - one render, to listen to (#1089)
-    const songToMake = !existsSync(songFileOf(project.dir)) && (existsSync(join(project.dir, 'input', 'idea.txt')) || existsSync(join(project.dir, 'input', 'lyrics.txt')))
+    const songToMake =
+        !existsSync(songFileOf(project.dir)) && (existsSync(join(project.dir, 'input', 'idea.txt')) || existsSync(join(project.dir, 'input', 'lyrics.txt')))
     return {
         id: project.id,
         dir: project.dir,
@@ -205,7 +210,7 @@ export async function projectStatus(id: string): Promise<Status> {
         notes: [
             ...withPre.notes,
             ...direction.notes,
-            ...lostStems.map(
+            ...lost.map(
                 step => ['Gone', `${styles.name(step)} ${styles.muted('- a stem file is missing, the next run separates them again')}`] as [string, string],
             ),
             ...(unplanned.length
@@ -221,13 +226,13 @@ export async function projectStatus(id: string): Promise<Status> {
     }
 }
 
-export async function filmStatus(id: string): Promise<Status> {
-    const film = new FilmStore(id)
-    await film.load()
-    const config = await loadFilmConfig(film.dir)
+export async function filmStatus(id: string, run?: EndOfRun<FilmStore, LoadedFilmConfig>): Promise<Status> {
+    const film = run?.store ?? new FilmStore(id)
+    if (!run) await film.load()
+    const config = run?.config ?? (await loadFilmConfig(film.dir))
     const mode = await filmMode(film.dir)
 
-    const changed = film.changedInputs(await filmInputs(film.dir, config))
+    const changed = run ? [] : film.changedInputs(await filmInputs(film.dir, config))
     const redo = new Set(film.redoneBy(changed.flatMap(c => c.steps)))
     const steps = FILM_STEP_NAMES.map(step => ({
         step,
@@ -242,7 +247,7 @@ export async function filmStatus(id: string): Promise<Status> {
     const renderConfig = filmRenderConfig(config)
     const render = await filmRenderState(film.dir, film.id, renderConfig)
 
-    const settings = await loadSettings({projectModel: config.llm.model})
+    const settings = run?.settings ?? (await loadSettings({projectModel: config.llm.model}))
     const servers = settings.comfy.map(s => s.name)
     // the subtitles are translated when the film is assembled, not by a plan run
     const toPlan = steps.filter(s => (s.state === 'redo' || s.state === 'missing') && s.step !== 'subtitles').map(s => s.step)

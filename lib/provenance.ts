@@ -11,8 +11,30 @@ export type Freshness = 'pinned' | 'current' | 'stale'
 
 export const fingerprint = (...parts: unknown[]) => Bun.hash(JSON.stringify(parts)).toString(16)
 
-/** The fingerprint of a file's content - 'missing' for a file that is not there yet. */
-export const fileFingerprint = (path: string) => (existsSync(path) ? Bun.hash(readFileSync(path)).toString(16) : 'missing')
+/** The fingerprint of a file's content - 'missing' for a file that is not there yet. Within eachFileOnce, each file is read once. */
+export function fileFingerprint(path: string) {
+    if (!existsSync(path)) return 'missing'
+    const known = sweep?.get(path)
+    if (known) return known
+    const print = Bun.hash(readFileSync(path)).toString(16)
+    sweep?.set(path, print)
+    return print
+}
+// A pass over many clips names the same few pictures in every clip's request (#1159). Within one synchronous pass nothing is written,
+// so each file is read once there. Not across passes: the time of a file is no proof - Windows moves it in steps of about 15 ms, and
+// a picture written again at the same size would keep its old fingerprint.
+let sweep: Map<string, string> | undefined
+
+/** Runs `pass` - synchronous: an await inside ends the sharing - with each file fingerprinted once. */
+export function eachFileOnce<T>(pass: () => T): T {
+    if (sweep) return pass()
+    sweep = new Map()
+    try {
+        return pass()
+    } finally {
+        sweep = undefined
+    }
+}
 
 function readSidecar(file: string): Record<string, unknown> | undefined {
     const sidecar = `${file}.json`

@@ -3,32 +3,8 @@ import {parseUntil, type UntilStage} from './stages.ts'
 
 // The options of one run that both pipelines take (#841): what is rendered and how - --render, --only, --again, --preview,
 // --retake, --refresh, --strict, the own picture of --picture-anchor - and how far it goes: --until, --review, --dry-run [--json].
-// Declared and checked here once; each pipeline adds its own (--redo, --beats, --scenes, --export, ...) and its own checks
+// Declared once in lib/pipeline-commands.ts, checked here once; each pipeline adds its own (--redo, --beats, --scenes, --export, ...) and its own checks
 // of how they go together. The planning stays in each pipeline.
-
-/** For parseArgs: spread into a pipeline's options. */
-export const RUN_OPTIONS = {
-    render: {type: 'string', default: ''},
-    only: {type: 'string', default: ''},
-    again: {type: 'boolean', default: false},
-    preview: {type: 'boolean', default: false},
-    retake: {type: 'string', default: ''},
-    'new-anchor': {type: 'boolean', default: false},
-    'picture-prompt': {type: 'string', default: ''},
-    'picture-anchor': {type: 'string', default: ''},
-    'picture-description': {type: 'string', default: ''},
-    'describe-picture': {type: 'boolean', default: false},
-    refresh: {type: 'string', default: ''},
-    strict: {type: 'boolean', default: false},
-    // stop after a step that was just generated: accept, edit, again, stop - in a terminal
-    review: {type: 'boolean', default: false},
-    // plan up to this stage and stop - the story, the cast or the look (lib/stages.ts)
-    until: {type: 'string', default: ''},
-    // says what --redo, changed inputs and --render would do, and does nothing
-    'dry-run': {type: 'boolean', default: false},
-    // with --dry-run: what it says as JSON, for the workspace (#836)
-    json: {type: 'boolean', default: false},
-} as const
 
 export type RunOptionValues = {
     render: string
@@ -64,7 +40,8 @@ export const FILM_RENDER: Renderable = {kinds: ['images', 'videos', 'final'], cl
 const RENDER_WORD: Record<string, string> = {pictures: 'images', clips: 'videos'}
 const REFRESH_WORD: Record<string, 'pictures' | 'clips'> = {pictures: 'pictures', images: 'pictures', clips: 'clips', videos: 'clips'}
 
-export type RunOptions = {render: Set<string>; refresh: Set<string>; only: string[]; retake?: RetakeAsk; until?: UntilStage}
+/** The steps take --only and --refresh from here, never from the raw strings: one reading of each (#1148). */
+export type RunOptions = {render: Set<string>; refresh: Set<string>; only: Set<string>; retake?: RetakeAsk; until?: UntilStage}
 
 /**
  * The shared options read and checked, in the order a person would hear about them; throws with the message of the first that is
@@ -102,8 +79,8 @@ export function readRunOptions(args: RunOptionValues, renderable: Renderable, in
         throw new Error('--picture-description and --describe-picture go with --picture-anchor: they describe your own picture')
     if (args['picture-description'] && args['describe-picture'])
         throw new Error('--picture-description or --describe-picture: the description given by hand, or read from the picture')
-    const only = args.only.split(',').filter(Boolean)
-    if (args['picture-anchor'] && only.length !== 1) throw new Error('--picture-anchor goes with one picture in --only')
+    const only = new Set(args.only.split(',').filter(Boolean))
+    if (args['picture-anchor'] && only.size !== 1) throw new Error('--picture-anchor goes with one picture in --only')
     if (args.again && !args.only) throw new Error(`--again needs --only=${renderable.clip},... - say which clips are rendered again, every one is GPU time`)
     if (args.review && !inTerminal) throw new Error('--review asks in the terminal - run it in one')
     if (args.json && !args['dry-run']) throw new Error('--json goes with --dry-run: what the run would do, as data')

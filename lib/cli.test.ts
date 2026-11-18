@@ -128,3 +128,13 @@ test('add-view refuses a traversal location before accessing a film', () => {
     expect(result.exitCode).toBe(1)
     expect(result.stderr.toString()).toContain('Invalid location id')
 })
+
+// #1155: the shared options are taken out by cli() - a pipeline declares none of them
+test('the pipelines take --debug and -v from cli(), their own parsers do not know them', () => {
+    const plan = run('index.ts', 'nonexistent-cli-test-project', '--debug', '-v')
+    expect(plan.stderr.toString()).toContain('No project "nonexistent-cli-test-project"')
+    expect(plan.stderr.toString()).not.toContain('Unknown option')
+    const film = run('film.ts', 'nonexistent-cli-test-film', '--debug', '--verbose')
+    expect(film.stderr.toString()).toContain('No film "nonexistent-cli-test-film"')
+    expect(film.stderr.toString()).not.toContain('Unknown option')
+})
