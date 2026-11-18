@@ -9,7 +9,7 @@ import {MUSIC_RENDER, readRunOptions, RUN_OPTIONS} from './lib/run-options.ts'
 import {renderAndAssemble} from './lib/pipeline/render-music.ts'
 import {renderPictures} from './lib/pipeline/pictures.ts'
 import {serverNames, sourceNote, startRenderer} from './lib/pipeline/render-steps.ts'
-import {dryRun, redoReasons} from './lib/pipeline/dry-run.ts'
+import {dryRun, lostStems, redoReasons, sectionsChanged} from './lib/pipeline/dry-run.ts'
 import {buildRequests} from './lib/pipeline/requests.ts'
 import {hearSong} from './lib/pipeline/song.ts'
 import {planBeats} from './lib/pipeline/beats.ts'
@@ -197,13 +197,6 @@ const redoWhole = replanBeats.length ? redoSteps.filter(step => step !== 'shotMo
 
 const toId = toSlug
 const readInput = (name: string) => readInputFile(project.input(name))
-// true if `value`'s fingerprint differs from the one project.syncInputs() recorded after the previous run - a
-// read-only check, for a step that needs to know this before that call itself has run (and recorded) this run's
-// values; undefined (nothing recorded yet, e.g. the first run) never counts as changed
-const inputChangedSinceLastRun = (name: string, value: string) => {
-    const saved = project.data.inputs?.[name]
-    return saved !== undefined && saved !== Bun.hash(value).toString(16)
-}
 
 /////////// GET LYRICS, STORY IDEA, STYLE AND CONFIG
 log.section(`FEVERSLOP TS · ${project.id}`)
@@ -275,14 +268,8 @@ if (render.has('song')) {
     // A hand-edit (or a deletion) of idea.txt/music-style.txt/lyrics.txt or a new singerVoice since the last run needs a
     // new style this run already - read-only, so the fingerprints it compares against are only recorded once, by the main
     // syncInputs() call further down, once this run's final lyrics.txt content is known.
-    if (
-        inputChangedSinceLastRun('idea.txt', idea) ||
-        inputChangedSinceLastRun('music-style.txt', musicStyleInput) ||
-        inputChangedSinceLastRun('lyrics.txt', lyricsBeforeSong) ||
-        inputChangedSinceLastRun('singerVoice', config.singerVoice)
-    ) {
-        project.invalidate('songStyle')
-    }
+    // the inputs that redo the style are listed in lib/inputs.ts, compared as syncInputs compares them (#1150)
+    if (project.changedInputs(await projectInputs(project.dir, config)).some(c => c.steps.includes('songStyle'))) project.invalidate('songStyle')
 
     // LYRICS - generated once from idea.txt; once lyrics.txt exists it's a plain input like story-idea.txt, never
     // auto-rewritten - delete it (or hand-correct it) to get it touched again.
@@ -379,13 +366,9 @@ if (render.has('videos') && project.data.shotMoments) {
 
 // an edited input redoes the steps built on it - the inputs and the steps they redo are listed in lib/inputs.ts
 await project.syncInputs(await projectInputs(project.dir, config))
-// the sections are named after the lyrics tags
-if (project.data.music && lyricSections.length && project.data.music.sections.map(s => s.label).join('|') !== lyricSections.map(s => s.label).join('|')) {
-    project.invalidate('music')
-}
-if (project.data.stems && Object.values(project.data.stems).some(file => !existsSync(join(project.dir, file)))) project.invalidate('stems')
-if (project.data.instrumentStems && Object.values(project.data.instrumentStems).some(file => !existsSync(join(project.dir, file))))
-    project.invalidate('instrumentStems')
+// the sections are named after the lyrics tags; a stem file that is gone is separated again - the same rules as the dry run's
+if (sectionsChanged(project.data.music, lyricSections)) project.invalidate('music')
+for (const step of lostStems(project)) project.invalidate(step)
 
 // the song heard: its sections and energy, the stems, the lyrics aligned to the vocals (lib/pipeline/song.ts)
 const {music, stems, lyricsTiming} = await hearSong({project, projectId, config, songFile, lyrics, lyricSections, language, idea})

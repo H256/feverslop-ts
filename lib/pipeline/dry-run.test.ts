@@ -42,3 +42,24 @@ test('a dry run counts the clips --render would render and what the final video 
     await sayRenders(again, s, {render: new Set(['videos']), refresh: new Set(), only: new Set(['clip-001']), again: true}, how)
     expect(again.clips?.ids).toEqual(['clip-001'])
 })
+
+// #1150: the run and the dry run redo the music and the stems by the same rules
+test('the music is heard again when the lyrics tag other sections, a stem is separated again when a file is gone', async () => {
+    const {sectionsChanged, lostStems} = await import('./dry-run.ts')
+    const music = {bpm: 120, durationSec: 60, downbeats: [], barEnergy: [], sections: [{label: 'verse', start: 0, end: 30, energy: 1}]}
+    expect(sectionsChanged(music, [{label: 'verse'}])).toBe(false)
+    expect(sectionsChanged(music, [{label: 'chorus'}])).toBe(true)
+    expect(sectionsChanged(music, [])).toBe(false)
+    expect(sectionsChanged(undefined, [{label: 'chorus'}])).toBe(false)
+
+    const {mkdtempSync, writeFileSync} = await import('node:fs')
+    const {join} = await import('node:path')
+    const {tmpdir} = await import('node:os')
+    const dir = mkdtempSync(join(tmpdir(), 'stems-'))
+    writeFileSync(join(dir, 'vocals.wav'), '')
+    const project = {
+        dir,
+        data: {stems: {vocals: 'vocals.wav', drums: 'drums.wav', bass: 'vocals.wav', other: 'vocals.wav'}, instrumentStems: {guitar: 'vocals.wav'}},
+    }
+    expect(lostStems(project)).toEqual(['stems'])
+})
