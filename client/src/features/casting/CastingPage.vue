@@ -18,6 +18,7 @@ import ReplacePicture from './ReplacePicture.vue'
 import TakeAsset from './TakeAsset.vue'
 import CastingPropRow from './CastingPropRow.vue'
 import TakeProp from './TakeProp.vue'
+import {castingNotices} from './notices'
 import {useCastEditing} from './useCastEditing'
 
 /** Who plays whom: a role given a library asset, or the cast changed by hand - two ways, never at once. */
@@ -30,6 +31,7 @@ const {data, loading, error, reload, refresh} = usePageData(async signal => {
   return {casting, cast: cast.cast, pending}
 })
 const rolesOf = (kind: CastingRole['kind']) => data.value?.casting.roles.filter(role => role.kind === kind) ?? []
+const notices = computed(() => castingNotices(data.value?.casting.warnings ?? []))
 const changed = computed(() => !!data.value?.pending.changes.length)
 
 /** A role given another player: one entry in casting.json, asked first - what goes stale with it. */
@@ -207,7 +209,8 @@ const {
         </span>
         <button class="btn primary" :disabled="busy" @click="askLayers">Ask which layer</button>
       </CalloutBox>
-      <NoticeList :errors="data.casting.errors" :warnings="data.casting.warnings" />
+      <CalloutBox v-if="notices.unlisted" as="div" :title="notices.unlisted.names">{{ notices.unlisted.text }}</CalloutBox>
+      <NoticeList :errors="data.casting.errors" :warnings="notices.rest" />
       <div v-if="!data.cast" class="empty">No cast yet - plan it with the button above.</div>
       <template v-else-if="draft">
         <CalloutBox as="div">
