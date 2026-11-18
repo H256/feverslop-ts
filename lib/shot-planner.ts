@@ -535,11 +535,15 @@ export function plannerCalls(total: number, perCall: number, again?: {issues: {s
 }
 
 /** Whose instrument is heard when: a character with a stem-bound prop and the active ranges of that stem. */
-export type Player = {name: string; prop: string; ranges: {start: number; end: number}[]}
+/** `leads`: where their instrument carries the part (leadSpans) - a solo */
+export type Player = {name: string; prop: string; ranges: {start: number; end: number}[]; leads?: {start: number; end: number}[]}
+
+/** A lead shorter than this is a fill, not a part of its own */
+const MIN_LEAD_SEC = 4
 
 /**
  * The song in `count` equal stretches, one per line: the time, how loud the music is there (the mean bar energy, 0 = the
- * quietest bar of the song, 1 = the loudest) and whose instrument is heard over most of it. The beats are spread evenly
+ * quietest bar of the song, 1 = the loudest), whose instrument is heard over most of it and whose carries the part in it (a solo). The beats are spread evenly
  * over the song, so stretch n is about where beat n falls - the beats' intensity can follow the music.
  */
 export function musicStretches(music: Pick<MusicMap, 'durationSec' | 'downbeats' | 'barEnergy'>, count: number, players: Player[] = []): string[] {
@@ -554,7 +558,12 @@ export function musicStretches(music: Pick<MusicMap, 'durationSec' | 'downbeats'
         const heard = players.filter(
             p => p.ranges.reduce((sum, r) => sum + Math.max(0, Math.min(end, r.end) - Math.max(start, r.start)), 0) > (end - start) / 2,
         )
-        return `${formatTime(start)}-${formatTime(end)} loudness ${energy.toFixed(2)}${players.length ? ` · heard: ${heard.length ? heard.map(p => `${p.name}'s ${p.prop}`).join(', ') : 'none of the instruments'}` : ''}`
+        const leads = players.flatMap(p =>
+            (p.leads ?? [])
+                .filter(r => r.end - r.start >= MIN_LEAD_SEC && r.start < end && r.end > start)
+                .map(r => `${p.name}'s ${p.prop} ${formatTime(Math.max(start, r.start))}-${formatTime(Math.min(end, r.end))}`),
+        )
+        return `${formatTime(start)}-${formatTime(end)} loudness ${energy.toFixed(2)}${players.length ? ` · heard: ${heard.length ? heard.map(p => `${p.name}'s ${p.prop}`).join(', ') : 'none of the instruments'}` : ''}${leads.length ? ` · leads: ${leads.join(', ')}` : ''}`
     })
 }
 
@@ -603,7 +612,7 @@ ${
         ? `
 The music along the way, in ${stretches.length} equal stretches - beat n falls about where stretch n is:
 ${stretches.join('\n')}
-The story's ups and downs follow the music: a beat's "intensity" is about the loudness where it falls, its climax goes where the music is loudest, and calm moments only where the music is quiet. The story winds down only where the music does - while the music is still loud near the end, the last beats are a last surge, not an aftermath.${stretches.some(s => s.includes(' · heard: ')) ? " Whoever's instrument is heard in a stretch plays it there: nobody lowers, rests, sets down or silences an instrument that is still heard." : ''}
+The story's ups and downs follow the music: a beat's "intensity" is about the loudness where it falls, its climax goes where the music is loudest, and calm moments only where the music is quiet. The story winds down only where the music does - while the music is still loud near the end, the last beats are a last surge, not an aftermath.${stretches.some(s => s.includes(' · heard: ')) ? " Whoever's instrument is heard in a stretch plays it there: nobody lowers, rests, sets down or silences an instrument that is still heard." : ''}${stretches.some(s => s.includes(' · leads: ')) ? ' Where an instrument "leads", it carries the music there - a solo: the beat there is about its player playing it, in the middle of things, never a quiet or still moment of theirs.' : ''}
 `
         : ''
 }
