@@ -38,16 +38,16 @@ export type FilmRenderRun = {
     config: LoadedFilmConfig
     settings: Settings
     args: {
-        only: string
         again: boolean
         preview: boolean
-        refresh: string
         strict: boolean
         'new-anchor': boolean
         'picture-anchor'?: string
         'picture-prompt'?: string
     }
     render: Set<string>
+    refresh: Set<string>
+    only: Set<string>
     retake: RetakeAsk | undefined
     screenplay: Screenplay
     pictures: FilmPictureJob[]
@@ -56,7 +56,7 @@ export type FilmRenderRun = {
 }
 
 export async function renderFilm(run: FilmRenderRun) {
-    const {film, config, settings, args, render, retake, screenplay, pictures, replan} = run
+    const {film, config, settings, args, render, refresh, only, retake, screenplay, pictures, replan} = run
     // the requests, planned again once the sheets of this run are there: the clips read their views from them
     let {requests} = run
     /////////// 11 · RENDERING WITH COMFYUI
@@ -65,7 +65,7 @@ export async function renderFilm(run: FilmRenderRun) {
         // the project id is part of ComfyUI's folder - "film-" keeps it apart from a music video of the same name
         using renderer = new FilmRenderer(`film-${film.id}`, film.dir, renderConfig, settings.comfy)
         // what was made from another request than the plan has now is rendered again - the old ones are kept (lib/provenance.ts)
-        renderer.refresh = new Set(args.refresh.split(',').filter(Boolean))
+        renderer.refresh = refresh
         log.section('11 · RENDERING WITH COMFYUI')
         log.step(
             'Config',
@@ -84,7 +84,6 @@ export async function renderFilm(run: FilmRenderRun) {
             log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
             const renderPicture = (picture: PictureJob) =>
                 config.sequenceSheets && picture.kind !== 'prop' ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture)
-            const only = new Set(args.only.split(',').filter(Boolean))
             const named = namedPictures(pictures, only, args.again && !render.has('videos'))
             // an edited prompt: this one picture, from these words, kept as it is from then on
             const edited = args['picture-prompt'] ? await Bun.file(args['picture-prompt']).text() : undefined
@@ -122,7 +121,6 @@ export async function renderFilm(run: FilmRenderRun) {
         // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
         if (render.has('videos')) {
             if (render.has('images')) await renderer.freeMemory()
-            const only = new Set(args.only.split(',').filter(Boolean))
             const selected = onlyClips(requests, only)
             log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${requests.length} (--only)`) : ''}`)
             for (const risk of clipFailureRisks(
@@ -176,7 +174,6 @@ export async function renderFilm(run: FilmRenderRun) {
         log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.duration}`)}`)
     } else if (render.has('final')) {
         log.section('12 · ASSEMBLING THE FILM')
-        const only = new Set(args.only.split(',').filter(Boolean))
         const selected = onlyClips(requests, only)
         // some of the clips only: a try-out, never the film itself
         const target = join(film.dir, only.size ? `${film.id}-partial.mp4` : `${film.id}.mp4`)

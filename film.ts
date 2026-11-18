@@ -111,7 +111,7 @@ const {values: args, positionals} = (() => {
 const extra = extraArgument(positionals, ['a film id'])
 if (extra) log.usageError(extra, usage)
 // the options of a run both pipelines take (lib/run-options.ts)
-const {render, retake, until} = (() => {
+const {render, refresh, only, retake, until} = (() => {
     try {
         return readRunOptions(args, FILM_RENDER, !!(process.stdin.isTTY && process.stdout.isTTY), positionals[0])
     } catch (e) {
@@ -131,9 +131,9 @@ if (!filmId || !validProjectId(filmId) || !filmExists(filmId)) {
 }
 
 // a clip or picture that is not there is said now - before the run is begun, so a typo is no failed run - not after every cached step was replayed (#818)
-if (!redoSteps.length && (args.only || retake)) {
+if (!redoSteps.length && (only.size || retake)) {
     const wrong = await unknownIds(filmDir(filmId!), join(filmDir(filmId!), 'assets.json'), {
-        only: args.only.split(',').filter(Boolean),
+        only: [...only],
         retake: retake?.clip,
         pictures: render.has('images'),
         clips: render.has('videos') || render.has('final'),
@@ -178,7 +178,7 @@ configureLlm(settings.llm, {endsRun: true})
 // your own picture as the anchor: its description first - the clips and its sheet are planned from it (lib/own-picture.ts)
 if (args['picture-anchor'] && !args['dry-run']) {
     if (!existsSync(args['picture-anchor'])) log.usageError(`--picture-anchor: no file ${args['picture-anchor']}`, usage)
-    await takeOwnDescription(film.data, () => film.save(), args.only, {
+    await takeOwnDescription(film.data, () => film.save(), [...only][0]!, {
         text: args['picture-description'] ? await Bun.file(args['picture-description']).text() : undefined,
         describeFrom: args['describe-picture'] ? args['picture-anchor'] : undefined,
     })
@@ -737,7 +737,7 @@ const replan = async () => {
     await planClips()
     return requests
 }
-await renderFilm({film, config, settings, args, render, retake, screenplay, pictures, requests, replan})
+await renderFilm({film, config, settings, args, render, refresh, only, retake, screenplay, pictures, requests, replan})
 /** --dry-run: what the run would redo and render, with an estimate - nothing is done (as in the music video). With --json the same as data. */
 async function dryRun() {
     const mode = await filmMode(film.dir)
@@ -782,18 +782,16 @@ async function dryRun() {
         const renderConfig = filmRenderConfig(config)
         const state = await filmRenderState(film.dir, film.id, renderConfig)
         const servers = settings.comfy.map(s => s.name)
-        const refreshKinds = new Set(args.refresh.split(',').filter(Boolean))
         if (redone.length || missing.length) warn('the renders below are counted from the requests of the last plan run - the steps redone now can change them')
         if (render.has('images')) {
-            const stale = refreshKinds.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
+            const stale = refresh.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
             const estimate = state.missingPictures.length ? await pictureEstimate(state.missingPictures.length, renderConfig, servers) : undefined
             found.pictures = {count: state.missingPictures.length, estimate: estimate && said(estimate)}
             log.step('Pictures', estimate ? `${estimate}${stale}` : styles.muted('all rendered'))
         }
         if (render.has('videos')) {
-            const only = new Set(args.only.split(',').filter(Boolean))
             const selected = onlyClips(state.clips, only)
-            const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refreshKinds.has('clips') && state.staleClips.includes(c)))
+            const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refresh.has('clips') && state.staleClips.includes(c)))
             for (const risk of clipFailureRisks(readTimings(), todo, renderConfig.videoWorkflow, servers)) warn(risk)
             const estimate = todo.length ? await clipEstimate(todo, renderConfig, servers) : undefined
             found.clips = {ids: todo.map(c => c.id), estimate: estimate && said(estimate)}

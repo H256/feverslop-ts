@@ -71,3 +71,13 @@ test('the help says what "all" leaves out and what a run renders: missing, stale
         expect(help).toContain('--again renders the ones in --only once more')
     }
 })
+
+// #1147, #1148: the pipelines take --only and --refresh as read here - a film run once split --refresh=images itself and never
+// mapped it to "pictures", so nothing was refreshed
+test('a film reads --refresh=images as pictures, and no pipeline splits --only or --refresh itself', async () => {
+    expect([...read({refresh: 'images', render: 'images'}, FILM_RENDER).refresh]).toEqual(['pictures'])
+    expect([...read({only: 'clip-005,clip-006,clip-005'}, FILM_RENDER).only]).toEqual(['clip-005', 'clip-006'])
+    const {Glob} = await import('bun')
+    const files = ['index.ts', 'film.ts', ...[...new Glob('lib/pipeline/*.ts').scanSync('.')].filter(f => !f.endsWith('.test.ts'))]
+    for (const file of files) expect({file, raw: /args\.(only|refresh)\.split/.test(await Bun.file(file).text())}).toEqual({file, raw: false})
+})

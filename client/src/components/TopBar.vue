@@ -20,7 +20,7 @@ const workspacePage = computed(() => ['/', '/library', '/stats'].includes(route.
 <template>
   <header class="topwrap">
     <div class="top">
-      <RouterLink class="mark" to="/" title="All projects" aria-label="All projects"><img :src="mark" alt="" /></RouterLink>
+      <RouterLink class="mark" to="/" :title="`All projects - release v${version}`" aria-label="All projects"><img :src="mark" alt="" /></RouterLink>
       <nav :class="['crumbs', {'in-project': !workspacePage}]" aria-label="Workspace">
         <RouterLink to="/" active-class="" exact-active-class="" :aria-current="$route.path === '/' ? 'page' : undefined">Projects</RouterLink>
         <RouterLink class="crumb-more" to="/library" :aria-current="$route.path === '/library' ? 'page' : undefined">Library</RouterLink>
@@ -36,7 +36,6 @@ const workspacePage = computed(() => ['/', '/library', '/stats'].includes(route.
       <div class="machine">
         <ServerStatus />
         <ThemeSwitch @changed="themeChanged" />
-        <span class="release" title="The release of this workspace">v{{ version }}</span>
       </div>
     </div>
     <div id="top-chips" class="chips subbar" />

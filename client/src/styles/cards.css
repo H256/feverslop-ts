@@ -13,8 +13,9 @@
   flex-wrap: wrap;
 }
 .pagebar h2 {
-  font-size: var(--text-l);
+  font-size: var(--text-xl);
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .pagebar input[type='search'] {
   width: 240px;

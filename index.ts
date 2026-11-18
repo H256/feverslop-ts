@@ -100,12 +100,7 @@ const extra = extraArgument(positionals, ['a project id'])
 if (extra) log.usageError(extra, usage)
 setOutput({verbose: undefined, show: args.show.split(',').filter(Boolean)})
 // the options of a run both pipelines take (lib/run-options.ts) - "song" is never part of --render=all, it has to be asked for
-const {
-    render,
-    refresh: refreshKinds,
-    retake,
-    until,
-} = (() => {
+const {render, refresh, only, retake, until} = (() => {
     try {
         return readRunOptions(args, MUSIC_RENDER, !!(process.stdin.isTTY && process.stdout.isTTY), positionals[0])
     } catch (e) {
@@ -154,9 +149,9 @@ const project = new ProjectStore(projectId)
 // --dry-run only reads: no lock, nothing saved
 // a clip or picture that is not there is said now - before the run is begun, so a typo is no failed run - not after every cached step was replayed (#818). A run that plans again
 // (--redo) can make other clips: the render checks them then
-if (!redoSteps.length && (args.only || retake)) {
+if (!redoSteps.length && (only.size || retake)) {
     const wrong = await unknownIds(project.dir, join(project.dir, 'output', 'assets.json'), {
-        only: args.only.split(',').filter(Boolean),
+        only: [...only],
         retake: retake?.clip,
         pictures: render.has('images'),
         clips: render.has('videos') || render.has('final'),
@@ -247,7 +242,7 @@ configureLlm(settings.llm)
 // your own picture as the anchor: its description first - the clips and its sheet are planned from it (lib/own-picture.ts)
 if (args['picture-anchor'] && !args['dry-run']) {
     if (!existsSync(args['picture-anchor'])) log.usageError(`--picture-anchor: no file ${args['picture-anchor']}`, usage)
-    await takeOwnDescription(project.data, () => project.save(), args.only, {
+    await takeOwnDescription(project.data, () => project.save(), [...only][0]!, {
         text: args['picture-description'] ? await Bun.file(args['picture-description']).text() : undefined,
         describeFrom: args['describe-picture'] ? args['picture-anchor'] : undefined,
     })
@@ -262,7 +257,7 @@ log.step(
         : styles.muted('none configured - fine while every step is cached, else run: bun run setup llm'),
 )
 if (args['dry-run']) {
-    await dryRun({project, config, readInput, redoWhole, timelineOutdated, settings, args, render, refreshKinds, replanBeats})
+    await dryRun({project, config, readInput, redoWhole, timelineOutdated, settings, args, render, refresh, only, replanBeats})
     process.exit(0)
 }
 const language = languageName(config.lyricsLanguage)!
@@ -650,7 +645,6 @@ function pictureJobs(
 
 /** --render=images: the pictures named in --only (all without it), again with --again, from an edited prompt with --picture-prompt. */
 async function renderPictures(renderer: Renderer, pictures: PictureJob[]) {
-    const only = new Set(args.only.split(',').filter(Boolean))
     log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
     const named = namedPictures(pictures, only, args.again && !render.has('videos'))
     // an edited prompt: this one picture, from these words, kept as it is from then on
@@ -700,10 +694,10 @@ if (until === 'look') {
     if (groups.length) log.step('Groups', styles.muted(`${groups.map(g => g.name).join(', ')}: the pictures of their members come with the shot plan`))
     if (render.has('images')) {
         using renderer = new Renderer(project.id, project.dir, config, settings.comfy)
-        renderer.refresh = refreshKinds
+        renderer.refresh = refresh
         log.section('8e · RENDERING THE CAST AND THE PLACES')
         log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
-        if (args.again || refreshKinds.size || retake || args['picture-anchor']) await renderer.serversFirst()
+        if (args.again || refresh.size || retake || args['picture-anchor']) await renderer.serversFirst()
         await renderPictures(renderer, lookPictures)
     } else
         log.step('Pictures', `${lookPictures.length} ${styles.muted(`- render them before the shots: bun index.ts ${projectId} --until=look --render=images`)}`)
@@ -802,7 +796,8 @@ await renderAndAssemble({
     settings,
     args,
     render,
-    refreshKinds,
+    refresh,
+    only,
     retake,
     clips,
     pictures,

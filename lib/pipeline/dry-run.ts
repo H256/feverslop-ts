@@ -28,9 +28,10 @@ export type ReasonsRun = {
 /** And what a dry run says beyond the reasons: what would be rendered. */
 export type DryRunRun = ReasonsRun & {
     settings: Settings
-    args: {only: string; again: boolean}
+    args: {again: boolean}
     render: Set<string>
-    refreshKinds: Set<string>
+    refresh: Set<string>
+    only: Set<string>
     replanBeats: string[]
 }
 
@@ -62,7 +63,7 @@ export async function redoReasons(run: ReasonsRun): Promise<[string, StepName[]]
 }
 
 export async function dryRun(run: DryRunRun) {
-    const {project, config, settings, args, render, refreshKinds, replanBeats} = run
+    const {project, config, settings, args, render, refresh, only, replanBeats} = run
     const reasons = await redoReasons(run)
     const redone = project.redoneBy(reasons.flatMap(([, steps]) => steps))
     // whether a step is used is read from the project as it is once the redone steps are gone (the blocking is made when the shots are planned again)
@@ -101,15 +102,14 @@ export async function dryRun(run: DryRunRun) {
         }
         if (redone.length || missing.length) warn('the renders below are counted from the requests of the last plan run - the steps redone now can change them')
         if (render.has('images')) {
-            const stale = refreshKinds.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
+            const stale = refresh.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
             const estimate = state.missingPictures.length ? await pictureEstimate(state.missingPictures.length, config, servers) : undefined
             found.pictures = {count: state.missingPictures.length, estimate: estimate && said(estimate)}
             log.step('Pictures', estimate ? `${estimate}${stale}` : styles.muted('all rendered'))
         }
         if (render.has('videos')) {
-            const only = new Set(args.only.split(',').filter(Boolean))
             const selected = onlyClips(state.clips, only)
-            const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refreshKinds.has('clips') && state.staleClips.includes(c)))
+            const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refresh.has('clips') && state.staleClips.includes(c)))
             for (const risk of clipFailureRisks(readTimings(), todo, config.videoWorkflow, servers)) warn(risk)
             const estimate = todo.length ? await clipEstimate(todo, config, servers) : undefined
             found.clips = {ids: todo.map(c => c.id), estimate: estimate && said(estimate)}
