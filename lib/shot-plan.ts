@@ -48,8 +48,11 @@ const characterOf = (characters: Character[], who: string) => tokenCharacter(cha
  * cost another planner call, so a rule that is nice to have can not keep the run from going on.
  */
 export type ReadPlan = {plan: BeatShots; problems: string[]; notes: string[]; issues: Issue[]}
-/** A problem with the shot it is in (0-based) - none for a problem of the whole beat (its shot count): asked again for those shots only. */
-export type Issue = {shot?: number; message: string}
+/**
+ * A problem with the shot it is in (0-based) - none for a problem of the whole beat (its shot count): asked again for those shots only.
+ * `leave`: the ids an overfull shot has to lose - a shot still overfull after the second answer is rewritten without them.
+ */
+export type Issue = {shot?: number; message: string; leave?: string[]}
 
 /** The most people a shot gives an own entry to, and shows at once unless it is a wide shot. */
 export const MAX_FOREGROUND = 4
@@ -192,18 +195,18 @@ function crowdedShot(
     characters: Character[],
     singing: string[],
     heard: string[],
-): string {
+): {message: string; leave: string[]} {
     const rank = (id: string) => (singing.includes(id) ? 0 : heard.includes(id) ? 1 : 2)
     const ranked = rankForeground(ids, action, characters, rank)
     const names = (list: string[]) => list.map(id => nameOfId(characters, id)).join(', ')
     const keep = ids.filter(id => ranked.indexOf(id) < room)
     const leave = ids.filter(id => ranked.indexOf(id) >= room)
     const needed = leave.filter(id => rank(id) < 2)
-    return (
+    const message =
         `shot ${j + 1}: ${ids.length} people (${names(ids)}) in ${size === 'extreme' ? 'an extreme close-up' : `a ${size} shot`}, which holds at most ${room} - the shot is about ${names(keep)}: ` +
         `take ${names(leave)} out of its "characters" and "people" and do not name them in its "action" or "rest" - heard is not seen, they are off camera` +
         (needed.length ? `; or make it a wide shot, since ${names(needed)} ${needed.length > 1 ? 'are' : 'is'} heard in it` : '')
-    )
+    return {message, leave}
 }
 
 export function readBeatPlan(
@@ -220,7 +223,8 @@ export function readBeatPlan(
     const issues: Issue[] = []
     const notes: string[] = []
     const onScreen = characters.filter(c => beat.characterIds.includes(c.id))
-    const problem = (shot: number | undefined, message: string) => issues.push({...(shot !== undefined ? {shot} : {}), message})
+    const problem = (shot: number | undefined, message: string, leave?: string[]) =>
+        issues.push({...(shot !== undefined ? {shot} : {}), message, ...(leave ? {leave} : {})})
 
     const shots = rawShots.map((entry, j): ShotPlan => {
         const e: Record<string, unknown> = entry && typeof entry === 'object' && !Array.isArray(entry) ? (entry as Record<string, unknown>) : {action: entry}
@@ -315,8 +319,10 @@ export function readBeatPlan(
         // a framing that cannot hold its people: the video model squeezes them together - it pulled a drummer away from
         // her kit, dropped the singer and shrank the faces when a "medium close-up" had all four of a band in it
         const room = size ? SHOT_ROOM[size] : undefined
-        if (room !== undefined && ids.length > room) problem(j, crowdedShot(j, ids, size!, room, action, characters, sungBy(singers, j), heardIn(props, j)))
-        else if (ids.length > MAX_FOREGROUND && size !== 'wide')
+        if (room !== undefined && ids.length > room) {
+            const crowded = crowdedShot(j, ids, size!, room, action, characters, sungBy(singers, j), heardIn(props, j))
+            problem(j, crowded.message, crowded.leave)
+        } else if (ids.length > MAX_FOREGROUND && size !== 'wide')
             notes.push(`shot ${j + 1}: ${ids.length} people in a "${text(e.framing) || 'shot'}" (size ${size ?? 'not given'})`)
         // three or more people: everybody moves (the prompt asks for it) - what the code can tell without reading the
         // words is a person with an entry of their own and no motion, who is then left standing in the reference pose
