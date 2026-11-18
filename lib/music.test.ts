@@ -478,4 +478,5 @@ test('a stem is decoded once per process, and again when the file is written ane
     const longer = await stemFramePower(file)
     expect(longer).not.toBe(a)
     expect(longer.length).toBeGreaterThan(a.length)
-})
+    // ffmpeg's first start on a cold machine can take longer than the default 5 s
+}, 30_000)

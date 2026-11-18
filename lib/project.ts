@@ -383,6 +383,9 @@ export const builtOn = (changed: StepName[], data: Partial<Record<StepName, unkn
 /** The fingerprint project.json keeps of an input (inputs) - the same one lib/song-library.ts keeps of a song. */
 export const fingerprintOf = (value: string | Uint8Array) => Bun.hash(value).toString(16)
 
+const fingerprintsOf = (inputs: Record<string, TrackedInput>) =>
+    Object.fromEntries(Object.entries(inputs).map(([name, {value}]) => [name, fingerprintOf(value)])) as Record<string, string>
+
 export class ProjectStore {
     readonly dir: string
     readonly file: string
@@ -466,12 +469,12 @@ export class ProjectStore {
         }
     }
 
-    /** The inputs that changed since the last run, with the steps each redoes - read-only. */
-    changedInputs(inputs: Record<string, TrackedInput>): {name: string; steps: StepName[]}[] {
+    /** The inputs that changed since the last run, with the steps each redoes - read-only. `prints`: their fingerprints, when made already. */
+    changedInputs(inputs: Record<string, TrackedInput>, prints = fingerprintsOf(inputs)): {name: string; steps: StepName[]}[] {
         const previous = this.data.inputs ?? {}
         const hasSteps = Object.keys(this.data).some(key => key !== 'inputs')
-        return Object.entries(inputs).flatMap(([name, {value, steps, assumed}]) => {
-            const current = fingerprintOf(value)
+        return Object.entries(inputs).flatMap(([name, {steps, assumed}]) => {
+            const current = prints[name]!
             const before = previous[name] ?? (assumed !== undefined && hasSteps ? fingerprintOf(assumed) : current)
             return before !== current ? [{name, steps}] : []
         })
@@ -495,11 +498,12 @@ export class ProjectStore {
      * project.json; `assumed` is the value an input had before fingerprints existed (else it counts as unchanged).
      */
     async syncInputs(inputs: Record<string, TrackedInput>) {
-        for (const {name, steps} of this.changedInputs(inputs)) {
+        // each input fingerprinted once - one of them is the whole song
+        const current = fingerprintsOf(inputs)
+        for (const {name, steps} of this.changedInputs(inputs, current)) {
             log.step('Changed', `${styles.name(name)} ${styles.muted(`- redoing ${steps.join(', ')}`)}`)
             for (const step of steps) this.invalidate(step)
         }
-        const current = Object.fromEntries(Object.entries(inputs).map(([name, {value}]) => [name, fingerprintOf(value)]))
         if (JSON.stringify(current) !== JSON.stringify(this.data.inputs ?? {})) {
             this.data.inputs = current
             await this.save()

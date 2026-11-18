@@ -52,6 +52,12 @@ export async function projectInputs(dir: string, config: ProjectConfig): Promise
     }
 }
 
+/** The stems whose files are not all there any more - they are separated again. The run, the dry run and the status ask this (#1150). */
+export const lostStems = (project: {dir: string; data: Project}) =>
+    (['stems', 'instrumentStems'] as const).filter(
+        step => project.data[step] && Object.values(project.data[step]!).some(file => !existsSync(join(project.dir, file))),
+    )
+
 /** Whether the pipeline runs a step at all for this project - the others are not missing, they are not used. */
 export function stepUsed(step: StepName, dir: string, data: Project, config: ProjectConfig): boolean {
     const props = new Set((data.cast?.characters ?? []).flatMap(c => (c.propStem ? [c.propStem] : [])))

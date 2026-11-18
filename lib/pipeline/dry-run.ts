@@ -1,15 +1,13 @@
 import {type DryRun} from '../../shared/workspace.ts'
 import {formatSlotRanges} from '../assemble.ts'
 import {onlyClips} from '../batch.ts'
-import {projectInputs, stepUsed} from '../inputs.ts'
+import {lostStems, projectInputs, stepUsed} from '../inputs.ts'
 import {jsonOutput, log, styles} from '../log.ts'
 import {projectLyricSections} from '../music.ts'
 import {type Project, STEP_NAMES, type StepName, unplannedBeats} from '../project.ts'
 import {clipEstimate, clipFailureRisks, pictureEstimate, type RenderState, renderState} from '../render-state.ts'
 import {serverNames} from './render-steps.ts'
 import {readTimings} from '../timings.ts'
-import {existsSync} from 'node:fs'
-import {join} from 'node:path'
 import type {ProjectConfig, RenderConfig} from '../config.ts'
 import type {ProjectStore} from '../project.ts'
 import type {Settings} from '../settings.ts'
@@ -41,12 +39,6 @@ export type DryRunRun = ReasonsRun & {
  * sections or clip length - along the dependencies) and the steps not generated yet, then what --render would render,
  * with the estimate from the measured timings. The renders are counted from the requests of the last plan run.
  */
-/** The stems whose files are not all there any more - they are separated again. The run and the dry run both ask this (#1150). */
-export const lostStems = (project: Pick<ProjectStore, 'dir' | 'data'>) =>
-    (['stems', 'instrumentStems'] as const).filter(
-        step => project.data[step] && Object.values(project.data[step]!).some(file => !existsSync(join(project.dir, file))),
-    )
-
 /** Whether the sections the song was heard in are no longer the ones the lyrics are tagged with - the music is heard again (#1150). */
 export const sectionsChanged = (music: Project['music'], sections: {label: string}[]) =>
     music !== undefined && sections.length > 0 && music.sections.map(s => s.label).join('|') !== sections.map(s => s.label).join('|')
