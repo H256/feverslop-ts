@@ -7,6 +7,7 @@ import {parseArgs} from 'node:util'
 import {formatDuration, keepLogIn, log, runLogFile, runWarnings, setOutput, styles} from './lib/log.ts'
 import {MUSIC_RENDER, readRunOptions, RUN_OPTIONS} from './lib/run-options.ts'
 import {renderAndAssemble} from './lib/pipeline/render-music.ts'
+import {renderPictures} from './lib/pipeline/pictures.ts'
 import {dryRun, redoReasons} from './lib/pipeline/dry-run.ts'
 import {buildRequests} from './lib/pipeline/requests.ts'
 import {hearSong} from './lib/pipeline/song.ts'
@@ -20,14 +21,14 @@ import {ask, askJson, configureLlm} from './lib/llm.ts'
 import {mkdirSync, readdirSync} from 'node:fs'
 import {join} from 'node:path'
 import {type Character, type Location, ProjectStore, type PropStem, STEP_NAMES, type StepName} from './lib/project.ts'
-import {renderAll, unknownIds, warnFixedSeed} from './lib/batch.ts'
+import {unknownIds} from './lib/batch.ts'
 import {directionNotTaken} from './lib/direction/service.ts'
 import {lockProject} from './lib/lock.ts'
 import {beginRun} from './lib/run-record-view.ts'
 import {separateInstrumentStems, stemActivity} from './lib/music.ts'
 import {groupMemberId, pictureAsset} from './lib/compose.ts'
-import {hasOwnAnchor, installOwnPicture, takeOwnDescription} from './lib/own-picture.ts'
-import {namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from './lib/render.ts'
+import {takeOwnDescription} from './lib/own-picture.ts'
+import {type PictureJob, Renderer} from './lib/render.ts'
 import {languageName, loadProjectConfig} from './lib/config.ts'
 import {sungLines} from './lib/lyrics.ts'
 import {projectLyricSections} from './lib/music.ts'
@@ -42,7 +43,6 @@ import {listProjects, projectExists, validProjectId} from './lib/project-setup.t
 import * as clack from '@clack/prompts'
 import {pictureProp, propMissing} from './lib/prop-check.ts'
 import {projectInputs, songFileOf, readInputFile} from './lib/inputs.ts'
-import {pictureEstimate} from './lib/render-state.ts'
 import {reviewed} from './lib/review.ts'
 import {stopAfter} from './lib/stages.ts'
 import {applyLibraryText, castFromLibrary, copyKey} from './lib/casting.ts'
@@ -643,44 +643,6 @@ function pictureJobs(
     ]
 }
 
-/** --render=images: the pictures named in --only (all without it), again with --again, from an edited prompt with --picture-prompt. */
-async function renderPictures(renderer: Renderer, pictures: PictureJob[]) {
-    log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
-    const named = namedPictures(pictures, only, args.again && !render.has('videos'))
-    // an edited prompt: this one picture, from these words, kept as it is from then on
-    const edited = args['picture-prompt'] ? await Bun.file(args['picture-prompt']).text() : undefined
-    if (edited !== undefined && named.length !== 1) throw new Error('--picture-prompt goes with one picture in --only')
-    const chosen = edited === undefined ? named : named.map(p => ({...p, prompt: edited}))
-    if (args.again && (only.size === 0 || pictures.some(p => only.has(p.id)))) {
-        warnFixedSeed(config.seed)
-        // a new anchor for an edited prompt - but the user's own anchor stays, its prompt is a note (lib/own-picture.ts)
-        const newAnchor = (picture: PictureJob) =>
-            args['new-anchor'] || !!args['picture-anchor'] || (edited !== undefined && !hasOwnAnchor(picture, project.dir, config.sequenceSheets))
-        for (const picture of chosen)
-            log.step('Again', `${picture.id} ${styles.muted(`- the old one is in ${putAwayPicture(picture, project.dir, config, newAnchor(picture))}`)}`)
-    }
-    if (args['picture-anchor'])
-        log.step(
-            'Own',
-            `${chosen[0]!.id} ${styles.muted(`- your picture is ${await installOwnPicture(chosen[0]!, project.dir, config.sequenceSheets, args['picture-anchor'])}`)}`,
-        )
-    const todoPictures = chosen.filter(p => !existsSync(join(project.dir, p.file)))
-    log.step(
-        'Estimate',
-        styles.muted(
-            await pictureEstimate(
-                todoPictures.length,
-                config,
-                settings.comfy.map(server => server.name),
-            ),
-        ),
-    )
-    await renderAll(chosen, picture =>
-        config.sequenceSheets && picture.kind !== 'prop' ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture),
-    )
-    if (edited !== undefined) pinEditedPicture(chosen[0]!, project.dir, edited)
-}
-
 if (until === 'look') {
     // the casting photos: every character and place as the look describes them, before the beats - a group's members come out
     // of the beats (how many are seen at once), so a group has its pictures with the shot plan
@@ -698,7 +660,14 @@ if (until === 'look') {
         log.section('8e · RENDERING THE CAST AND THE PLACES')
         log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
         if (args.again || refresh.size || retake || args['picture-anchor']) await renderer.serversFirst()
-        await renderPictures(renderer, lookPictures)
+        await renderPictures(renderer, lookPictures, {
+            dir: project.dir,
+            config,
+            servers: settings.comfy.map(s => s.name),
+            render,
+            only,
+            args,
+        })
     } else
         log.step('Pictures', `${lookPictures.length} ${styles.muted(`- render them before the shots: bun index.ts ${projectId} --until=look --render=images`)}`)
 }
@@ -805,7 +774,6 @@ await renderAndAssemble({
     songFile,
     exportFormats,
     from,
-    renderPictures,
 })
 
 log.section('✔ DONE')

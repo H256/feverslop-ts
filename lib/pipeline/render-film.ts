@@ -4,7 +4,7 @@ import {clipChains, onlyClips, warnClipsGoingOn, warnFixedSeed} from '../batch.t
 import {archiveClip} from '../film/archive.ts'
 import {addScore, assembleFilm, assembleSmoothFilm, SCORE_EXTENSIONS} from '../film/assemble.ts'
 import {askFilmJson as askJson} from '../film/json.ts'
-import {filmRenderConfig, pictureSeed, renderAll} from '../film/pictures.ts'
+import {filmRenderConfig, renderAll} from '../film/pictures.ts'
 import {filmAssemblyClips, filmClipFreshness, FilmRenderer} from '../film/render.ts'
 import {addSubtitles, subtitleCues, subtitlePrompt, subtitleTexts, toSrt} from '../film/subtitles.ts'
 import {timelineEdl} from '../film/timeline.ts'
@@ -12,9 +12,8 @@ import {finishCopy, interpolateClips} from '../final-pass.ts'
 import {finishOf} from '../finish.ts'
 import {FPS, secondsAt} from '../frames.ts'
 import {log, styles} from '../log.ts'
-import {hasOwnAnchor, installOwnPicture} from '../own-picture.ts'
+import {type PictureAsk, renderPictures} from './pictures.ts'
 import {clipFailureRisks} from '../render-state.ts'
-import {namedPictures, type PictureJob, pinEditedPicture, putAwayPicture} from '../render.ts'
 import {runEvent} from '../run-events.ts'
 import {filmStatus} from '../status.ts'
 import {readTimings} from '../timings.ts'
@@ -37,14 +36,7 @@ export type FilmRenderRun = {
     film: FilmStore
     config: LoadedFilmConfig
     settings: Settings
-    args: {
-        again: boolean
-        preview: boolean
-        strict: boolean
-        'new-anchor': boolean
-        'picture-anchor'?: string
-        'picture-prompt'?: string
-    }
+    args: PictureAsk & {preview: boolean; strict: boolean}
     render: Set<string>
     refresh: Set<string>
     only: Set<string>
@@ -81,40 +73,7 @@ export async function renderFilm(run: FilmRenderRun) {
             await renderer.renderFilmRetake(clip, retake)
         }
         if (render.has('images')) {
-            log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
-            const renderPicture = (picture: PictureJob) =>
-                config.sequenceSheets && picture.kind !== 'prop' ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture)
-            const named = namedPictures(pictures, only, args.again && !render.has('videos'))
-            // an edited prompt: this one picture, from these words, kept as it is from then on
-            const edited = args['picture-prompt'] ? await Bun.file(args['picture-prompt']).text() : undefined
-            if (edited !== undefined && named.length !== 1) throw new Error('--picture-prompt goes with one picture in --only')
-            const chosen = edited === undefined ? named : named.map(p => ({...p, prompt: edited}))
-            if (args.again && pictures.some(p => only.has(p.id))) {
-                warnFixedSeed(config.seed)
-                // a new anchor for an edited prompt - but the user's own anchor stays, its prompt is a note (lib/own-picture.ts)
-                const newAnchor = (picture: PictureJob) =>
-                    args['new-anchor'] || !!args['picture-anchor'] || (edited !== undefined && !hasOwnAnchor(picture, film.dir, config.sequenceSheets))
-                for (const picture of chosen)
-                    log.step(
-                        'Again',
-                        `${picture.id} ${styles.muted(`- the old one is in ${putAwayPicture(picture, film.dir, renderConfig, newAnchor(picture))}`)}`,
-                    )
-            }
-            if (args['picture-anchor'])
-                log.step(
-                    'Own',
-                    `${chosen[0]!.id} ${styles.muted(`- your picture is ${await installOwnPicture(chosen[0]!, film.dir, config.sequenceSheets, args['picture-anchor'])}`)}`,
-                )
-            await renderAll(
-                chosen.filter(p => !p.baseId),
-                renderPicture,
-            )
-            // another look of a character is drawn with the seed of the normal picture - that keeps the face; it waits for it
-            await renderAll(
-                chosen.filter(p => p.baseId),
-                p => renderPicture({...p, seed: pictureSeed(film.dir, p.baseId!)}),
-            )
-            if (edited !== undefined) pinEditedPicture(chosen[0]!, film.dir, edited)
+            await renderPictures(renderer, pictures, {dir: film.dir, config: renderConfig, servers: settings.comfy.map(s => s.name), render, only, args})
         }
         // a sheet rendered just now gets its views read, and the clips their view, before they are rendered
         if (render.has('images') && render.has('videos') && config.sequenceSheets && !config.locationViews) requests = await replan()
