@@ -38,7 +38,7 @@ const about = computed(() => (props.role.kind === 'character' ? props.role.role 
         <b>{{ role.name }}</b> <span class="muted">{{ role.id }}</span>
       </div>
       <div class="muted about" :title="about">{{ about }}</div>
-      <div class="muted">{{ plural(role.clips.length, 'clip') }}</div>
+      <div class="muted">{{ plural(role.clips.length, 'clip') }}<template v-if="!role.picture"> · no picture yet</template></div>
       <CalloutBox v-if="out" kind="warn" as="div">{{
         project.kind === 'film' ? 'Out of the screenplay told anew.' : 'Out of the cast when saved.'
       }}</CalloutBox>
@@ -63,7 +63,7 @@ const about = computed(() => (props.role.kind === 'character' ? props.role.role 
         </select>
         <button
           v-if="project.kind === 'music'"
-          class="btn"
+          class="link"
           :aria-label="`${role.name} from another project`"
           title="Take over a finished character or place of another music video - its picture and its whole reference sheet: bun run import-asset"
           @click="emit('take')"
@@ -72,7 +72,7 @@ const about = computed(() => (props.role.kind === 'character' ? props.role.role 
         </button>
         <button
           v-if="role.kind === 'character'"
-          class="btn"
+          class="link"
           :aria-label="`Replace the picture of ${role.name}`"
           title="A picture of your own for this character, in what is planned: bun run replace-character - what it would do is shown first"
           @click="emit('replace')"
