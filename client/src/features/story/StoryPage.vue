@@ -137,15 +137,15 @@ const drop = toasts.guard(async () => {
           <p class="muted">The film follows the script as it is. Repair it here, or change the script in input/ and plan again.</p>
           <button class="btn" @click="repair">Repair the script…</button>
         </div>
-        <div class="section"><textarea v-model="draft.text.value" class="book" rows="24" :aria-label="name" :readonly="!book.editable" /></div>
-        <div v-if="book.editable" class="section btn-row">
+        <div class="section sp-column"><textarea v-model="draft.text.value" class="book" rows="24" :aria-label="name" :readonly="!book.editable" /></div>
+        <div v-if="book.editable" class="section btn-row sp-column">
           <button class="btn primary" :disabled="!draft.dirty.value" @click="save"><AppIcon name="save" />Save the story</button>
           <button class="btn" @click="writeAgain"><AppIcon name="repeat" />Write it again</button>
           <button class="btn" title="The same story with the cast as the Casting page has it now - a proposal next to this one" @click="adapt">
             Tell it anew for the cast
           </button>
         </div>
-        <p v-if="book.editable && builtOn.length" class="muted">
+        <p v-if="book.editable && builtOn.length" class="muted sp-column">
           Saving a changed story drops what is built on it: <span :title="stepNames(builtOn)">{{ listSteps(builtOn, project.kind) }}</span
           >. The next plan run makes those again.
         </p>
@@ -155,6 +155,10 @@ const drop = toasts.guard(async () => {
 </template>
 
 <style scoped>
+/* a story is read in a column of about 70 characters of its serif, as a page is (#1141) */
+.sp-column {
+  max-width: 40rem;
+}
 .sp-notes ul {
   margin: var(--space-1) 0;
   padding-left: var(--space-4);
