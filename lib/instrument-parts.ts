@@ -169,6 +169,30 @@ export function leadOf(rel: Record<string, number>): string | undefined {
     return best && best[1] > LEAD_MIN_DB && (!second || best[1] - second[1] >= LEAD_MARGIN_DB) ? best[0] : undefined
 }
 
+/**
+ * Where each stem carries the part, bar by bar (leadOf), as spans of the song in seconds - only the stems given, which are the
+ * ones somebody plays: a stem of nobody ("other") holds the bleed of a separated guitar and rose with its solo. The beats are
+ * told it (lib/shot-planner.ts, musicStretches): tides-261115 wrote its guitar solo as a quiet bridge, Kael playing "softly".
+ */
+export function leadSpans(
+    stems: Record<string, {power: number[]; hopSec: number; loudDb: number}>,
+    downbeats: number[],
+    durationSec: number,
+): Record<string, {start: number; end: number}[]> {
+    const edges = [...downbeats, durationSec]
+    const spans: Record<string, {start: number; end: number}[]> = {}
+    for (let i = 0; i + 1 < edges.length; i++) {
+        const [from, to] = [edges[i]!, edges[i + 1]!]
+        const lead = leadOf(Object.fromEntries(Object.entries(stems).map(([name, s]) => [name, howStemPlays(s.power, s.hopSec, s.loudDb, from, to).relDb])))
+        if (!lead) continue
+        const own = (spans[lead] ??= [])
+        const last = own.at(-1)
+        if (last && last.end === from) last.end = to
+        else own.push({start: from, end: to})
+    }
+    return spans
+}
+
 export function instrumentParts(input: PartsInput): InstrumentGap[] {
     const {downbeats, durationSec, barEnergy, hopSec} = input
     if (downbeats.length < 2 || barEnergy.length < downbeats.length) return []

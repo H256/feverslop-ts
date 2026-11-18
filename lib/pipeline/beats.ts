@@ -13,6 +13,8 @@ import {asDrawn} from '../props.ts'
 import type {ProjectConfig} from '../config.ts'
 import type {Character, Location, LyricSection, LyricsTiming, MusicMap, ProjectStore, PropStem, Singing} from '../project.ts'
 import {energyBar} from './energy-bar.ts'
+import {playerStemPowers} from './stem-power.ts'
+import {leadSpans} from '../instrument-parts.ts'
 import {performanceRules} from './singers-choice.ts'
 import {textOf} from '../text.ts'
 
@@ -77,9 +79,25 @@ export async function planBeats(run: BeatsRun) {
             : ''
     }`
                 // the music along the way - loudness and whose instrument is heard - so the story's curve follows the song's
-                const players = cast.characters.flatMap(c =>
-                    c.prop && c.propStem && propActivity?.[c.propStem] ? [{name: c.name, prop: c.prop, ranges: propActivity[c.propStem]!}] : [],
+                const playing = cast.characters.filter((c): c is Character & {prop: string; propStem: PropStem} =>
+                    Boolean(c.prop && c.propStem && propActivity?.[c.propStem]),
                 )
+                // where an instrument carries the part (a solo), among the stems somebody plays - the beat that falls there is theirs
+                const powers = playing.length
+                    ? await playerStemPowers(
+                          project.dir,
+                          {...project.data.stems, ...project.data.instrumentStems},
+                          [...new Set(playing.map(c => c.propStem))],
+                          music,
+                      )
+                    : {}
+                const leads = Object.keys(powers).length > 1 ? leadSpans(powers, music.downbeats, music.durationSec) : {}
+                const players = playing.map(c => ({
+                    name: c.name,
+                    prop: c.prop,
+                    ranges: propActivity![c.propStem]!,
+                    ...(leads[c.propStem] ? {leads: leads[c.propStem]} : {}),
+                }))
                 const stretches = musicStretches(music, beatCount, players)
                 const extracted = await askJson<{beats: Omit<StoryBeat, 'id' | 'order'>[]}>(
                     beatsPrompt({
