@@ -131,7 +131,11 @@ export async function planBeats(run: BeatsRun) {
                     }
                 })
                 // a token that is nobody of the cast ({Aldric} for "Aldric Thorne") is mapped by one short call, not by matching words
-                const texts = built.flatMap(b => [b.summary, ...b.moments, ...b.stateAfter.flatMap(f => [f.fact, ...(f.ends ?? [])])])
+                const texts = built.flatMap(b => [
+                    b.summary,
+                    ...b.moments,
+                    ...b.stateAfter.flatMap(f => [f.fact, ...(f.ends ?? []), ...(f.about ? [f.about] : [])]),
+                ])
                 const {texts: fixed, mapped} = await resolveUnknownTokens(texts, cast.characters)
                 if (Object.keys(mapped).length)
                     log.step(
@@ -149,6 +153,7 @@ export async function planBeats(run: BeatsRun) {
                         ...f,
                         fact: fixed[next++]!,
                         ...(f.ends ? {ends: f.ends.map(() => fixed[next++]!)} : {}),
+                        ...(f.about ? {about: fixed[next++]!} : {}),
                     })),
                 }))
             }),
@@ -248,7 +253,8 @@ export const sameStart = (before: string[] | undefined, now: string[]) => !!befo
 /**
  * One fact of a beat's "stateAfter" as the planner wrote it: whether it is of the place, the earlier facts it ends. A plain
  * string (the model forgot the object) is read as written. A fact of where someone is, what they do or a sound is not kept
- * (its words are dropped), it may still end earlier ones; a fact from before "kind" says "place" itself.
+ * (its words are dropped), it may still end earlier ones; a fact from before "kind" says "place" itself. `about`: the thing it
+ * describes, kept only with a kept fact.
  */
 export function parseFact(f: unknown): Fact {
     if (!f || typeof f !== 'object') return {fact: String(f), place: false}
@@ -256,5 +262,11 @@ export function parseFact(f: unknown): Fact {
     const ends = (Array.isArray(raw.ends) ? raw.ends : []).map(textOf).filter(e => e.trim())
     const kind = typeof raw.kind === 'string' ? raw.kind : undefined
     const kept = kind === undefined || KEPT_FACT_KINDS.includes(kind)
-    return {fact: kept ? textOf(raw.fact) : '', place: kind === undefined ? raw.place === true : kind === 'place', ...(ends.length ? {ends} : {})}
+    const about = kept && typeof raw.about === 'string' ? raw.about.trim() : ''
+    return {
+        fact: kept ? textOf(raw.fact) : '',
+        place: kind === undefined ? raw.place === true : kind === 'place',
+        ...(ends.length ? {ends} : {}),
+        ...(about ? {about} : {}),
+    }
 }

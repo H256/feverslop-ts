@@ -461,6 +461,30 @@ describe('a fact goes with whom it is about, or stays at its place', () => {
         expect(prompt).not.toContain('torn')
         expect(prompt).not.toContain('burns low')
     })
+
+    // tides-261115: "the halves are converging" (beat 6) was still in the last clip - no later fact had quoted it in "ends"
+    test('a new fact about the same thing replaces the one before, without "ends"', () => {
+        const later = [
+            at('b1', 'forge', ['shaman'], [{fact: 'the fire burns low', place: true, about: 'The fire'}]),
+            at('b2', 'forge', ['shaman'], [{fact: 'the fire roars as a column', place: true, about: 'the fire.'}]),
+            at('b3', 'forge', ['shaman']),
+        ]
+        const prompt = buildClipRequests({
+            slots: later.map((b, n) => ({id: `slot-00${n + 1}`, index: n, section: 'A', start: n * 4, end: n * 4 + 4, bars: 2, energy: 0.5, lyrics: []})),
+            mapping: later.map((b, n) => ({slotId: `slot-00${n + 1}`, beatId: b.id})),
+            beats: later,
+            characters,
+            locations: [{id: 'forge', name: 'Forge'}],
+            characterDescriptions: {shaman: 'A stocky shaman.', runa: 'A small grey cat.'},
+            locationDescriptions: {forge: 'A forge.'},
+            lookBrief: '',
+            music: {bpm: 120, durationSec: 12, downbeats: [0, 2, 4, 6, 8, 10], barEnergy: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5], sections: []},
+            language: 'English',
+            stemsAvailable: false,
+        })[2]!.prompt
+        expect(prompt).toContain('Continuity from earlier scenes: the fire roars as a column.')
+        expect(prompt).not.toContain('burns low')
+    })
 })
 
 describe('singingPerBeat', () => {

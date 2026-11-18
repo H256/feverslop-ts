@@ -24,4 +24,13 @@ describe('a fact of a beat as the planner wrote it', () => {
         expect(parseFact({fact: 'the fire is out', place: true})).toEqual({fact: 'the fire is out', place: true})
         expect(parseFact('the fire is out')).toEqual({fact: 'the fire is out', place: false})
     })
+    test('what a kept fact is about goes with it; an empty one or one of a fact not kept does not', () => {
+        expect(parseFact({fact: 'the gate is open', kind: 'place', about: ' the gate ', ends: []})).toEqual({
+            fact: 'the gate is open',
+            place: true,
+            about: 'the gate',
+        })
+        expect(parseFact({fact: 'the gate is open', kind: 'place', about: '', ends: []})).toEqual({fact: 'the gate is open', place: true})
+        expect(parseFact({fact: '{Kael} kneels', kind: 'doing', about: '{Kael}', ends: []}).about).toBeUndefined()
+    })
 })
