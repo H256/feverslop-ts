@@ -64,6 +64,8 @@ if (args.props) {
                 'Dropped',
                 `${result.dropped.join(', ')} ${styles.muted('- the next plan run makes them again; the pictures, the beats and the timeline stay')}`,
             )
+        // the story was told with the props as they were: a piano played at a table in the dressing room (zz-stille-261118)
+        log.step('Beats', styles.muted(`they still tell of the props as before - told anew with: bun index.ts ${t.id} --redo=beats`))
         log.next(`bun index.ts ${t.id}`)
         log.success('the props are saved')
     }
