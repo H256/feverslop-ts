@@ -49,6 +49,7 @@ import {castFromLibrary, copyKey} from './lib/casting.ts'
 import {libraryDir} from './lib/library.ts'
 import {type AssetKind} from './lib/asset-import.ts'
 import {askLayers, STEM_NAMES, stemQuestion, withStems} from './lib/cast-stems.ts'
+import {askStanding, holdersOf, withStanding} from './lib/cast-standing.ts'
 import {castPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt} from './lib/prompts.ts'
 import {messageOf} from './lib/text.ts'
 import {castProps, propPictureJob} from './lib/props.ts'
@@ -380,6 +381,27 @@ const cast = await reviewed(
                     if (given.length) log.step('Layers', styles.muted(given.map(c => `${c.name}: ${c.propStem}`).join(', ')))
                 } catch (error) {
                     log.warn(`the layer of the song of ${candidates.map(c => c.name).join(', ')} could not be asked: ${messageOf(error)}`)
+                }
+            // whether a prop is carried or stands, asked once more by itself (lib/cast-standing.ts): the long answer got a drum kit carried
+            const holders = holdersOf(extracted.characters)
+            if (holders.length)
+                try {
+                    const before = extracted.characters
+                    extracted.characters = withStanding(
+                        extracted.characters,
+                        await askStanding(
+                            holders,
+                            extracted.locations.map(l => l.name),
+                        ),
+                    )
+                    const changed = extracted.characters.filter((c, n) => (c.propCarried === false) !== (before[n]!.propCarried === false))
+                    if (changed.length)
+                        log.step(
+                            'Props',
+                            styles.muted(changed.map(c => `${c.name}: ${c.prop} ${c.propCarried === false ? 'stands' : 'is carried'}`).join(', ')),
+                        )
+                } catch (error) {
+                    log.warn(`whether the props of ${holders.map(c => c.name).join(', ')} are carried could not be asked: ${messageOf(error)}`)
                 }
             const stemNames = new Set<string>(STEM_NAMES)
             const takenCharacters = new Set<string>()

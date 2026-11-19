@@ -561,7 +561,7 @@ ${
     withSet
         ? `- "set": where the people below have their fixed places when they are in this place, the same in every scene, named by the features of the layout (never a compass point):
   - "stage": one sentence - the area where the band plays, between which features, and where the camera of view 0 sees it.
-  - "spots": one entry per person below who has a fixed spot, "name" exactly as below: ${spotted.map(p => JSON.stringify(p.name)).join(', ') || 'nobody'}. "spot" is one sentence: for a player of an instrument that stands in the place, where that instrument stands - on the stage, at one fixed feature, and the player only ever at it; for a crowd that watches, where it stands or sits - off the stage, in front of it, never on it or among the players - and that it faces the band.
+  - "spots": one entry per person below who has a fixed spot, "name" exactly as below: ${spotted.map(p => JSON.stringify(p.name)).join(', ') || 'nobody'}. "spot" is one sentence: for a player of an instrument that stands in the place, where that instrument stands - on the stage, at one fixed feature, and the player only ever at it - which way it is turned, and the side of it the player plays from, facing which way (seated behind the drums facing the crowd, standing at the keys of the piano with the back to the crowd or turned side-on to it): never at the back or the far side of it; for a crowd that watches, where it stands or sits - off the stage, in front of it, never on it or among the players - and that it faces the band.
   People of this place:
 ${performers.map(p => `  - ${p.name}: ${p.role}${p.prop ? ` - ${p.standing ? 'plays' : 'carries'} ${p.prop}${p.standing ? ', which stands in the place' : ''}` : ''}${p.group ? ' - a crowd' : ''}`).join('\n')}
 `
