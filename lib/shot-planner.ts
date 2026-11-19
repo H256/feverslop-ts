@@ -185,7 +185,7 @@ const PLAN_RULES: {rule: string; when?: (b: BeatNeeds) => boolean}[] = [
         when: b => b.props || b.group,
     },
     {
-        rule: `Someone whose instrument stands in the place (the cast says it "stands in" a place and is used there, never carried) is only in a shot together with it: at it, the instrument in the frame with them, never in front of it or away from it. A shot that cannot show the instrument - a medium or close shot of people elsewhere in the place - leaves them out; they are heard off camera. And a shot whose picture shows the instrument has them at it, in its "characters" (small at the back is enough): an instrument in the picture with nobody of the shot at it is drawn with somebody else of the clip at it, with the wrong face.`,
+        rule: `Someone whose instrument stands in the place (the cast says it "stands in" a place and is used there, never carried) is only in a shot together with it: at it, the instrument in the frame with them, never in front of it or away from it. A shot that cannot show the instrument - a medium or close shot of people elsewhere in the place - leaves them out; they are heard off camera. And a shot whose picture shows the instrument has them at it, in its "characters" (small at the back is enough): an instrument in the picture with nobody of the shot at it is drawn with somebody else of the clip at it, with the wrong face. At it they face the instrument, on the side they play it from; their "frame" says how the camera sees them there - from behind, from the side, or across the instrument - never which way they face in the room: the picture of the place shows how the instrument stands, and a facing it does not have puts them at its back.`,
         when: b => b.props,
     },
     {

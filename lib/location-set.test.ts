@@ -33,7 +33,7 @@ describe('the set of a place', () => {
         expect(withSet.input).toContain('"name" exactly as below: "Vex", "The audience"')
         expect(withSet.input).toContain('- Vex: drummer - plays coral drum kit, which stands in the place')
         // zz-stille-261118 slot-007: the piano player at the back of the piano
-        expect(withSet.input).toContain('the side of it the player plays from, facing which way')
+        expect(withSet.input).toContain('on the side of it the player plays from, facing the instrument')
         expect((withSet.schema as {required: string[]}).required).toEqual(['layout', 'views', 'set'])
         const without = locationLayoutPrompt('Hall', 'A hall.', 'A long hall.', [])
         expect(without.input).not.toContain('"set"')

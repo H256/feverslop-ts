@@ -445,6 +445,8 @@ describe('the rules a beat needs (#825)', () => {
             'on the side the spot says they play it from, never at its back',
             // tides 028: the kit behind Kael and Sera, Vex not in the shot - Vex drawn with the bass, Sera at the kit
             'a shot whose picture shows the instrument has them at it',
+            // zz-stille-261118 slot-007: "facing the proscenium wall" put the pianist at the back of the piano
+            'their "frame" says how the camera sees them there',
             // and the band came out big in front of the crowd it was seen over: each frame says how near
             'how near: in front, in the middle or small at the back of the picture',
         ])
