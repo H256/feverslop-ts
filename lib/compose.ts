@@ -1262,8 +1262,16 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 const propPictureClause = shownProps.length
                     ? ` In the shot: ${shownProps.map(p => `${p.label}, ${the(p.name)} of ${p.owner}, exactly as in ${p.picture}`).join('; ')} - ${shownProps.length > 1 ? 'each the same object' : 'the same object'} in every frame, never turned into anything else ${shownProps.length > 1 ? 'they carry' : `${shownProps[0]!.owner} carries`}.`
                     : ''
+                // a crowd with its fixed place and the band in one shot: the band is beyond the crowd, smaller - with depth said only for
+                // the drummer, the singer was drawn big among the crowd in front of the camera (tides-261115, slot-028)
+                const crowd = placeSet?.stage ? shot.focus.find(s => s.isGroup && placeSet.spots[s.id]) : undefined
+                const onStage = crowd ? shot.focus.filter(s => !s.isGroup && (s.prop || input.singing?.singers.includes(s.id))) : []
+                const stageClause =
+                    crowd && onStage.length
+                        ? ` ${joinAnd(onStage.map(s => s.label))} ${onStage.length > 1 ? 'are' : 'is'} on the stage, beyond ${crowd.label}: ${crowd.label} nearer the camera, ${onStage.length > 1 ? 'they' : onStage[0]!.label} farther away and smaller, never among ${crowd.label} or in front of it.`
+                        : ''
                 const inFrame = shot.focus.length
-                    ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${behind}${propPictureClause}${holdClause}`
+                    ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${stageClause}${behind}${propPictureClause}${holdClause}`
                     : `${viewClause}${holdClause}`
 
                 if (performing) {

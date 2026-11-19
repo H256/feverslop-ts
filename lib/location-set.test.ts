@@ -135,4 +135,11 @@ describe('the set in a clip', () => {
     test('a clip without them says nothing of the set', () => {
         expect(buildClipRequests(input(['kael']))[0]!.prompt).not.toContain('Fixed places')
     })
+
+    // tides-261115 slot-028: depth said only for the drummer - the singer was drawn big among the crowd in front of the camera
+    test('the band in a shot with the crowd is on the stage beyond it; without the crowd nothing is said of it', () => {
+        const prompt = buildClipRequests(input(['vex', 'kael', 'crowd']))[0]!.prompt
+        expect(prompt).toMatch(/<Subject \d+> and <Subject \d+> are on the stage, beyond <Subject \d+>: <Subject \d+> nearer the camera, they farther away and smaller/)
+        expect(buildClipRequests(input(['vex', 'kael']))[0]!.prompt).not.toContain('on the stage, beyond')
+    })
 })
