@@ -10,6 +10,7 @@ import {mapBeatsToSlots, splitFightSlots} from '../music.ts'
 import {playingCases, playingIssues} from '../playing-check.ts'
 import {crowdViewCases, crowdViewIssues} from '../crowd-view-check.ts'
 import {handsCases, handsIssues} from '../hands-check.ts'
+import {directionCases, directionIssues} from '../direction-check.ts'
 import {placementCases, placementIssues} from '../placement-check.ts'
 import {type BeatShots, type Blocking, type ShotPlan} from '../project.ts'
 import {readTokens, resolveUnknownTokens} from '../refs.ts'
@@ -369,8 +370,15 @@ export async function planShots(run: ShotRun) {
                                 return []
                             })
                           : []
+                      // a body that leans or steps "forward" with no target: the model moved it toward the camera (lib/direction-check.ts)
+                      const aimless = read
+                          ? await directionIssues(directionCases(read.plan.shots, cast.characters)).catch((e: unknown) => {
+                                log.warn(`${beat.id}: the check of the directions failed (${messageOf(e)}) - they stay unchecked`)
+                                return []
+                            })
+                          : []
                       if (read)
-                          for (const issue of [...idle, ...busy, ...crowdView, ...placed]) {
+                          for (const issue of [...idle, ...busy, ...crowdView, ...placed, ...aimless]) {
                               read.issues.push(issue)
                               read.problems.push(issue.message)
                           }
