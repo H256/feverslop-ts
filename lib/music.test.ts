@@ -459,3 +459,24 @@ describe('the meter (#994)', () => {
         expect(musicMapProblem({...map, beatsPerBar: 5})).toContain('beatsPerBar')
     })
 })
+
+// #1158: the props' activity, the shots' activity and the players' power read the same stems - each file is decoded once a run
+test('a stem is decoded once per process, and again when the file is written anew', async () => {
+    const {stemFramePower} = await import('./music.ts')
+    const {mkdtempSync} = await import('node:fs')
+    const {tmpdir} = await import('node:os')
+    const {join} = await import('node:path')
+    const dir = mkdtempSync(join(tmpdir(), 'stem-power-'))
+    const file = join(dir, 'bass.wav')
+    const tone = (seconds: number) =>
+        Bun.spawnSync(['ffmpeg', '-y', '-v', 'error', '-f', 'lavfi', '-i', `sine=frequency=110:duration=${seconds}`, file]).exitCode
+    expect(tone(1)).toBe(0)
+    const [a, b] = await Promise.all([stemFramePower(file), stemFramePower(file)])
+    expect(a).toBe(b)
+    expect(await stemFramePower(file)).toBe(a)
+    expect(tone(2)).toBe(0)
+    const longer = await stemFramePower(file)
+    expect(longer).not.toBe(a)
+    expect(longer.length).toBeGreaterThan(a.length)
+    // ffmpeg's first start on a cold machine can take longer than the default 5 s
+}, 30_000)

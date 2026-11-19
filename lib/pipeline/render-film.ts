@@ -1,10 +1,10 @@
-import {archiveFiles, versionStamp} from '../archive.ts'
+import {versionStamp} from '../archive.ts'
 import {previewSources} from '../assemble.ts'
 import {clipChains, onlyClips, warnClipsGoingOn, warnFixedSeed} from '../batch.ts'
-import {archiveClip} from '../film/archive.ts'
+import {archiveClip, archivePreview} from '../film/archive.ts'
 import {addScore, assembleFilm, assembleSmoothFilm, SCORE_EXTENSIONS} from '../film/assemble.ts'
 import {askFilmJson as askJson} from '../film/json.ts'
-import {filmRenderConfig, pictureSeed, renderAll} from '../film/pictures.ts'
+import {filmRenderConfig, renderAll} from '../film/pictures.ts'
 import {filmAssemblyClips, filmClipFreshness, FilmRenderer} from '../film/render.ts'
 import {addSubtitles, subtitleCues, subtitlePrompt, subtitleTexts, toSrt} from '../film/subtitles.ts'
 import {timelineEdl} from '../film/timeline.ts'
@@ -12,9 +12,10 @@ import {finishCopy, interpolateClips} from '../final-pass.ts'
 import {finishOf} from '../finish.ts'
 import {FPS, secondsAt} from '../frames.ts'
 import {log, styles} from '../log.ts'
-import {hasOwnAnchor, installOwnPicture} from '../own-picture.ts'
+import {type PictureAsk, renderPictures} from './pictures.ts'
+import {sayStaleClips, serverNames, startRenderer} from './render-steps.ts'
 import {clipFailureRisks} from '../render-state.ts'
-import {namedPictures, type PictureJob, pinEditedPicture, putAwayPicture} from '../render.ts'
+import {eachFileOnce} from '../provenance.ts'
 import {runEvent} from '../run-events.ts'
 import {filmStatus} from '../status.ts'
 import {readTimings} from '../timings.ts'
@@ -37,17 +38,10 @@ export type FilmRenderRun = {
     film: FilmStore
     config: LoadedFilmConfig
     settings: Settings
-    args: {
-        only: string
-        again: boolean
-        preview: boolean
-        refresh: string
-        strict: boolean
-        'new-anchor': boolean
-        'picture-anchor'?: string
-        'picture-prompt'?: string
-    }
+    args: PictureAsk & {preview: boolean; strict: boolean}
     render: Set<string>
+    refresh: Set<string>
+    only: Set<string>
     retake: RetakeAsk | undefined
     screenplay: Screenplay
     pictures: FilmPictureJob[]
@@ -56,7 +50,7 @@ export type FilmRenderRun = {
 }
 
 export async function renderFilm(run: FilmRenderRun) {
-    const {film, config, settings, args, render, retake, screenplay, pictures, replan} = run
+    const {film, config, settings, args, render, refresh, only, retake, screenplay, pictures, replan} = run
     // the requests, planned again once the sheets of this run are there: the clips read their views from them
     let {requests} = run
     /////////// 11 · RENDERING WITH COMFYUI
@@ -64,8 +58,6 @@ export async function renderFilm(run: FilmRenderRun) {
         const renderConfig = filmRenderConfig(config)
         // the project id is part of ComfyUI's folder - "film-" keeps it apart from a music video of the same name
         using renderer = new FilmRenderer(`film-${film.id}`, film.dir, renderConfig, settings.comfy)
-        // what was made from another request than the plan has now is rendered again - the old ones are kept (lib/provenance.ts)
-        renderer.refresh = new Set(args.refresh.split(',').filter(Boolean))
         log.section('11 · RENDERING WITH COMFYUI')
         log.step(
             'Config',
@@ -73,63 +65,28 @@ export async function renderFilm(run: FilmRenderRun) {
                 `seed ${config.seed}, images ${config.imageResolution} (${renderConfig.imageWorkflow})${config.sequenceSheets ? `, sequence sheets (${renderConfig.sequenceWorkflow})` : ''}`,
             ),
         )
-        log.step('Servers', settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', '))
-        if (args.again || renderer.refresh.size || retake || args['picture-anchor']) await renderer.serversFirst()
+        // what was made from another request than the plan has now is rendered again - the old ones are kept (lib/provenance.ts)
+        await startRenderer(renderer, settings, {refresh, again: args.again, retake, pictureAnchor: args['picture-anchor']})
         if (retake) {
             const clip = requests.find(r => r.id === retake.clip)
             if (!clip) throw new Error(`--retake: no clip ${retake.clip} - the clips are ${requests.map(r => r.id).join(', ')}`)
             await renderer.renderFilmRetake(clip, retake)
         }
         if (render.has('images')) {
-            log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
-            const renderPicture = (picture: PictureJob) =>
-                config.sequenceSheets && picture.kind !== 'prop' ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture)
-            const only = new Set(args.only.split(',').filter(Boolean))
-            const named = namedPictures(pictures, only, args.again && !render.has('videos'))
-            // an edited prompt: this one picture, from these words, kept as it is from then on
-            const edited = args['picture-prompt'] ? await Bun.file(args['picture-prompt']).text() : undefined
-            if (edited !== undefined && named.length !== 1) throw new Error('--picture-prompt goes with one picture in --only')
-            const chosen = edited === undefined ? named : named.map(p => ({...p, prompt: edited}))
-            if (args.again && pictures.some(p => only.has(p.id))) {
-                warnFixedSeed(config.seed)
-                // a new anchor for an edited prompt - but the user's own anchor stays, its prompt is a note (lib/own-picture.ts)
-                const newAnchor = (picture: PictureJob) =>
-                    args['new-anchor'] || !!args['picture-anchor'] || (edited !== undefined && !hasOwnAnchor(picture, film.dir, config.sequenceSheets))
-                for (const picture of chosen)
-                    log.step(
-                        'Again',
-                        `${picture.id} ${styles.muted(`- the old one is in ${putAwayPicture(picture, film.dir, renderConfig, newAnchor(picture))}`)}`,
-                    )
-            }
-            if (args['picture-anchor'])
-                log.step(
-                    'Own',
-                    `${chosen[0]!.id} ${styles.muted(`- your picture is ${await installOwnPicture(chosen[0]!, film.dir, config.sequenceSheets, args['picture-anchor'])}`)}`,
-                )
-            await renderAll(
-                chosen.filter(p => !p.baseId),
-                renderPicture,
-            )
-            // another look of a character is drawn with the seed of the normal picture - that keeps the face; it waits for it
-            await renderAll(
-                chosen.filter(p => p.baseId),
-                p => renderPicture({...p, seed: pictureSeed(film.dir, p.baseId!)}),
-            )
-            if (edited !== undefined) pinEditedPicture(chosen[0]!, film.dir, edited)
+            await renderPictures(renderer, pictures, {dir: film.dir, config: renderConfig, servers: serverNames(settings), render, only, args})
         }
         // a sheet rendered just now gets its views read, and the clips their view, before they are rendered
         if (render.has('images') && render.has('videos') && config.sequenceSheets && !config.locationViews) requests = await replan()
         // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
         if (render.has('videos')) {
             if (render.has('images')) await renderer.freeMemory()
-            const only = new Set(args.only.split(',').filter(Boolean))
             const selected = onlyClips(requests, only)
             log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${requests.length} (--only)`) : ''}`)
             for (const risk of clipFailureRisks(
                 readTimings(),
                 selected.filter(c => args.again || !existsSync(join(film.dir, 'videos', `${c.id}.mp4`))),
                 renderConfig.videoWorkflow,
-                settings.comfy.map(server => server.name),
+                serverNames(settings),
             ))
                 log.warn(risk)
             // a clip that starts on the last frame of the one before waits for it: those render one after the other, each chain next to the others
@@ -150,7 +107,7 @@ export async function renderFilm(run: FilmRenderRun) {
                 for (const clip of selected)
                     log.step(
                         'Again',
-                        `${clip.id} ${styles.muted(`- the old one is in ${args.preview ? archiveFiles(film.dir, `${clip.id}-preview-${stamp}`, [join('previews', `${clip.id}.mp4`), join('previews', `${clip.id}.mp4.json`)]) : archiveClip(film.dir, clip.id, stamp)}`)}`,
+                        `${clip.id} ${styles.muted(`- the old one is in ${(args.preview ? archivePreview : archiveClip)(film.dir, clip.id, stamp)}`)}`,
                     )
                 // a preview leaves no last frame behind - the clips after it are not affected
                 if (!args.preview) warnClipsGoingOn(selected, requests)
@@ -176,19 +133,16 @@ export async function renderFilm(run: FilmRenderRun) {
         log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.duration}`)}`)
     } else if (render.has('final')) {
         log.section('12 · ASSEMBLING THE FILM')
-        const only = new Set(args.only.split(',').filter(Boolean))
         const selected = onlyClips(requests, only)
         // some of the clips only: a try-out, never the film itself
         const target = join(film.dir, only.size ? `${film.id}-partial.mp4` : `${film.id}.mp4`)
         log.step('Sound', styles.muted('the sound the model made for each clip, with a short fade at every cut'))
         // a clip made from another picture, workflow or start frame than the plan has now is still a clip: said here, an error only with --strict
         const filmConfig = filmRenderConfig(config)
-        const stale = selected.filter(r => filmClipFreshness(r, film.dir, filmConfig) === 'stale').map(r => r.id)
-        if (stale.length) {
-            const message = `${stale.length} clip(s) were made from another prompt, picture or start frame than the plan has now: ${stale.join(', ')} - render them again with --render=videos --refresh=clips`
-            if (args.strict) throw new Error(message)
-            log.warn(message)
-        }
+        sayStaleClips(
+            eachFileOnce(() => selected.filter(r => filmClipFreshness(r, film.dir, filmConfig) === 'stale').map(r => r.id)),
+            args.strict,
+        )
         const result = await assembleFilm({clips: filmAssemblyClips(film.dir, selected), projectDir: film.dir, target, levelMatching: config.levelMatching})
 
         // a score in input/ is mixed under the film
@@ -272,9 +226,7 @@ export async function renderFilm(run: FilmRenderRun) {
 
     // the next step, as bun run status says it - so that following only the "Next" lines leads to a film (#828)
     {
-        const {next} = await filmStatus(film.id).catch(() => ({next: undefined}))
+        const {next} = await filmStatus(film.id, {store: film, config, settings}).catch(() => ({next: undefined}))
         if (next?.command) log.next(next.command)
     }
-
-    return {}
 }

@@ -11,3 +11,8 @@ export function archiveClip(projectDir: string, clipId: string, label: string) {
         boundaryFrameAsset(clipId, 'ff'),
     ])
 }
+
+/** The same for a preview of a clip (previews/): it leaves no frames behind. */
+export function archivePreview(projectDir: string, clipId: string, label: string) {
+    return archiveFiles(projectDir, `${clipId}-preview-${label}`, [join('previews', `${clipId}.mp4`), join('previews', `${clipId}.mp4.json`)])
+}

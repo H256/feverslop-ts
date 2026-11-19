@@ -1,13 +1,16 @@
 import {noProject} from './lib/usage.ts'
-import {extraArgument} from './lib/command-schema.ts'
 import {cli} from './lib/cli.ts'
+import {extraArgument, parseArgsOptions, usageArgs} from './lib/command-schema.ts'
+import {planCommand} from './lib/pipeline-commands.ts'
 import {toSlug} from './lib/slug.ts'
-import {existsSync} from 'node:fs'
+import {existsSync, mkdirSync, readdirSync} from 'node:fs'
 import {parseArgs} from 'node:util'
 import {formatDuration, keepLogIn, log, runLogFile, runWarnings, setOutput, styles} from './lib/log.ts'
-import {MUSIC_RENDER, readRunOptions, RUN_OPTIONS} from './lib/run-options.ts'
+import {MUSIC_RENDER, readRunOptions} from './lib/run-options.ts'
 import {renderAndAssemble} from './lib/pipeline/render-music.ts'
-import {dryRun, redoReasons} from './lib/pipeline/dry-run.ts'
+import {renderPictures} from './lib/pipeline/pictures.ts'
+import {serverNames, sourceNote, startRenderer} from './lib/pipeline/render-steps.ts'
+import {dryRun, redoReasons, sectionsChanged} from './lib/pipeline/dry-run.ts'
 import {buildRequests} from './lib/pipeline/requests.ts'
 import {hearSong} from './lib/pipeline/song.ts'
 import {planBeats} from './lib/pipeline/beats.ts'
@@ -17,20 +20,18 @@ import {chooseSingers} from './lib/pipeline/singers-choice.ts'
 import {projectStatus} from './lib/status.ts'
 import {keepTimingsIn, runTimings} from './lib/timings.ts'
 import {ask, askJson, configureLlm} from './lib/llm.ts'
-import {mkdirSync, readdirSync} from 'node:fs'
 import {join} from 'node:path'
-import {type Character, type Location, ProjectStore, type PropStem, STEP_NAMES, type StepName} from './lib/project.ts'
-import {renderAll, unknownIds, warnFixedSeed} from './lib/batch.ts'
+import {type Character, dropBeatPlans, type Location, ProjectStore, type PropStem, STEP_NAMES, type StepName} from './lib/project.ts'
+import {unknownIds} from './lib/batch.ts'
 import {directionNotTaken} from './lib/direction/service.ts'
 import {lockProject} from './lib/lock.ts'
 import {beginRun} from './lib/run-record-view.ts'
-import {separateInstrumentStems, stemActivity} from './lib/music.ts'
+import {projectLyricSections, separateInstrumentStems, stemActivity} from './lib/music.ts'
 import {groupMemberId, pictureAsset} from './lib/compose.ts'
-import {hasOwnAnchor, installOwnPicture, takeOwnDescription} from './lib/own-picture.ts'
-import {namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from './lib/render.ts'
+import {takeOwnDescription} from './lib/own-picture.ts'
+import {type PictureJob, Renderer} from './lib/render.ts'
 import {languageName, loadProjectConfig} from './lib/config.ts'
 import {sungLines} from './lib/lyrics.ts'
-import {projectLyricSections} from './lib/music.ts'
 import {archiveFiles, versionStamp} from './lib/archive.ts'
 import {clipRequestsDir, clipRequestsIn} from './lib/previous-output.ts'
 import {writeGallery} from './lib/gallery.ts'
@@ -41,75 +42,41 @@ import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from './lib/style
 import {listProjects, projectExists, validProjectId} from './lib/project-setup.ts'
 import * as clack from '@clack/prompts'
 import {pictureProp, propMissing} from './lib/prop-check.ts'
-import {projectInputs, songFileOf, readInputFile} from './lib/inputs.ts'
-import {pictureEstimate} from './lib/render-state.ts'
+import {lostStems, projectInputs, songFileOf, readInputFile} from './lib/inputs.ts'
 import {reviewed} from './lib/review.ts'
 import {stopAfter} from './lib/stages.ts'
-import {applyLibraryText, castFromLibrary, copyKey} from './lib/casting.ts'
-import {type LibraryAsset, libraryDir} from './lib/library.ts'
+import {castFromLibrary, copyKey} from './lib/casting.ts'
+import {libraryDir} from './lib/library.ts'
 import {type AssetKind} from './lib/asset-import.ts'
-import {dropBeatPlans} from './lib/project.ts'
-import {askLayers, stemQuestion, withStems} from './lib/cast-stems.ts'
+import {askLayers, STEM_NAMES, stemQuestion, withStems} from './lib/cast-stems.ts'
 import {castPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt} from './lib/prompts.ts'
 import {messageOf} from './lib/text.ts'
 import {castProps, propPictureJob} from './lib/props.ts'
 cli('plan')
 
-// any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
-// as one of these) gets the same tidy red box as a bad --flag, instead of Bun's raw stack-trace dump
-
-// bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002]
-//              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
-const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again] [--preview] [--retake=slot-007:3.2-5.0]
-             [--llm-url=…] [--llm-key=…] [--llm-model=…] [--llm-parallel=2] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
-             [--refresh=pictures,clips] [--beats=beat-05,beat-07] [--strict] [--debug] [--review] [--until=story|cast|look] [--dry-run [--json]] [-v|--verbose] [--show=story,cast,clips]   (--debug: the stack trace of a failure · --review: stop after story, cast, look and beats to accept, edit or redo them · --until: plan up to this stage and stop, the next run goes on from it · --dry-run: what the run would redo and render, nothing is done · -v: every detail as before · --show: the details of these cached steps, clips = the prompts · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
-bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
-bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
+// the options of a plan run: lib/pipeline-commands.ts
+const usage = `bun index.ts ${usageArgs(planCommand)}`
 const {values: args, positionals} = (() => {
     try {
         return parseArgs({
             args: Bun.argv.slice(2),
             allowPositionals: true,
-            options: {
-                ...RUN_OPTIONS,
-                redo: {type: 'string', default: ''},
-                beats: {type: 'string', default: ''},
-                'llm-url': {type: 'string'},
-                'llm-key': {type: 'string'},
-                'llm-model': {type: 'string'},
-                'llm-parallel': {type: 'string'},
-                comfy: {type: 'string'},
-                // skips step 11b and spreads/reuses beat.moments across shots the old way - a fallback while 11b is new
-                'legacy-moments': {type: 'boolean', default: false},
-                'debug-audio': {type: 'boolean', default: false},
-                // read by failRun (lib/log.ts) from the raw arguments - declared here so parseArgs accepts it
-                debug: {type: 'boolean', default: false},
-                gallery: {type: 'boolean', default: false},
-                export: {type: 'string', default: ''},
-                // the terminal shows a cached step as one line; -v everything, --show=story,clips the details of those
-                verbose: {type: 'boolean', short: 'v', default: false},
-                show: {type: 'string', default: ''},
-            },
+            options: parseArgsOptions(planCommand.options),
         })
     } catch (e) {
-        return log.usageError(e instanceof Error ? e.message : String(e), usage)
+        return log.usageError(messageOf(e), usage)
     }
 })()
 // a word more than it takes is said before any work (#938)
 const extra = extraArgument(positionals, ['a project id'])
 if (extra) log.usageError(extra, usage)
-setOutput({verbose: undefined, show: args.show.split(',').filter(Boolean)})
+setOutput({show: args.show.split(',').filter(Boolean)})
 // the options of a run both pipelines take (lib/run-options.ts) - "song" is never part of --render=all, it has to be asked for
-const {
-    render,
-    refresh: refreshKinds,
-    retake,
-    until,
-} = (() => {
+const {render, refresh, only, retake, until} = (() => {
     try {
         return readRunOptions(args, MUSIC_RENDER, !!(process.stdin.isTTY && process.stdout.isTTY), positionals[0])
     } catch (e) {
-        return log.usageError((e as Error).message, usage)
+        return log.usageError(messageOf(e), usage)
     }
 })()
 if (until && ([...render].some(r => r !== 'images') || args.retake || args.gallery || args.export || args['dry-run']))
@@ -154,9 +121,9 @@ const project = new ProjectStore(projectId)
 // --dry-run only reads: no lock, nothing saved
 // a clip or picture that is not there is said now - before the run is begun, so a typo is no failed run - not after every cached step was replayed (#818). A run that plans again
 // (--redo) can make other clips: the render checks them then
-if (!redoSteps.length && (args.only || retake)) {
+if (!redoSteps.length && (only.size || retake)) {
     const wrong = await unknownIds(project.dir, join(project.dir, 'output', 'assets.json'), {
-        only: args.only.split(',').filter(Boolean),
+        only: [...only],
         retake: retake?.clip,
         pictures: render.has('images'),
         clips: render.has('videos') || render.has('final'),
@@ -172,7 +139,6 @@ if (!args.gallery && !args['dry-run']) {
     beginRun(project.dir, 'index.ts')
 }
 if (args.gallery) {
-    if (!existsSync(project.dir)) throw new Error(`No project "${project.id}" in projects/`)
     const {file, counts} = await writeGallery(project.dir, project.id, project.data)
     log.step(
         'Gallery',
@@ -199,15 +165,7 @@ if (replanBeats.length) {
 // the steps named, but with --beats not shotMoments as a whole: just the shot plans of those beats go
 const redoWhole = replanBeats.length ? redoSteps.filter(step => step !== 'shotMoments') : redoSteps
 
-const toId = toSlug
 const readInput = (name: string) => readInputFile(project.input(name))
-// true if `value`'s fingerprint differs from the one project.syncInputs() recorded after the previous run - a
-// read-only check, for a step that needs to know this before that call itself has run (and recorded) this run's
-// values; undefined (nothing recorded yet, e.g. the first run) never counts as changed
-const inputChangedSinceLastRun = (name: string, value: string) => {
-    const saved = project.data.inputs?.[name]
-    return saved !== undefined && saved !== Bun.hash(value).toString(16)
-}
 
 /////////// GET LYRICS, STORY IDEA, STYLE AND CONFIG
 log.section(`FEVERSLOP TS · ${project.id}`)
@@ -247,22 +205,21 @@ configureLlm(settings.llm)
 // your own picture as the anchor: its description first - the clips and its sheet are planned from it (lib/own-picture.ts)
 if (args['picture-anchor'] && !args['dry-run']) {
     if (!existsSync(args['picture-anchor'])) log.usageError(`--picture-anchor: no file ${args['picture-anchor']}`, usage)
-    await takeOwnDescription(project.data, () => project.save(), args.only, {
+    await takeOwnDescription(project.data, () => project.save(), [...only][0]!, {
         text: args['picture-description'] ? await Bun.file(args['picture-description']).text() : undefined,
         describeFrom: args['describe-picture'] ? args['picture-anchor'] : undefined,
     })
 }
 // where a setting comes from: (settings), (project), (env), (flag), (default)
-const from = (source: string) => styles.muted(`(${source === 'file' ? 'settings' : source})`)
 // the model itself is checked on the first LLM call - a fully cached project needs no server
 log.step(
     'LLM',
     settings.llm.url
-        ? `${settings.llm.url} ${from(settings.sources.llmUrl)} · ${settings.llm.model ? `${styles.name(settings.llm.model)} ${from(settings.sources.llmModel)}` : styles.muted('the only model on the server')}`
+        ? `${settings.llm.url} ${sourceNote(settings.sources.llmUrl)} · ${settings.llm.model ? `${styles.name(settings.llm.model)} ${sourceNote(settings.sources.llmModel)}` : styles.muted('the only model on the server')}`
         : styles.muted('none configured - fine while every step is cached, else run: bun run setup llm'),
 )
 if (args['dry-run']) {
-    await dryRun({project, config, readInput, redoWhole, timelineOutdated, settings, args, render, refreshKinds, replanBeats})
+    await dryRun({project, config, readInput, redoWhole, timelineOutdated, settings, args, render, refresh, only, replanBeats})
     process.exit(0)
 }
 const language = languageName(config.lyricsLanguage)!
@@ -280,14 +237,8 @@ if (render.has('song')) {
     // A hand-edit (or a deletion) of idea.txt/music-style.txt/lyrics.txt or a new singerVoice since the last run needs a
     // new style this run already - read-only, so the fingerprints it compares against are only recorded once, by the main
     // syncInputs() call further down, once this run's final lyrics.txt content is known.
-    if (
-        inputChangedSinceLastRun('idea.txt', idea) ||
-        inputChangedSinceLastRun('music-style.txt', musicStyleInput) ||
-        inputChangedSinceLastRun('lyrics.txt', lyricsBeforeSong) ||
-        inputChangedSinceLastRun('singerVoice', config.singerVoice)
-    ) {
-        project.invalidate('songStyle')
-    }
+    // the inputs that redo the style are listed in lib/inputs.ts, compared as syncInputs compares them (#1150)
+    if (project.changedInputs(await projectInputs(project.dir, config)).some(c => c.steps.includes('songStyle'))) project.invalidate('songStyle')
 
     // LYRICS - generated once from idea.txt; once lyrics.txt exists it's a plain input like story-idea.txt, never
     // auto-rewritten - delete it (or hand-correct it) to get it touched again.
@@ -384,16 +335,12 @@ if (render.has('videos') && project.data.shotMoments) {
 
 // an edited input redoes the steps built on it - the inputs and the steps they redo are listed in lib/inputs.ts
 await project.syncInputs(await projectInputs(project.dir, config))
-// the sections are named after the lyrics tags
-if (project.data.music && lyricSections.length && project.data.music.sections.map(s => s.label).join('|') !== lyricSections.map(s => s.label).join('|')) {
-    project.invalidate('music')
-}
-if (project.data.stems && Object.values(project.data.stems).some(file => !existsSync(join(project.dir, file)))) project.invalidate('stems')
-if (project.data.instrumentStems && Object.values(project.data.instrumentStems).some(file => !existsSync(join(project.dir, file))))
-    project.invalidate('instrumentStems')
+// the sections are named after the lyrics tags; a stem file that is gone is separated again - the same rules as the dry run's
+if (sectionsChanged(project.data.music, lyricSections)) project.invalidate('music')
+for (const step of lostStems(project)) project.invalidate(step)
 
 // the song heard: its sections and energy, the stems, the lyrics aligned to the vocals (lib/pipeline/song.ts)
-const {music, stems, lyricsTiming} = await hearSong({project, projectId, config, songFile, lyrics, lyricSections, language, idea})
+const {music, stems, lyricsTiming} = await hearSong({project, config, songFile, lyrics, lyricSections, language, idea})
 
 ////////// CRAFT A STORY FOR THE LYRICS
 const storyBase = await reviewed(
@@ -432,11 +379,9 @@ const cast = await reviewed(
                     const given = extracted.characters.filter(c => candidates.some(a => a.name === c.name) && c.propStem)
                     if (given.length) log.step('Layers', styles.muted(given.map(c => `${c.name}: ${c.propStem}`).join(', ')))
                 } catch (error) {
-                    log.warn(
-                        `the layer of the song of ${candidates.map(c => c.name).join(', ')} could not be asked: ${error instanceof Error ? error.message : String(error)}`,
-                    )
+                    log.warn(`the layer of the song of ${candidates.map(c => c.name).join(', ')} could not be asked: ${messageOf(error)}`)
                 }
-            const stemNames = new Set(['drums', 'bass', 'other', 'guitar', 'piano'])
+            const stemNames = new Set<string>(STEM_NAMES)
             const takenCharacters = new Set<string>()
             const takenLocations = new Set<string>()
             const uniqueId = (base: string, taken: Set<string>) => {
@@ -445,14 +390,14 @@ const cast = await reviewed(
                 taken.add(id)
                 return id
             }
-            const locations = extracted.locations.map(l => ({...l, id: uniqueId(toId(l.name), takenLocations)}))
+            const locations = extracted.locations.map(l => ({...l, id: uniqueId(toSlug(l.name), takenLocations)}))
             // the place a prop stands in, by the name the answer gives it - the only place when there is just one
             const placeOf = (name: string | undefined) =>
-                locations.find(l => l.name === name || l.id === toId(name ?? ''))?.id ?? (locations.length === 1 ? locations[0]!.id : undefined)
+                locations.find(l => l.name === name || l.id === toSlug(name ?? ''))?.id ?? (locations.length === 1 ? locations[0]!.id : undefined)
             return {
                 // "A B" and "A-B" give the same slug: a second one gets its own id instead of overwriting the first one's look
                 characters: extracted.characters.map(c => ({
-                    id: uniqueId(toId(c.name), takenCharacters),
+                    id: uniqueId(toSlug(c.name), takenCharacters),
                     name: c.name,
                     role: c.role,
                     ...(c.isGroup === true ? {isGroup: true} : {}),
@@ -508,17 +453,6 @@ const casted = (kind: AssetKind, id: string) => castLibrary.get(copyKey(kind, id
             log.warn(`${entry.id}: library:${entry.libraryId} does not name the role's prop "${shown}" - the clips may show the picture's prop, or none`)
     }
 }
-// the steps below that a library asset stands in for: its texts replace theirs, also in a step kept from an earlier run
-// (the entry was changed since) - what was planned with the old ones is named at the end
-const castChanged = new Set<StepName>()
-function castTexts<T>(step: StepName, kind: AssetKind, values: Record<string, T>, pick: (asset: LibraryAsset) => T | undefined) {
-    for (const [key, asset] of castLibrary) {
-        if (!key.startsWith(`${kind}:`)) continue
-        const id = key.slice(kind.length + 1)
-        const value = pick(asset)
-        if (applyLibraryText(values, id, value)) castChanged.add(step)
-    }
-}
 
 ////////// THE PROPS AS THINGS OF THEIR OWN - config.propPictures: each character's prop gets a picture, laid into the clips its owner
 // is in (#944). Built by code from the cast's prop words, no question to the language model
@@ -552,13 +486,15 @@ const stemFiles: Record<string, string> = {
 const propActivity =
     stems && neededStems.length
         ? await project.step('propActivity', '5c · DETECTING INSTRUMENT ACTIVITY', async () => {
-              const result: NonNullable<typeof project.data.propActivity> = {}
-              for (const stemName of neededStems) {
+              // the stems are decoded side by side - local ffmpeg runs, in the order of the stems in project.json
+              const measured = neededStems.flatMap(stemName => {
                   const stemFile = allStems[stemName]
-                  if (!stemFile) continue
+                  if (!stemFile) return []
                   log.step('Analyzing', styles.muted(stemFile))
-                  result[stemName] = await stemActivity(join(project.dir, stemFile), music.bpm)
-              }
+                  return [[stemName, stemActivity(join(project.dir, stemFile), music.bpm)] as const]
+              })
+              const result: NonNullable<typeof project.data.propActivity> = {}
+              for (const [stemName, activity] of measured) result[stemName] = await activity
               return result
           })
         : undefined
@@ -598,14 +534,11 @@ stopAfter(until, 'cast', project.file, `bun index.ts ${projectId}`)
 // the look of the whole, of the cast and of the places (lib/pipeline/look.ts)
 const {lookBrief, characterLooks, characterDescriptions, locationLooks, locationDescriptions, locationAnchors, locationLayouts} = await planLook({
     project,
-    projectId,
     args,
     style,
     storySummary,
     cast,
-    casted,
-    castChanged,
-    castTexts,
+    castLibrary,
     propPictures: config.propPictures,
 })
 
@@ -648,45 +581,6 @@ function pictureJobs(
     ]
 }
 
-/** --render=images: the pictures named in --only (all without it), again with --again, from an edited prompt with --picture-prompt. */
-async function renderPictures(renderer: Renderer, pictures: PictureJob[]) {
-    const only = new Set(args.only.split(',').filter(Boolean))
-    log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
-    const named = namedPictures(pictures, only, args.again && !render.has('videos'))
-    // an edited prompt: this one picture, from these words, kept as it is from then on
-    const edited = args['picture-prompt'] ? await Bun.file(args['picture-prompt']).text() : undefined
-    if (edited !== undefined && named.length !== 1) throw new Error('--picture-prompt goes with one picture in --only')
-    const chosen = edited === undefined ? named : named.map(p => ({...p, prompt: edited}))
-    if (args.again && (only.size === 0 || pictures.some(p => only.has(p.id)))) {
-        warnFixedSeed(config.seed)
-        // a new anchor for an edited prompt - but the user's own anchor stays, its prompt is a note (lib/own-picture.ts)
-        const newAnchor = (picture: PictureJob) =>
-            args['new-anchor'] || !!args['picture-anchor'] || (edited !== undefined && !hasOwnAnchor(picture, project.dir, config.sequenceSheets))
-        for (const picture of chosen)
-            log.step('Again', `${picture.id} ${styles.muted(`- the old one is in ${putAwayPicture(picture, project.dir, config, newAnchor(picture))}`)}`)
-    }
-    if (args['picture-anchor'])
-        log.step(
-            'Own',
-            `${chosen[0]!.id} ${styles.muted(`- your picture is ${await installOwnPicture(chosen[0]!, project.dir, config.sequenceSheets, args['picture-anchor'])}`)}`,
-        )
-    const todoPictures = chosen.filter(p => !existsSync(join(project.dir, p.file)))
-    log.step(
-        'Estimate',
-        styles.muted(
-            await pictureEstimate(
-                todoPictures.length,
-                config,
-                settings.comfy.map(server => server.name),
-            ),
-        ),
-    )
-    await renderAll(chosen, picture =>
-        config.sequenceSheets && picture.kind !== 'prop' ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture),
-    )
-    if (edited !== undefined) pinEditedPicture(chosen[0]!, project.dir, edited)
-}
-
 if (until === 'look') {
     // the casting photos: every character and place as the look describes them, before the beats - a group's members come out
     // of the beats (how many are seen at once), so a group has its pictures with the shot plan
@@ -700,11 +594,16 @@ if (until === 'look') {
     if (groups.length) log.step('Groups', styles.muted(`${groups.map(g => g.name).join(', ')}: the pictures of their members come with the shot plan`))
     if (render.has('images')) {
         using renderer = new Renderer(project.id, project.dir, config, settings.comfy)
-        renderer.refresh = refreshKinds
         log.section('8e · RENDERING THE CAST AND THE PLACES')
-        log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
-        if (args.again || refreshKinds.size || retake || args['picture-anchor']) await renderer.serversFirst()
-        await renderPictures(renderer, lookPictures)
+        await startRenderer(renderer, settings, {refresh, again: args.again, retake, pictureAnchor: args['picture-anchor']})
+        await renderPictures(renderer, lookPictures, {
+            dir: project.dir,
+            config,
+            servers: serverNames(settings),
+            render,
+            only,
+            args,
+        })
     } else
         log.step('Pictures', `${lookPictures.length} ${styles.muted(`- render them before the shots: bun index.ts ${projectId} --until=look --render=images`)}`)
 }
@@ -735,11 +634,13 @@ const plannedShots = project.data.shotMoments !== undefined || project.data.part
 const shotActivity =
     propActivity && (project.data.shotActivity !== undefined || !plannedShots)
         ? await project.step('shotActivity', '5e · MEASURING THE ACTIVITY FOR THE SHOTS', async () => {
-              const result: NonNullable<typeof project.data.shotActivity> = {}
-              for (const stemName of Object.keys(propActivity) as (keyof typeof propActivity)[]) {
+              // the stems the props were measured from are decoded once a run (stemFramePower): this costs no second decode
+              const measured = (Object.keys(propActivity) as (keyof typeof propActivity)[]).map(stemName => {
                   const stemFile = allStems[stemName]
-                  result[stemName] = stemFile ? await stemActivity(join(project.dir, stemFile), music.bpm) : propActivity[stemName]
-              }
+                  return [stemName, stemFile ? stemActivity(join(project.dir, stemFile), music.bpm) : propActivity[stemName]] as const
+              })
+              const result: NonNullable<typeof project.data.shotActivity> = {}
+              for (const [stemName, activity] of measured) result[stemName] = await activity
               return result
           })
         : propActivity
@@ -783,8 +684,6 @@ const {clips, outputDir, pictures} = await buildRequests({
     locationAnchors,
     locationLayouts,
     beats,
-    memberCounts,
-    characterLookVariants,
     characterDescriptionVariants,
     timeline,
     clipSlots,
@@ -792,7 +691,7 @@ const {clips, outputDir, pictures} = await buildRequests({
     locationView,
     directedPlan,
     shotViews,
-    pictureJobs,
+    pictures: pictureJobs(memberCounts, characterLookVariants, characterDescriptionVariants),
 })
 
 // the pictures and clips asked for, the final video, the timeline for an editor (lib/pipeline/render-music.ts)
@@ -802,15 +701,14 @@ await renderAndAssemble({
     settings,
     args,
     render,
-    refreshKinds,
+    refresh,
+    only,
     retake,
     clips,
     pictures,
     stemFiles,
     songFile,
     exportFormats,
-    from,
-    renderPictures,
 })
 
 log.section('✔ DONE')
@@ -849,7 +747,7 @@ if (warned.size) {
 log.step('Log', runLogFile() ?? '')
 // the next step, as bun run status says it - so that following only the "Next" lines leads to a video (#828)
 {
-    const {next} = await projectStatus(project.id).catch(() => ({next: undefined}))
+    const {next} = await projectStatus(project.id, {store: project, config, settings}).catch(() => ({next: undefined}))
     if (next?.command) log.next(next.command)
 }
 

@@ -1,16 +1,19 @@
 import {existsSync} from 'node:fs'
 import {join} from 'node:path'
-import {archiveFiles, versionStamp} from '../archive.ts'
-import {assembleFinal, formatSlotRanges, previewSources} from '../assemble.ts'
+import {versionStamp} from '../archive.ts'
+import {assembleFinal, previewSources} from '../assemble.ts'
 import {clipChains, onlyClips, renderAll, warnClipsGoingOn, warnFixedSeed} from '../batch.ts'
-import {boundaryFrameAsset, type ClipRequest} from '../compose.ts'
+import type {ClipRequest} from '../compose.ts'
 import type {ProjectConfig} from '../config.ts'
 import {finishCopy, interpolateClips} from '../final-pass.ts'
 import {finishOf} from '../finish.ts'
 import {FPS, secondsAt} from '../frames.ts'
 import {log, styles} from '../log.ts'
+import {type PictureAsk, renderPictures} from './pictures.ts'
+import {sayStaleClips, serverNames, startRenderer} from './render-steps.ts'
+import {archiveClip, archivePreview} from '../film/archive.ts'
 import type {ProjectStore} from '../project.ts'
-import {freshness} from '../provenance.ts'
+import {eachFileOnce, freshness} from '../provenance.ts'
 import {clipFingerprint, type PictureJob, Renderer} from '../render.ts'
 import {clipEstimate, clipFailureRisks} from '../render-state.ts'
 import type {RetakeAsk} from '../retake.ts'
@@ -28,28 +31,23 @@ export type MusicRenderRun = {
     project: ProjectStore
     config: ProjectConfig
     settings: Settings
-    args: {only: string; again: boolean; preview: boolean; strict: boolean; 'picture-anchor'?: string}
+    args: PictureAsk & {preview: boolean; strict: boolean}
     render: Set<string>
-    refreshKinds: Set<string>
+    refresh: Set<string>
+    only: Set<string>
     retake?: RetakeAsk
     clips: ClipRequest[]
     pictures: PictureJob[]
     stemFiles: Record<string, string>
     songFile: string
     exportFormats: string[]
-    /** where a setting comes from, in the words of the run */
-    from: (source: string) => string
-    /** the pictures of the cast and the places, as the look stage renders them too */
-    renderPictures: (renderer: Renderer, pictures: PictureJob[]) => Promise<void>
 }
 
 export async function renderAndAssemble(run: MusicRenderRun) {
-    const {project, config, settings, args, render, refreshKinds, retake, clips, pictures, stemFiles, songFile, exportFormats, from, renderPictures} = run
+    const {project, config, settings, args, render, refresh, only, retake, clips, pictures, stemFiles, songFile, exportFormats} = run
     ////////// RENDERING WITH COMFYUI
     if (render.has('images') || render.has('videos') || retake) {
-        const only = new Set(args.only.split(',').filter(Boolean))
         using renderer = new Renderer(project.id, project.dir, config, settings.comfy)
-        renderer.refresh = refreshKinds
         log.section('13 · RENDERING WITH COMFYUI')
         log.step(
             'Config',
@@ -57,8 +55,7 @@ export async function renderAndAssemble(run: MusicRenderRun) {
                 `seed ${config.seed}, images ${config.imageResolution} (${config.imageWorkflow}), video ${config.videoResolution} (${config.videoWorkflow})${config.sequenceSheets ? `, sequence sheets (${config.sequenceWorkflow})` : ''}`,
             ),
         )
-        log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
-        if (args.again || refreshKinds.size || retake || args['picture-anchor']) await renderer.serversFirst()
+        await startRenderer(renderer, settings, {refresh, again: args.again, retake, pictureAnchor: args['picture-anchor']})
 
         if (retake) {
             const clip = clips.find(c => c.id === retake.clip)
@@ -67,7 +64,7 @@ export async function renderAndAssemble(run: MusicRenderRun) {
         }
 
         // everything at once - the renderer runs one job per server and queues the rest
-        if (render.has('images')) await renderPictures(renderer, pictures)
+        if (render.has('images')) await renderPictures(renderer, pictures, {dir: project.dir, config, servers: serverNames(settings), render, only, args})
         // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
         if (render.has('videos')) {
             if (render.has('images')) await renderer.freeMemory()
@@ -78,18 +75,7 @@ export async function renderAndAssemble(run: MusicRenderRun) {
                 warnFixedSeed(config.seed)
                 const stamp = versionStamp()
                 for (const clip of selected) {
-                    const keep = archiveFiles(
-                        project.dir,
-                        `${clip.id}${args.preview ? '-preview' : ''}-${stamp}`,
-                        args.preview
-                            ? [join('previews', `${clip.id}.mp4`), join('previews', `${clip.id}.mp4.json`)]
-                            : [
-                                  join('videos', `${clip.id}.mp4`),
-                                  join('videos', `${clip.id}.mp4.json`),
-                                  boundaryFrameAsset(clip.id, 'ff'),
-                                  boundaryFrameAsset(clip.id, 'lf'),
-                              ],
-                    )
+                    const keep = (args.preview ? archivePreview : archiveClip)(project.dir, clip.id, stamp)
                     log.step('Again', `${clip.id} ${styles.muted(`- the old one is in ${keep}`)}`)
                     recordTiming({kind: 'clip', name: config.videoWorkflow, seconds: 0, outcome: 'again', reason: 'again'})
                 }
@@ -98,23 +84,8 @@ export async function renderAndAssemble(run: MusicRenderRun) {
             }
             const clipFolder = args.preview ? 'previews' : 'videos'
             const todoClips = selected.filter(c => args.again || !existsSync(join(project.dir, clipFolder, `${c.id}.mp4`)))
-            log.step(
-                'Estimate',
-                styles.muted(
-                    await clipEstimate(
-                        todoClips,
-                        config,
-                        settings.comfy.map(server => server.name),
-                    ),
-                ),
-            )
-            for (const risk of clipFailureRisks(
-                readTimings(),
-                todoClips,
-                config.videoWorkflow,
-                settings.comfy.map(server => server.name),
-            ))
-                log.warn(risk)
+            log.step('Estimate', styles.muted(await clipEstimate(todoClips, config, serverNames(settings))))
+            for (const risk of clipFailureRisks(readTimings(), todoClips, config.videoWorkflow, serverNames(settings))) log.warn(risk)
             // a clip that starts on the last frame of the one before waits for it: those clips render one after the other,
             // each chain next to the others
             // the jobs an earlier run left queued on a server get it before any new clip does (#335) - the head of each chain
@@ -159,14 +130,12 @@ export async function renderAndAssemble(run: MusicRenderRun) {
         log.step('Audio', config.songAudio ? 'original song' : styles.muted('the clips\' own audio ("songAudio": false)'))
         const target = join(project.dir, `${project.id}.mp4`)
         // a clip made from another request than the plan has now is still a clip: said here, an error only with --strict
-        const stale = clips
-            .filter(c => freshness(join(project.dir, 'videos', `${c.id}.mp4`), clipFingerprint(c, project.dir, config)) === 'stale')
-            .map(c => c.id)
-        if (stale.length) {
-            const message = `${stale.length} clip(s) were made from another prompt, picture or start frame than the plan has now: ${formatSlotRanges(stale)} - render them again with --render=videos --refresh=clips`
-            if (args.strict) throw new Error(message)
-            log.warn(message)
-        }
+        sayStaleClips(
+            eachFileOnce(() =>
+                clips.filter(c => freshness(join(project.dir, 'videos', `${c.id}.mp4`), clipFingerprint(c, project.dir, config)) === 'stale').map(c => c.id),
+            ),
+            args.strict,
+        )
         const result = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target})
         log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.seconds.toFixed(3)}s`)}`)
         // the light grade and sharpen ("finish"): a copy next to each final video, which itself stays as it is

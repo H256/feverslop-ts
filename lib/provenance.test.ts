@@ -1,4 +1,4 @@
-import {describe, expect, test} from 'bun:test'
+import {describe, expect, spyOn, test} from 'bun:test'
 import {mkdirSync, mkdtempSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
@@ -73,4 +73,21 @@ describe('clipFingerprint', () => {
         expect(clipFingerprint(clip(), d, config)).toBe(clipFingerprint(clip(), d, config))
         expect(fingerprint('a', 1)).toBe(fingerprint('a', 1))
     })
+})
+
+// #1159: the clips share a few pictures - within one pass a file is read once, and after it again
+test('a file is fingerprinted once within a pass, and anew after it', async () => {
+    const fs = await import('node:fs')
+    const {eachFileOnce, fileFingerprint} = await import('./provenance.ts')
+    const dir = mkdtempSync(join(tmpdir(), 'fingerprint-'))
+    const file = join(dir, 'ann.png')
+    writeFileSync(file, 'one')
+    const reads = spyOn(fs, 'readFileSync')
+    const [a, b] = eachFileOnce(() => [fileFingerprint(file), fileFingerprint(file)])
+    expect(a).toBe(b)
+    expect(reads).toHaveBeenCalledTimes(1)
+    reads.mockRestore()
+    // the same size, at once after: a new fingerprint - the time of the file is not trusted
+    writeFileSync(file, 'two')
+    expect(fileFingerprint(file)).not.toBe(a)
 })

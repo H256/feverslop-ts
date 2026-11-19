@@ -2,22 +2,37 @@ import {usageArgs} from './command-schema.ts'
 import {creditsCommand, descriptionCommand, introCommand, labelCommand} from './postwork/commands.ts'
 import {refinishCommand} from './refinish-command.ts'
 import {lipsyncCommand} from './lipsync-command.ts'
+import {filmCommand, planCommand} from './pipeline-commands.ts'
 import {helpDetails} from './cli-help.ts'
 import {activeJobs, cancelJobs} from './comfy-cancel.ts'
 import {configureOutput, failRun, formatDuration, log, printBanner, runLogFile, runResult, runWarnings, setOutput, styles} from './log.ts'
 
 // Shared options are consumed before each tool's own parser. Never inspect values after `--`.
-// banner: the logo at the start - true for the plain one, a string for one with the tool's name under it
-const commands: Record<string, {args: string; description: string; json?: boolean; banner?: boolean | string}> = {
+type CommandSpec = {
+    args: string
+    description: string
+    /** --json makes the output machine-readable; 'consumed': and it is taken out before the tool's own parser, which has none */
+    json?: true | 'consumed'
+    /** the logo at the start - true for the plain one, a string for one with the tool's name under it */
+    banner?: boolean | string
+    /** how it is started, when not `bun run <command>` */
+    invocation?: string
+    /** a run that keeps what it completed: the hint after a failure says to run it again */
+    resumable?: true
+}
+const commands: Record<string, CommandSpec> = {
     plan: {
-        args: '[project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001] [--again] [--preview] [--retake=slot-007:3.2-5.0] [--new-anchor] [--picture-prompt=FILE] [--picture-anchor=FILE] [--picture-description=FILE] [--describe-picture] [--refresh=pictures,clips] [--beats=beat-05,beat-07] [--strict] [--review] [--until=story|cast|look] [--dry-run [--json]] [--show=story,cast,clips] [--export=mlt,openshot|all] [--gallery] [--llm-url=URL] [--llm-key=KEY] [--llm-model=MODEL] [--llm-parallel=N] [--comfy=URL] [--legacy-moments] [--debug-audio]',
+        invocation: 'bun index.ts',
+        resumable: true,
+        args: usageArgs(planCommand),
         description: 'Plan and render a music video; existing steps are reused.',
         json: true,
     },
     film: {
-        args: '<film-id> [--redo=steps] [--render=images,videos,final|all] [--only=clip-001] [--again] [--preview] [--retake=clip-007:3.2-5.0] [--new-anchor] [--picture-prompt=FILE] [--picture-anchor=FILE] [--picture-description=FILE] [--describe-picture] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--scenes=s6,s7] [--review] [--until=story|cast|look] [--dry-run [--json]] [--llm-url=URL] [--llm-key=KEY] [--llm-model=MODEL] [--comfy=URL]',
+        args: usageArgs(filmCommand),
         description: 'Plan and render a film.',
         json: true,
+        resumable: true,
     },
     setup: {
         args: '[llm|llm-model|vision|comfy|show] [llm --url= [--key=] [--model=] [--parallel=] | vision --url= [--model=] | --off | comfy --add=URL [--name=] [--token=] | --remove=NAME | show --json]',
@@ -147,7 +162,7 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         json: true,
     },
     status: {args: '<project-id> [--json] [--film]', description: 'Show project state and the next command.', json: true},
-    inspect: {args: '<project-id> <clip-id> [--json] [--film]', description: 'Inspect one clip, its references and prompt.', json: true},
+    inspect: {args: '<project-id> <clip-id> [--json] [--film]', description: 'Inspect one clip, its references and prompt.', json: 'consumed'},
     stats: {
         args: '[--by=variant,gpu] [--kind=clip|picture|song|interpolation|llm] [--project=id] [--since=7d] [--sort=name|median|p90|n|failed] [--top=N] [--compare] [--baseline="GPU or group"] [--details] [--json]',
         description: 'Compare measured render and LLM performance.',
@@ -220,7 +235,7 @@ async function stopRun(why: string) {
 
 export function cli(command: string) {
     const spec = commands[command]!
-    const invocation = command === 'plan' ? 'bun index.ts' : `bun run ${command}`
+    const invocation = spec.invocation ?? `bun run ${command}`
     const usage = `${invocation} ${spec.args}`.trim()
     const original = Bun.argv.slice(2)
     const end = original.indexOf('--')
@@ -231,13 +246,11 @@ export function cli(command: string) {
         )
         process.exit(0)
     }
-    const common = new Set(['--verbose', '-v', '--debug', '--quiet', '--banner'])
+    const common = new Set(['--verbose', '-v', '--debug', '--quiet', '--banner', ...(spec.json === 'consumed' ? ['--json'] : [])])
     const machine = !!spec.json && options.includes('--json')
-    // Existing status parsing owns --json; inspect has a positional parser.
-    if (command === 'inspect') common.add('--json')
     const filtered = options.filter(arg => !common.has(arg))
     Bun.argv.splice(2, original.length, ...filtered, ...(end < 0 ? [] : original.slice(end)))
-    const hint = `Help: ${invocation} --help${command === 'plan' || command === 'film' ? '\nCompleted outputs are retained. Correct the reported problem and rerun the same command to reuse completed work.' : ''}`
+    const hint = `Help: ${invocation} --help${spec.resumable ? '\nCompleted outputs are retained. Correct the reported problem and rerun the same command to reuse completed work.' : ''}`
     // Child pipeline runs launched by init/example inherit the chosen output mode.
     if (options.includes('--quiet')) process.env.FEVERSLOP_QUIET = '1'
     if (options.includes('--verbose') || options.includes('-v')) process.env.FEVERSLOP_VERBOSE = '1'
