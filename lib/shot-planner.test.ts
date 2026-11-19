@@ -443,6 +443,8 @@ describe('the rules a beat needs (#825)', () => {
             // tides-261115 slot-040: a wide shot from the side wall put the band among the audience
             'A shot of the crowd together with the band looks along the line between them',
             'on the side the spot says they play it from, never at its back',
+            // tides 028: the kit behind Kael and Sera, Vex not in the shot - Vex drawn with the bass, Sera at the kit
+            'a shot whose picture shows the instrument has them at it',
             // and the band came out big in front of the crowd it was seen over: each frame says how near
             'how near: in front, in the middle or small at the back of the picture',
         ])
