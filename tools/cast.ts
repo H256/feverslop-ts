@@ -4,20 +4,23 @@ import {extraArgument} from '../lib/command-schema.ts'
 // --json prints it in the form --set takes back: change names, roles and props, add a character or place (without an id), leave one
 // out to remove it. A film's script says who is in it: there names and texts change, nobody comes or goes. What was planned from
 // the old cast goes - for a music video the looks only of whoever is new or changed. Nothing is rendered.
-// usage: bun run cast <project-id> [--film] [--json | --set=cast.json | --stems]
+// usage: bun run cast <project-id> [--film] [--json | --set=cast.json | --stems | --props]
 // --stems: a music video where somebody plays an instrument of the song and somebody else carries one with no layer of the song set
 // (a guitarist next to a bassist and a drummer, #1085): the language model is asked once which of them play it, and the layer is
 // written - only that: the looks, the beats and the timeline stay; the separated instruments, the activity and the shot plans go.
+// --props: a music video - whether each prop is carried or stands somewhere it is used (a drum kit, a piano) is asked once more by
+// itself (lib/cast-standing.ts) and written; the pictures, the beats and the timeline stay, the fixed places and the shots go.
 import {existsSync, readFileSync} from 'node:fs'
 import {parseArgs} from 'node:util'
 import {log, styles} from '../lib/log.ts'
 import {configureLlm} from '../lib/llm.ts'
 import {loadSettings} from '../lib/settings.ts'
 import {askLayers} from '../lib/cast-stems.ts'
-import {type CastChange, commandTarget, planCommand, readCast, writeCast, writeLayers} from '../lib/editor/preproduction.ts'
+import {askStanding} from '../lib/cast-standing.ts'
+import {type CastChange, commandTarget, planCommand, readCast, writeCast, writeLayers, writeStanding} from '../lib/editor/preproduction.ts'
 cli('cast')
 
-const usage = 'usage: bun run cast <project-id> [--film] [--json | --set=cast.json | --stems]'
+const usage = 'usage: bun run cast <project-id> [--film] [--json | --set=cast.json | --stems | --props]'
 const {values: args, positionals} = (() => {
     try {
         return parseArgs({
@@ -28,6 +31,7 @@ const {values: args, positionals} = (() => {
                 json: {type: 'boolean', default: false},
                 set: {type: 'string'},
                 stems: {type: 'boolean', default: false},
+                props: {type: 'boolean', default: false},
             },
         })
     } catch (e) {
@@ -44,7 +48,26 @@ const view = readCast(t)
 if (!view) log.usageError(`no cast yet - plan up to it: ${t.kind === 'film' ? 'bun film.ts' : 'bun index.ts'} ${t.id} --until=cast`, usage)
 const cast = view!
 
-if (args.stems) {
+if (args.props) {
+    if (t.kind === 'film') log.usageError('--props is for a music video', usage)
+    configureLlm((await loadSettings({})).llm)
+    const result = await writeStanding(t, async (holders, locations) => {
+        log.step('Asking', styles.muted(holders.map(h => `${h.name}: ${h.prop}`).join(', ')))
+        return askStanding(holders, locations)
+    })
+    if (!result.asked.length) log.success('nobody of the cast has a prop - nothing to ask')
+    else if (!result.changed.length) log.success('every prop is carried or stands as the cast says - nothing changed')
+    else {
+        for (const c of result.changed) log.step('Prop', `${styles.name(c.id)} ${c.name}: ${c.prop} ${c.stands ? 'stands in its place' : 'is carried'}`)
+        if (result.dropped.length)
+            log.step(
+                'Dropped',
+                `${result.dropped.join(', ')} ${styles.muted('- the next plan run makes them again; the pictures, the beats and the timeline stay')}`,
+            )
+        log.next(`bun index.ts ${t.id}`)
+        log.success('the props are saved')
+    }
+} else if (args.stems) {
     if (t.kind === 'film') log.usageError('--stems is for a music video: a film has no song its characters play in', usage)
     configureLlm((await loadSettings({})).llm)
     const result = await writeLayers(t, async (players, candidates) => {

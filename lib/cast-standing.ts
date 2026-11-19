@@ -1,4 +1,5 @@
 import {type AskOptions, askJson} from './llm.ts'
+import {dropPartials} from './partials.ts'
 
 // Whether a character carries their prop while using it or goes to where it stands (propCarried) is written by the cast step in the
 // same long answer as the rest of the cast - and zz-stille-261118 got a drum kit and a piano player's "keys" as carried, although the
@@ -71,4 +72,39 @@ export function withStanding<T extends Extracted>(characters: T[], answers: Stan
             ...(a.place.trim() ? {propPlace: a.place.trim()} : {}),
         } as T
     })
+}
+
+/**
+ * What goes when a planned project's props turn out carried or standing: the fixed places of the band in each place and the shots
+ * planned on them. The pictures, the beats and the timeline stay - a picture redrawn would lose the reference the clips have.
+ */
+export const DROPPED_BY_STANDING = ['locationLayouts', 'blocking', 'shotMoments', 'shotViews']
+
+type Planned = {id: string; name: string; role: string; prop?: string; propCarried?: false; propInHand?: string; propPlace?: string}
+
+/** The answer written into the cast of a planned project, the place by its id; what is built on a change is dropped. */
+export function giveStanding(
+    data: {cast?: {characters: Planned[]; locations: {id: string; name: string}[]}} & Record<string, unknown>,
+    answers: Standing[],
+): {changed: {id: string; name: string; prop: string; stands: boolean}[]; dropped: string[]} {
+    if (!data.cast) return {changed: [], dropped: []}
+    const {locations} = data.cast
+    const placeId = (name: string) => locations.find(l => l.name === name || l.id === name)?.id ?? (locations.length === 1 ? locations[0]!.id : undefined)
+    const before = data.cast.characters
+    const after = withStanding(before, answers).map(c => {
+        const {propCarried, propPlace, ...rest} = c as Planned & {propCarried?: boolean}
+        if (propCarried !== false) return rest as Planned
+        const id = propPlace ? placeId(propPlace) : undefined
+        return {...rest, propCarried: false as const, ...(id ? {propPlace: id} : {})}
+    })
+    const same = (a: Planned, b: Planned) => a.propCarried === b.propCarried && a.propInHand === b.propInHand && a.propPlace === b.propPlace
+    const changed = after.flatMap((c, n) => (c.prop && !same(c, before[n]!) ? [{id: c.id, name: c.name, prop: c.prop, stands: c.propCarried === false}] : []))
+    if (!changed.length) return {changed, dropped: []}
+    data.cast.characters = after
+    const dropped = DROPPED_BY_STANDING.filter(step => step in data)
+    for (const step of dropped) {
+        delete data[step]
+        dropPartials(data as Parameters<typeof dropPartials>[0], step)
+    }
+    return {changed, dropped}
 }

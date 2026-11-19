@@ -1,5 +1,5 @@
 import {describe, expect, test} from 'bun:test'
-import {castStandingPrompt, holdersOf, withStanding} from './cast-standing.ts'
+import {castStandingPrompt, giveStanding, holdersOf, withStanding} from './cast-standing.ts'
 
 // zz-stille-261118: the cast step had the drum kit and the piano player's keys carried - the clips put the keys in his hands
 type Entry = {name: string; role?: string; prop?: string; propCarried?: boolean; propInHand?: string; propPlace?: string}
@@ -37,5 +37,48 @@ describe('whether a prop is carried, asked once more', () => {
         expect(prompt.reasoning).toBe('none')
         expect(prompt.input).toContain('{"name":"Mateo","role":"Drummer","prop":"drum kit"}')
         expect(prompt.input).toContain('["Stage","Dressing room"]')
+    })
+})
+
+describe('the answer written into a planned project', () => {
+    const planned = () => ({
+        cast: {
+            characters: [
+                {id: 'elias', name: 'Elias', role: 'keys player', prop: 'keys'},
+                {id: 'julian', name: 'Julian', role: 'Guitarist', prop: 'guitar'},
+            ],
+            locations: [
+                {id: 'stage', name: 'Stage'},
+                {id: 'dressing-room', name: 'Dressing room'},
+            ],
+        },
+        locationLayouts: {stage: {layout: 'x'}},
+        shotMoments: {},
+        characterLooks: {elias: 'a man'},
+    })
+
+    test('a prop that stands gets its place by id; the places and shots built on it go, the pictures stay', () => {
+        const data: Record<string, unknown> & ReturnType<typeof planned> = planned()
+        const {changed, dropped} = giveStanding(data, [
+            {name: 'Elias', carried: false, inHand: '', place: 'Stage'},
+            {name: 'Julian', carried: true, inHand: '', place: ''},
+        ])
+        expect(changed).toEqual([{id: 'elias', name: 'Elias', prop: 'keys', stands: true}])
+        expect(data.cast.characters[0] as object).toEqual({
+            id: 'elias',
+            name: 'Elias',
+            role: 'keys player',
+            prop: 'keys',
+            propCarried: false,
+            propPlace: 'stage',
+        })
+        expect(dropped).toEqual(['locationLayouts', 'shotMoments'])
+        expect(data.characterLooks).toEqual({elias: 'a man'})
+    })
+
+    test('an answer that changes nothing drops nothing', () => {
+        const data = planned()
+        expect(giveStanding(data, [{name: 'Julian', carried: true, inHand: '', place: ''}])).toEqual({changed: [], dropped: []})
+        expect(data.locationLayouts).toBeDefined()
     })
 })
