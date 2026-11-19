@@ -22,8 +22,8 @@ describe('the set of a place', () => {
             {name: 'Vex', role: 'drummer', prop: 'coral drum kit', standing: true},
             {name: 'The audience', role: 'spectators', group: true},
         ])
-        // the kit stands in the hall, not in the forest
-        expect(performersOf(band, 'forest').find(p => p.name === 'Vex')?.standing).toBeUndefined()
+        // the kit stands in the hall, not in the forest - and is not in the drummer's hands there (zz-stille-261118)
+        expect(performersOf(band, 'forest').find(p => p.name === 'Vex')).toEqual({name: 'Vex', role: 'drummer'})
         expect(performersOf([{id: 'a', name: 'Ann', role: 'a girl'}], 'hall')).toEqual([])
     })
 
