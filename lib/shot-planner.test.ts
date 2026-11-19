@@ -360,6 +360,15 @@ describe('musicStretches - the music along the way for the beats', () => {
         expect(beatsPrompt(args).input).not.toContain('The music along the way')
     })
 
+    // zz-stille-261118 beat 18: "{Elias} sits at his keys on the small table" in the dressing room - the piano stands on the stage
+    test('a prop that stands in a place is used there only, and the beats are told where', () => {
+        const args = {durationSec: 60, beatCount: 2, locations: [{id: 'stage', name: 'Stage'}], lyrics: '', story: 'They play.', performance: ''}
+        const elias = {id: 'elias', name: 'Elias', role: 'pianist', prop: 'piano', propStem: 'piano' as const, propCarried: false as const, propPlace: 'stage'}
+        const input = beatsPrompt({...args, characters: [elias]}).input
+        expect(input).toContain('the one they use there and nowhere else: in another place they are without it')
+        expect(input).toContain('piano (stands in Stage and is used there')
+    })
+
     test('stateAfter keeps the music out of its facts only when a band is on screen', () => {
         const args = {durationSec: 60, beatCount: 2, locations: [{id: 'hall', name: 'Hall'}], lyrics: '', story: 'They play.', performance: ''}
         const rule = 'A fact is never about sound or the music'
@@ -445,6 +454,8 @@ describe('the rules a beat needs (#825)', () => {
             'on the side the spot says they play it from, never at its back',
             // tides 028: the kit behind Kael and Sera, Vex not in the shot - Vex drawn with the bass, Sera at the kit
             'a shot whose picture shows the instrument has them at it',
+            // zz-stille-261118 slot-037: the drum kit of the stage put beside the drummer in the dressing room
+            'In any other place the instrument is not there at all',
             // zz-stille-261118 slot-007: "facing the proscenium wall" put the pianist at the back of the piano
             'their "frame" says how the camera sees them there',
             // tides-261115 slot-028: "near the door wall, looking up at the stage" drew the crowd on the stage around the band
