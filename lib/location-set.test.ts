@@ -128,11 +128,26 @@ describe('the set in a clip', () => {
     // tides-261115, slot-040: "The audience, in the frame" - the crowd stood on the stage between the band
     test('somebody in a shot without an entry of their own is in their fixed place', () => {
         const prompt = buildClipRequests(input(['vex', 'kael', 'crowd']))[0]!.prompt
-        expect(prompt).toContain('The audience, in their fixed place: At the near end, facing the band')
+        expect(prompt).toContain(
+            'The audience, nearest to the camera, their backs to it, facing the band - in their fixed place: At the near end, facing the band',
+        )
         expect(prompt).not.toMatch(/The audience, in the frame/)
     })
 
     test('a clip without them says nothing of the set', () => {
         expect(buildClipRequests(input(['kael']))[0]!.prompt).not.toContain('Fixed places')
+    })
+
+    // tides-261115 slot-028: every player placed in the frame on their own - the singer was drawn big among the crowd in front of
+    // the camera, three renders of three; slot-025: the crowd faced the camera. The crowd first, backs to the lens, the band beyond it
+    test('a shot of the crowd with the band: the crowd first with its back to the camera, the band as one group far beyond it', () => {
+        const prompt = buildClipRequests(input(['vex', 'kael', 'crowd']))[0]!.prompt
+        expect(prompt).toMatch(
+            /In frame: <Subject \d+>, The audience, nearest to the camera, their backs to it, facing the band - in their fixed place: At the near end, facing the band; far beyond <Subject \d+>, small on the stage: <Subject \d+>, Vex, at the coral drum kit/,
+        )
+        expect(prompt).toContain('Both are on the stage, far from the camera and small in the picture; nobody of the band is among')
+        const without = buildClipRequests(input(['vex', 'kael']))[0]!.prompt
+        expect(without).not.toContain('far beyond')
+        expect(without).not.toContain('far from the camera')
     })
 })
