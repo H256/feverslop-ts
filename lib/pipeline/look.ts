@@ -245,7 +245,8 @@ export function performersOf(characters: Character[], locationId: string): Perfo
         .map(c => ({
             name: c.name,
             role: c.role,
-            ...(c.prop ? {prop: c.prop} : {}),
+            // an instrument that stands in another place is not here: "with his drum kit in hand" in the dressing room (zz-stille-261118)
+            ...(c.prop && (c.propCarried !== false || standing(c)) ? {prop: c.prop} : {}),
             ...(standing(c) ? {standing: true} : {}),
             ...(c.isGroup ? {group: true} : {}),
         }))

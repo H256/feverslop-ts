@@ -442,6 +442,11 @@ describe('the rules a beat needs (#825)', () => {
             'In a shot with three or more people',
             // tides-261115 slot-040: a wide shot from the side wall put the band among the audience
             'A shot of the crowd together with the band looks along the line between them',
+            'on the side the spot says they play it from, never at its back',
+            // tides 028: the kit behind Kael and Sera, Vex not in the shot - Vex drawn with the bass, Sera at the kit
+            'a shot whose picture shows the instrument has them at it',
+            // zz-stille-261118 slot-007: "facing the proscenium wall" put the pianist at the back of the piano
+            'their "frame" says how the camera sees them there',
             // tides-261115 slot-028: "near the door wall, looking up at the stage" drew the crowd on the stage around the band
             'from behind the crowd, over their heads toward the stage',
             // and the band came out big in front of the crowd it was seen over: each frame says how near

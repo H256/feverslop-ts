@@ -22,8 +22,8 @@ describe('the set of a place', () => {
             {name: 'Vex', role: 'drummer', prop: 'coral drum kit', standing: true},
             {name: 'The audience', role: 'spectators', group: true},
         ])
-        // the kit stands in the hall, not in the forest
-        expect(performersOf(band, 'forest').find(p => p.name === 'Vex')?.standing).toBeUndefined()
+        // the kit stands in the hall, not in the forest - and is not in the drummer's hands there (zz-stille-261118)
+        expect(performersOf(band, 'forest').find(p => p.name === 'Vex')).toEqual({name: 'Vex', role: 'drummer'})
         expect(performersOf([{id: 'a', name: 'Ann', role: 'a girl'}], 'hall')).toEqual([])
     })
 
@@ -32,6 +32,8 @@ describe('the set of a place', () => {
         expect(withSet.input).toContain('"set": where the people below have their fixed places')
         expect(withSet.input).toContain('"name" exactly as below: "Vex", "The audience"')
         expect(withSet.input).toContain('- Vex: drummer - plays coral drum kit, which stands in the place')
+        // zz-stille-261118 slot-007: the piano player at the back of the piano
+        expect(withSet.input).toContain('on the side of it the player plays from, facing the instrument')
         expect((withSet.schema as {required: string[]}).required).toEqual(['layout', 'views', 'set'])
         const without = locationLayoutPrompt('Hall', 'A hall.', 'A long hall.', [])
         expect(without.input).not.toContain('"set"')

@@ -1,5 +1,6 @@
 import {existsSync} from 'node:fs'
 import {type Candidate, giveLayers, notAskedYet, type Player, stemQuestion} from '../../cast-stems.ts'
+import {giveStanding, type Holder, holdersOf, type Standing} from '../../cast-standing.ts'
 import {writeJsonFile} from '../../json-file.ts'
 import {join} from 'node:path'
 import {toSlug} from '../../slug.ts'
@@ -307,6 +308,31 @@ export async function writeLayers(
         project.castLayersAsked = [...new Set([...(project.castLayersAsked ?? []), ...candidates.map(c => c.name)])]
         save(target, data)
         return {...none, given, dropped}
+    })
+}
+
+/**
+ * Whether each prop of a music video's cast is carried or stands somewhere (lib/cast-standing.ts), asked once more by itself: the
+ * cast step's long answer got a drum kit carried, and a prop changed on this page is carried until asked. Only that is written - the
+ * pictures, the beats and the timeline stay - and the fixed places and shots built on it go (DROPPED_BY_STANDING).
+ */
+export async function writeStanding(
+    target: EditorTarget,
+    askStanding: (holders: Holder[], locations: string[]) => Promise<Standing[]>,
+): Promise<{asked: string[]; changed: {id: string; name: string; prop: string; stands: boolean}[]; dropped: string[]}> {
+    return withProjectLock(target.dir, target.id, async () => {
+        const data = readJson<Data>(join(target.dir, 'project.json'))
+        if (!data || target.kind !== 'music' || !(data as Project).cast) throw new Error('no cast of a music video yet - plan up to the cast first')
+        const cast = (data as Project).cast!
+        const holders = holdersOf(cast.characters)
+        if (!holders.length) return {asked: [], changed: [], dropped: []}
+        const answers = await askStanding(
+            holders,
+            cast.locations.map(l => l.name),
+        )
+        const {changed, dropped} = giveStanding(data as Project as Parameters<typeof giveStanding>[0], answers)
+        if (changed.length) save(target, data)
+        return {asked: holders.map(h => h.name), changed, dropped}
     })
 }
 
