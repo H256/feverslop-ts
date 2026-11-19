@@ -10,6 +10,7 @@ import {mapBeatsToSlots, splitFightSlots} from '../music.ts'
 import {playingCases, playingIssues} from '../playing-check.ts'
 import {crowdViewCases, crowdViewIssues} from '../crowd-view-check.ts'
 import {handsCases, handsIssues} from '../hands-check.ts'
+import {placementCases, placementIssues} from '../placement-check.ts'
 import {type BeatShots, type Blocking, type ShotPlan} from '../project.ts'
 import {readTokens, resolveUnknownTokens} from '../refs.ts'
 import {LOCATION_VIEWS} from '../sequenceSheet.ts'
@@ -361,8 +362,15 @@ export async function planShots(run: ShotRun) {
                                 },
                             )
                           : []
+                      // "between Maren and Kael" but on the far side of both in the picture: the model drew one of them twice (lib/placement-check.ts)
+                      const placed = read
+                          ? await placementIssues(placementCases(read.plan.shots, cast.characters)).catch((e: unknown) => {
+                                log.warn(`${beat.id}: the check of the places in the picture failed (${messageOf(e)}) - they stay unchecked`)
+                                return []
+                            })
+                          : []
                       if (read)
-                          for (const issue of [...idle, ...busy, ...crowdView]) {
+                          for (const issue of [...idle, ...busy, ...crowdView, ...placed]) {
                               read.issues.push(issue)
                               read.problems.push(issue.message)
                           }
