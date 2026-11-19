@@ -1212,21 +1212,32 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                         ? `, with ${joinAnd(s.companions)} beside ${s.companions.length > 1 ? 'them' : 'it'} - ${s.companions.length > 1 ? `${s.companions.length} more` : 'another one'} of ${the(s.name)}, each the one in their own picture`
                         : ''
                 const personInFrame = (s: (typeof shot.focus)[number], n: number) => `${personAlone(s, n)}${together(s)}`
+                // a crowd with its fixed place and the band in one shot, told as the picture is built from the lens: the crowd first, nearest,
+                // backs to the camera; then the band as one group far beyond it, each by where they are and what they do - no place in the
+                // frame of their own. With every player placed in the frame on their own ("sharp, right of centre") the singer was drawn big
+                // among the crowd in three renders of tides-261115 slot-028, and the crowd faced the camera (slot-025); told this way she
+                // stayed small on the stage in two of two
+                const crowd = placeSet?.stage ? shot.focus.find(s => s.isGroup && placeSet.spots[s.id]) : undefined
+                const onStage = crowd ? shot.focus.filter(s => !s.isGroup && (s.prop || input.singing?.singers.includes(s.id))) : []
                 const personAlone = (s: (typeof shot.focus)[number], n: number) => {
                     const p = stagedPeople?.[s.id]
                     // compact: the token only - the name next to it called one person twice in one sentence (#824)
                     const who = input.clipPrompt === 'compact' ? s.label : `${s.label}, ${s.name}`
+                    const far = crowd !== undefined && onStage.includes(s)
                     // not for a singer the plan shows from behind (#822): "three-quarter back view" and "the face clearly visible" cannot both hold
-                    const face = shot.singers.includes(s) && !p?.faceHidden ? ', the face clearly visible' : ''
+                    const face = shot.singers.includes(s) && !p?.faceHidden && !far ? ', the face clearly visible' : ''
                     if (!shot.plan) return `${who}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${face}`
                     // somebody in the picture the planner gave no entry of their own: the shot's "rest" says what they do
                     // A fixed place of theirs (#1119) is where they are: "The audience, in the frame" put the crowd on the stage between
                     // the band in a wide shot of everyone (tides-261115, slot-040)
                     const spot = s.stationary || s.isGroup ? placeSet?.spots[s.id]?.replace(/[.\s]+$/, '') : undefined
-                    if (!p) return `${who}, ${spot ? `${s.stationary ? `at the ${s.stationary}, ${playedFrom}` : 'in their fixed place'}: ${spot}` : 'in the frame'}${face}`
+                    if (s === crowd && onStage.length)
+                        return `${who}, nearest to the camera, their backs to it, facing the band${spot ? ` - in their fixed place: ${spot}` : ''}`
+                    if (!p)
+                        return `${who}, ${spot ? `${s.stationary ? `at the ${s.stationary}, ${playedFrom}` : 'in their fixed place'}: ${spot}` : 'in the frame'}${face}`
                     return `${who}, ${
                         // compact: the movement is told by the shot's action - told again here, the two differed in detail (#824)
-                        [p.state, p.frame, input.clipPrompt === 'compact' && shot.plan.action ? undefined : p.motion]
+                        [p.state, far ? undefined : p.frame, input.clipPrompt === 'compact' && shot.plan.action ? undefined : p.motion]
                             .filter(Boolean)
                             .map(t => withLabels(t!, planTokens))
                             .join('; ') || 'in the frame'
@@ -1262,8 +1273,21 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 const propPictureClause = shownProps.length
                     ? ` In the shot: ${shownProps.map(p => `${p.label}, ${the(p.name)} of ${p.owner}, exactly as in ${p.picture}`).join('; ')} - ${shownProps.length > 1 ? 'each the same object' : 'the same object'} in every frame, never turned into anything else ${shownProps.length > 1 ? 'they carry' : `${shownProps[0]!.owner} carries`}.`
                     : ''
+                const stageClause =
+                    crowd && onStage.length
+                        ? ` ${onStage.length > 1 ? (onStage.length === 2 ? 'Both are' : `All ${onStage.length} are`) : `${onStage[0]!.label} is`} on the stage, far from the camera and small in the picture; nobody of the band is among ${crowd.label} or near the camera.`
+                        : ''
+                const at = (s: (typeof shot.focus)[number]) => personInFrame(s, shot.focus.indexOf(s))
+                const framedList =
+                    crowd && onStage.length
+                        ? [
+                              at(crowd),
+                              `far beyond ${crowd.label}, small on the stage: ${onStage.map(at).join('; ')}`,
+                              ...shot.focus.filter(s => s !== crowd && !onStage.includes(s)).map(at),
+                          ].join('; ')
+                        : shot.focus.map(personInFrame).join('; ')
                 const inFrame = shot.focus.length
-                    ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${behind}${propPictureClause}${holdClause}`
+                    ? `${viewClause} In frame: ${framedList}.${restClause}${stageClause}${behind}${propPictureClause}${holdClause}`
                     : `${viewClause}${holdClause}`
 
                 if (performing) {
@@ -1516,7 +1540,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     const spotted = castSubjects.filter(s => (s.stationary || s.isGroup) && placeSet?.spots[s.id])
                     if (!spotted.length) return []
                     const said = spotted.map(
-                        s => `${s.label}, ${s.name}${s.stationary ? `, at the ${s.stationary}, ${playedFrom}` : ''}: ${placeSet!.spots[s.id]!.replace(/[.\s]+$/, '')}`,
+                        s =>
+                            `${s.label}, ${s.name}${s.stationary ? `, at the ${s.stationary}, ${playedFrom}` : ''}: ${placeSet!.spots[s.id]!.replace(/[.\s]+$/, '')}`,
                     )
                     return [`Fixed places in ${locationSubject?.label ?? 'the place'}, the same in every shot: ${said.join('; ')}.`]
                 })(),

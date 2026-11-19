@@ -462,6 +462,8 @@ describe('the rules a beat needs (#825)', () => {
             'from behind the crowd, over their heads toward the stage',
             // and the band came out big in front of the crowd it was seen over: each frame says how near
             'how near: in front, in the middle or small at the back of the picture',
+            // tides-261115 slot-028: "presses her weight forward" - the singer walked off the stage into the crowd, big in front
+            'leans, presses or steps "forward": say toward whom or what',
         ])
             expect(instructions).toContain(rule)
     })
