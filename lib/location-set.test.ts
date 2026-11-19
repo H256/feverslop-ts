@@ -32,8 +32,9 @@ describe('the set of a place', () => {
         expect(withSet.input).toContain('"set": where the people below have their fixed places')
         expect(withSet.input).toContain('"name" exactly as below: "Vex", "The audience"')
         expect(withSet.input).toContain('- Vex: drummer - plays coral drum kit, which stands in the place')
-        // zz-stille-261118 slot-007: the piano player at the back of the piano
-        expect(withSet.input).toContain('on the side of it the player plays from, facing the instrument')
+        // zz-stille-261118 slot-007: the piano player at the back of the piano; tides-261115: "Vex plays behind the kit, facing
+        // the throne" - the spot says only where the instrument stands, the clip says the player is on its playing side
+        expect(withSet.input).toContain('only where that instrument stands - on the stage, at one fixed feature - and nothing of its player')
         expect((withSet.schema as {required: string[]}).required).toEqual(['layout', 'views', 'set'])
         const without = locationLayoutPrompt('Hall', 'A hall.', 'A long hall.', [])
         expect(without.input).not.toContain('"set"')
@@ -105,7 +106,7 @@ describe('the set in a clip', () => {
                 layout: 'The throne at the back.',
                 set: {
                     stage: 'In front of the throne.',
-                    spots: {vex: 'The kit stands in front of the throne.', crowd: 'At the near end, facing the band.', kael: 'Left.'},
+                    spots: {vex: 'The kit stands between the pillars', crowd: 'At the near end, facing the band.', kael: 'Left.'},
                 },
             },
         },
@@ -119,7 +120,7 @@ describe('the set in a clip', () => {
     test('the drum kit and the crowd of the clip have their fixed places in it; a carried guitar has none', () => {
         const prompt = buildClipRequests(input(['vex', 'kael', 'crowd']))[0]!.prompt
         expect(prompt).toContain('Fixed places in <Subject 1>, the same in every shot:')
-        expect(prompt).toContain('Vex, at the coral drum kit: The kit stands in front of the throne')
+        expect(prompt).toContain('Vex, at the coral drum kit, on the side it is played from, never at its back: The kit stands between the pillars;')
         expect(prompt).toContain('The audience: At the near end, facing the band')
         expect(prompt).not.toContain(': Left')
     })

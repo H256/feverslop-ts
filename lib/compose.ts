@@ -42,6 +42,10 @@ export const groupMemberId = (characterId: string, member: number) => `${charact
 // each one is a full extra image (and, with sequence sheets on, a full extra reference video) to generate.
 export const MAX_GROUP_MEMBERS = 5
 
+// how the clip puts a player at an instrument that stands in the place: the spot of the place says only where the
+// instrument stands - written by the layout step, it put the drummer "facing the throne", at the back of the kit (tides-261115)
+const playedFrom = 'on the side it is played from, never at its back'
+
 /**
  * How many distinct reference images a group character (Character.isGroup) needs: the most individuals of it
  * ever shown on screen together in one beat (beat.groupSize), capped at MAX_GROUP_MEMBERS. A group character with
@@ -1219,7 +1223,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     // A fixed place of theirs (#1119) is where they are: "The audience, in the frame" put the crowd on the stage between
                     // the band in a wide shot of everyone (tides-261115, slot-040)
                     const spot = s.stationary || s.isGroup ? placeSet?.spots[s.id]?.replace(/[.\s]+$/, '') : undefined
-                    if (!p) return `${who}, ${spot ? `in their fixed place: ${spot}` : 'in the frame'}${face}`
+                    if (!p) return `${who}, ${spot ? `${s.stationary ? `at the ${s.stationary}, ${playedFrom}` : 'in their fixed place'}: ${spot}` : 'in the frame'}${face}`
                     return `${who}, ${
                         // compact: the movement is told by the shot's action - told again here, the two differed in detail (#824)
                         [p.state, p.frame, input.clipPrompt === 'compact' && shot.plan.action ? undefined : p.motion]
@@ -1512,7 +1516,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     const spotted = castSubjects.filter(s => (s.stationary || s.isGroup) && placeSet?.spots[s.id])
                     if (!spotted.length) return []
                     const said = spotted.map(
-                        s => `${s.label}, ${s.name}${s.stationary ? `, at the ${s.stationary}` : ''}: ${placeSet!.spots[s.id]!.replace(/[.s]+$/, '')}`,
+                        s => `${s.label}, ${s.name}${s.stationary ? `, at the ${s.stationary}, ${playedFrom}` : ''}: ${placeSet!.spots[s.id]!.replace(/[.\s]+$/, '')}`,
                     )
                     return [`Fixed places in ${locationSubject?.label ?? 'the place'}, the same in every shot: ${said.join('; ')}.`]
                 })(),
