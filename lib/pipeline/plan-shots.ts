@@ -8,6 +8,7 @@ import {ask, askJson, llmMap} from '../llm.ts'
 import {log, styles} from '../log.ts'
 import {mapBeatsToSlots, splitFightSlots} from '../music.ts'
 import {playingCases, playingIssues} from '../playing-check.ts'
+import {crowdViewCases, crowdViewIssues} from '../crowd-view-check.ts'
 import {type BeatShots, type Blocking, type ShotPlan} from '../project.ts'
 import {readTokens, resolveUnknownTokens} from '../refs.ts'
 import {LOCATION_VIEWS} from '../sequenceSheet.ts'
@@ -343,8 +344,17 @@ export async function planShots(run: ShotRun) {
                                 return []
                             })
                           : []
+                      // a crowd with the band seen from anywhere but over its heads: the model put it on the stage (lib/crowd-view-check.ts)
+                      const crowdView = read
+                          ? await crowdViewIssues(crowdViewCases(read.plan.shots, cast.characters, locationLayouts[beat.locationId]?.set)).catch(
+                                (e: unknown) => {
+                                    log.warn(`${beat.id}: the check of the crowd views failed (${messageOf(e)}) - they stay unchecked`)
+                                    return []
+                                },
+                            )
+                          : []
                       if (read)
-                          for (const issue of idle) {
+                          for (const issue of [...idle, ...crowdView]) {
                               read.issues.push(issue)
                               read.problems.push(issue.message)
                           }
