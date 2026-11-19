@@ -70,26 +70,27 @@ export async function planFilmShots(run: FilmShotsRun) {
             }
             log.step(`Scene ${i + 1}/${screenplay.scenes.length}`, styles.name(`${scene.setting}. ${scene.location} - ${scene.time}`))
             const location = locationOf(cast, scene.location)!
+            // the prompt of the scene, with what was wrong with the answer before - the first one (none) is also its key below
+            const promptFor = (problems: string[]) =>
+                coveragePrompt(
+                    scene,
+                    location,
+                    cast.characters,
+                    languageName(brief.language) ?? brief.language,
+                    lookBrief,
+                    budgetOf(scene),
+                    maxShotsFor(scene),
+                    problems,
+                    handover(i),
+                    locationViews[location.id],
+                    i + 1,
+                    props,
+                    directionNotes[scene.id],
+                )
             const planScene = async () => {
                 let problems: string[] = []
                 for (let attempt = 0; ; attempt++) {
-                    const raw = await askJson<RawCoverage>(
-                        coveragePrompt(
-                            scene,
-                            location,
-                            cast.characters,
-                            languageName(brief.language) ?? brief.language,
-                            lookBrief,
-                            budgetOf(scene),
-                            maxShotsFor(scene),
-                            problems,
-                            handover(i),
-                            locationViews[location.id],
-                            i + 1,
-                            props,
-                            directionNotes[scene.id],
-                        ),
-                    )
+                    const raw = await askJson<RawCoverage>(promptFor(problems))
                     try {
                         // the first time what the script checks find is a reason to ask again, the second time it is only noted
                         const {coverage: planned, notes} = toCoverage(
@@ -113,22 +114,7 @@ export async function planFilmShots(run: FilmShotsRun) {
             }
             // kept as soon as it is planned: a failure on a later scene does not cost the scenes before it. What it was asked
             // (the first prompt, with the hand-over of the scene before) decides whether it is asked again
-            const firstAsk = coveragePrompt(
-                scene,
-                location,
-                cast.characters,
-                languageName(brief.language) ?? brief.language,
-                lookBrief,
-                budgetOf(scene),
-                maxShotsFor(scene),
-                [],
-                handover(i),
-                locationViews[location.id],
-                i + 1,
-                props,
-                directionNotes[scene.id],
-            )
-            result.push(await film.each('coverage', scene.id, firstAsk, planScene))
+            result.push(await film.each('coverage', scene.id, promptFor([]), planScene))
             plannedNow.push(scene.id)
         }
         return result

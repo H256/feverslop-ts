@@ -328,6 +328,21 @@ describe('musicStretches - the music along the way for the beats', () => {
         ])
         expect(musicStretches(music, 1, [{name: 'Kael', prop: 'guitar', ranges: [{start: 0, end: 5}]}])[0]).toContain('heard: none of the instruments')
     })
+    // tides-261115: the guitar solo at 1:56 was written as a quiet bridge, Kael playing "softly" - nothing told the beats of it
+    test('where an instrument carries the part, a fill of a bar or two is no part', () => {
+        const kael = {name: 'Kael', prop: 'guitar', ranges: [{start: 0, end: 60}], leads: [{start: 36, end: 48}]}
+        const mara = {name: 'Mara', prop: 'drum kit', ranges: [{start: 0, end: 60}], leads: [{start: 10, end: 12}]}
+        expect(musicStretches(music, 3, [kael, mara])).toEqual([
+            "0:00-0:20 loudness 0.20 · heard: Kael's guitar, Mara's drum kit",
+            "0:20-0:40 loudness 0.50 · heard: Kael's guitar, Mara's drum kit · leads: Kael's guitar 0:36-0:40",
+            "0:40-1:00 loudness 0.80 · heard: Kael's guitar, Mara's drum kit · leads: Kael's guitar 0:40-0:48",
+        ])
+        const args = {durationSec: 60, beatCount: 3, characters: [], locations: [{id: 'hall', name: 'Hall'}], lyrics: '', story: 'x', performance: ''}
+        expect(beatsPrompt({...args, stretches: musicStretches(music, 3, [kael])}).input).toContain(
+            'Where an instrument "leads", it carries the music there - a solo',
+        )
+        expect(beatsPrompt({...args, stretches: musicStretches(music, 3, [mara])}).input).not.toContain('Where an instrument "leads"')
+    })
     test('the beats prompt carries them and the rules that follow them', () => {
         const args = {
             durationSec: 60,
@@ -433,6 +448,13 @@ describe('the rules a beat needs (#825)', () => {
             'how near: in front, in the middle or small at the back of the picture',
         ])
             expect(instructions).toContain(rule)
+    })
+    // tides-261115: in the guitar solo Kael stood with his head bowed, "a slow, gentle pull across the strings", Sera in front
+    test('a shot where somebody leads is about them, their whole body playing the part', () => {
+        // in the way of the song's genre, not of a rock guitar only
+        expect(planInstructions).toContain(
+            "A shot where somebody leads is about them: they are in it, in front and sharp, and their whole body plays the part the way a player of this song's genre and of this instrument does in a solo",
+        )
     })
     test('with everything needed the rules are the whole set', () => {
         expect(planInstructionsFor(ALL_NEEDS)).toBe(planInstructions)

@@ -1,44 +1,17 @@
-// What --help says beyond the usage line, for the two commands with many options. No imports of the pipeline: help stays
-// instant. lib/cli.test.ts checks that every option of index.ts and film.ts and every step is named here.
+import type {CommandSchema} from './command-schema.ts'
+import {filmCommand, planCommand} from './pipeline-commands.ts'
+
+// What --help says beyond the usage line. No imports of the pipeline: help stays instant. The options of the two pipelines are
+// those of their schema (lib/pipeline-commands.ts), in its order; lib/cli-help.test.ts checks every step is named here.
 type Help = {options: [string, string][]; steps: [string, string][]; notes: string[]}
 
-const rendering: [string, string][] = [
-    ['--only=ID,ID', 'Only these clips or pictures (with --render=videos, final or images); try one before all - every clip is GPU time'],
-    ['--again', 'Render the clips or pictures in --only once more with a new seed; the old version is kept. Needs --render=videos or images'],
-    ['--new-anchor', 'With --render=images --again: a reference sheet gets a new anchor too - another person or place, not only other views'],
-    ['--picture-prompt=FILE', 'With --render=images --only=ID --again: render this one picture from the words in FILE and keep it (pinned)'],
-    [
-        '--picture-anchor=FILE',
-        'With --render=images --only=ID --again: put your own picture in as the anchor of this one picture and draw its sheet from it; the old one is kept',
-    ],
-    ['--picture-description=FILE', 'With --picture-anchor: what the clips and the sheet say of it, from FILE, into project.json'],
-    ['--describe-picture', 'With --picture-anchor: the description read from your picture by the vision model (bun run setup vision)'],
-    [
-        '--preview',
-        'With --render=videos: cheap renders into previews/ (config.json "preview"), never a clip. With --render=final: a low-resolution video from them',
-    ],
-    ['--retake=CLIP:PART', 'Render part of a clip again, between the frames around it: slot-007:3.2-5.0 in seconds, or slot-007:shot2. The old clip is kept'],
-    ['--refresh=images,videos', 'Render again what is stale - made from an older plan; the old files go to old/attempts/. pictures, clips say the same. With --preview: the previews of an older plan'],
-    ['--strict', 'Refuse stale clips in the final video instead of only listing them'],
-]
+/** The options of a schema as rows of the help: --name=shown and what it does. */
+const optionRows = (schema: CommandSchema): [string, string][] =>
+    Object.entries(schema.options).map(([name, spec]) => [`--${name}${spec.kind === 'flag' ? '' : `=${'shown' in spec ? spec.shown : ''}`}`, spec.help])
+
 /** What a run renders and what it leaves (#937) - the same note in both helps. */
 const renderNote =
     'What --render renders is what is missing. A stale one - made from an older plan - stays as it is until --refresh=images,videos renders it again; --again renders the ones in --only once more, with a new seed. Nothing else is rendered: GPU time only for what is asked.'
-const planning: [string, string][] = [
-    ['--review', 'Stop after each main step that was just generated: accept, edit, generate again or stop'],
-    [
-        '--until=STAGE',
-        'Plan up to story, cast or look and stop there; the next run goes on from it. --until=look --render=images renders the pictures of the cast and the places first',
-    ],
-    ['--dry-run', 'Say what this command would redo and render, with an estimate where one is known; does nothing'],
-]
-const servers: [string, string][] = [
-    ['--llm-url=URL', 'LLM server for this run, instead of the settings'],
-    ['--llm-key=KEY', 'API key of that server'],
-    ['--llm-model=MODEL', 'Model for this run'],
-    ['--comfy=URL,URL', 'ComfyUI servers for this run'],
-]
-const redo = 'Generate these steps again, and every step built on them'
 
 export const commandHelp: Record<string, Help> = {
     direction: {
@@ -61,24 +34,7 @@ export const commandHelp: Record<string, Help> = {
         ],
     },
     plan: {
-        options: [
-            ['--redo=STEP,STEP', redo],
-            ['--beats=beat-05,beat-07', 'With --redo=shotMoments: plan only the shots of these beats again; the other beats and their clips stay'],
-            [
-                '--render=song,images,videos,final|all',
-                'Also render: the song, the pictures, the clips, the final video. all = images, videos and final - never the song: --render=song makes a new one and is asked for by name',
-            ],
-            ...rendering,
-            ...planning,
-            ['--json', 'With --dry-run: what it would do as JSON - the reasons, the steps made again, the beats planned again, the renders'],
-            ['--show=STEP,clips', 'Print the details of these cached steps; clips = the clip prompts'],
-            ['--export=mlt,openshot|all', 'Write a timeline for Shotcut/Kdenlive and/or OpenShot'],
-            ['--gallery', 'Write gallery.html, an overview of the assets so far; runs nothing else'],
-            ...servers,
-            ['--llm-parallel=N', 'LLM calls at the same time'],
-            ['--legacy-moments', 'Skip blocking and shotMoments, spread beat.moments across the shots the old way'],
-            ['--debug-audio', 'Also cut one listenable wav per track and clip into output/audio'],
-        ],
+        options: optionRows(planCommand),
         steps: [
             ['Song', 'songStyle, music, stems, instrumentStems, transcript, lyricsTiming, propActivity, shotActivity'],
             ['Story', 'story, summary, cast, props (propPictures), singing, beats'],
@@ -96,17 +52,7 @@ export const commandHelp: Record<string, Help> = {
         ],
     },
     film: {
-        options: [
-            ['--redo=STEP,STEP', redo],
-            ['--render=images,videos,final|all', 'Also render: the pictures, the clips, the film. all = all three'],
-            ...rendering,
-            ['--scenes=s6,s7', 'With --redo=coverage: plan only these scenes again; the other shots and their clips stay'],
-            ['--fix-script', 'Repair a handed-in screenplay; by default its contradictions are only reported'],
-            ['--allow-import-gaps', 'Go on when importing a screenplay lost a line, instead of stopping'],
-            ...planning,
-            ['--json', 'With --dry-run: what it would do as JSON - the reasons, the steps made again, the scenes planned again, the renders'],
-            ...servers,
-        ],
+        options: optionRows(filmCommand),
         steps: [
             ['Script', 'brief, outline, screenplay, scriptNotes, scriptFixes, subtitles'],
             ['Cast', 'cast, summary, props'],

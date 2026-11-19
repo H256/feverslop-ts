@@ -1,5 +1,5 @@
 import {describe, expect, test} from 'bun:test'
-import {howStemPlays, instrumentParts, leadOf, stemLoudDb, type PartsInput} from './instrument-parts.ts'
+import {howStemPlays, instrumentParts, leadOf, leadSpans, stemLoudDb, type PartsInput} from './instrument-parts.ts'
 
 // a 120 s song of 2 s bars, 0.05 s frames; every stem is a function of the time
 const hop = 0.05,
@@ -123,5 +123,15 @@ describe('the pieces the shots use (#1024)', () => {
         expect(leadOf({guitar: -3, bass: -5})).toBeUndefined()
         expect(leadOf({})).toBeUndefined()
         expect(leadOf({guitar: 2})).toBe('guitar')
+    })
+})
+
+describe('leadSpans - where a stem carries the part', () => {
+    test('the bars a stem leads in, joined into spans; none where nobody does', () => {
+        // the guitar 10 dB over its own level from 40 to 52 s, the bass on its level throughout
+        const guitar = {power: power(t => (between(t, 40, 52) ? loud * 10 : loud)), hopSec: hop, loudDb: 10 * Math.log10(loud)}
+        const bass = {power: power(() => loud), hopSec: hop, loudDb: 10 * Math.log10(loud)}
+        expect(leadSpans({guitar, bass}, downbeats, length)).toEqual({guitar: [{start: 40, end: 52}]})
+        expect(leadSpans({bass}, downbeats, length)).toEqual({})
     })
 })

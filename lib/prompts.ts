@@ -295,7 +295,7 @@ const propRule = ({prop, propCarried, propInHand, hands, propPicture}: PropOf) =
     !prop
         ? ''
         : propPicture
-          ? `- The character's "${prop}" has a picture of its own and is not in this one: nothing is in their ${handsOf({hands})}, and nothing of it is near them.\n`
+          ? `- The character's "${prop}" has a picture of its own and is not in this one: nothing is in their ${handsOf({hands})}, and nothing of it is near them - and they carry no other weapon, tool or instrument either (no sword at the hip, no staff on the back): in a clip the video model swapped such a thing with the prop.\n`
           : propCarried === false
             ? `- The character uses "${prop}", which stands in a place and is not in this picture: ${propInHand ? `they hold only "${propInHand}", the way they hold it while using it, in the working grip of their ${handsOf({hands})}` : `nothing is in their ${handsOf({hands})}`}.\n`
             : `- The character carries "${prop}": show exactly that object, at the size such an object really has, described by the parts that kind of object has - never a different kind of object, and never stretched into a pole or staff when it is not one. It is in use in the picture: held in the position it has while it is used, and say where each of the ${handsOf({hands})} is on it, at work - never resting, hanging down, slung aside, lowered or held by one end at the side.\n`

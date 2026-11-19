@@ -1,15 +1,14 @@
 import {type DryRun} from '../../shared/workspace.ts'
 import {formatSlotRanges} from '../assemble.ts'
 import {onlyClips} from '../batch.ts'
-import {projectInputs, stepUsed} from '../inputs.ts'
+import {lostStems, projectInputs, stepUsed} from '../inputs.ts'
 import {jsonOutput, log, styles} from '../log.ts'
 import {projectLyricSections} from '../music.ts'
-import {STEP_NAMES, type StepName, unplannedBeats} from '../project.ts'
-import {clipEstimate, clipFailureRisks, pictureEstimate, renderState} from '../render-state.ts'
+import {type Project, STEP_NAMES, type StepName, unplannedBeats} from '../project.ts'
+import {clipEstimate, clipFailureRisks, pictureEstimate, type RenderState, renderState} from '../render-state.ts'
+import {serverNames} from './render-steps.ts'
 import {readTimings} from '../timings.ts'
-import {existsSync} from 'node:fs'
-import {join} from 'node:path'
-import type {ProjectConfig} from '../config.ts'
+import type {ProjectConfig, RenderConfig} from '../config.ts'
 import type {ProjectStore} from '../project.ts'
 import type {Settings} from '../settings.ts'
 
@@ -40,24 +39,23 @@ export type DryRunRun = ReasonsRun & {
  * sections or clip length - along the dependencies) and the steps not generated yet, then what --render would render,
  * with the estimate from the measured timings. The renders are counted from the requests of the last plan run.
  */
+/** Whether the sections the song was heard in are no longer the ones the lyrics are tagged with - the music is heard again (#1150). */
+export const sectionsChanged = (music: Project['music'], sections: {label: string}[]) =>
+    music !== undefined && sections.length > 0 && music.sections.map(s => s.label).join('|') !== sections.map(s => s.label).join('|')
+
 /** What makes this run redo steps, with the steps each one names: --redo, changed inputs and settings, gone stems, changed sections, clip length. */
 export async function redoReasons(run: ReasonsRun): Promise<[string, StepName[]][]> {
     const {project, config, readInput, redoWhole, timelineOutdated} = run
     const changed = project.changedInputs(await projectInputs(project.dir, config))
-    const lostStems = (['stems', 'instrumentStems'] as const).filter(
-        step => project.data[step] && Object.values(project.data[step]!).some(file => !existsSync(join(project.dir, file))),
-    )
-    const labels = projectLyricSections(
+    const sections = projectLyricSections(
         await readInput('lyrics.txt'),
         project.data.music?.sections.map(s => s.label),
-    ).map(s => s.label)
-    const sectionsChanged =
-        project.data.music !== undefined && labels.length > 0 && project.data.music.sections.map(s => s.label).join('|') !== labels.join('|')
+    )
     return [
         ...(redoWhole.length ? [['--redo', redoWhole] as [string, StepName[]]] : []),
         ...changed.map(c => [`${c.name} changed`, c.steps] as [string, StepName[]]),
-        ...lostStems.map(step => [`a file of ${step} is gone`, [step]] as [string, StepName[]]),
-        ...(sectionsChanged ? [['the lyrics sections changed', ['music']] as [string, StepName[]]] : []),
+        ...lostStems(project).map(step => [`a file of ${step} is gone`, [step]] as [string, StepName[]]),
+        ...(sectionsChanged(project.data.music, sections) ? [['the lyrics sections changed', ['music']] as [string, StepName[]]] : []),
         ...(timelineOutdated ? [['the longest clip changed', ['timeline']] as [string, StepName[]]] : []),
     ]
 }
@@ -80,7 +78,6 @@ export async function dryRun(run: DryRunRun) {
         generated: missing,
         warnings: [],
     }
-    const said = (text: string) => Bun.stripANSI(text)
 
     log.section('DRY RUN - nothing is done')
     for (const [why, steps] of reasons) log.step(why, styles.muted(`redoes ${steps.join(', ')}`))
@@ -93,37 +90,56 @@ export async function dryRun(run: DryRunRun) {
     }
     if (missing.length) log.step('Generated', `${missing.map(styles.name).join(', ')} ${styles.muted('- not generated yet')}`)
 
-    if (render.has('images') || render.has('videos') || render.has('final')) {
-        const state = await renderState(project.dir, project.id, config)
-        const servers = settings.comfy.map(s => s.name)
-        const warn = (text: string) => {
-            found.warnings.push(said(text))
-            log.warn(text)
-        }
-        if (redone.length || missing.length) warn('the renders below are counted from the requests of the last plan run - the steps redone now can change them')
-        if (render.has('images')) {
-            const stale = refresh.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
-            const estimate = state.missingPictures.length ? await pictureEstimate(state.missingPictures.length, config, servers) : undefined
-            found.pictures = {count: state.missingPictures.length, estimate: estimate && said(estimate)}
-            log.step('Pictures', estimate ? `${estimate}${stale}` : styles.muted('all rendered'))
-        }
-        if (render.has('videos')) {
-            const selected = onlyClips(state.clips, only)
-            const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refresh.has('clips') && state.staleClips.includes(c)))
-            for (const risk of clipFailureRisks(readTimings(), todo, config.videoWorkflow, servers)) warn(risk)
-            const estimate = todo.length ? await clipEstimate(todo, config, servers) : undefined
-            found.clips = {ids: todo.map(c => c.id), estimate: estimate && said(estimate)}
-            log.step('Clips', estimate ? `${estimate} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}` : styles.muted('all rendered'))
-        }
-        if (render.has('final')) {
-            found.final = {missingClips: state.missingClips.length}
-            log.step(
-                'Final video',
-                state.missingClips.length
-                    ? styles.warning(`needs every clip - ${state.missingClips.length} missing`)
-                    : styles.muted('assembled from the clips'),
-            )
-        }
-    }
+    if (render.has('images') || render.has('videos') || render.has('final'))
+        await sayRenders(
+            found,
+            await renderState(project.dir, project.id, config),
+            {render, refresh, only, again: args.again},
+            {config, servers: serverNames(settings), finalLabel: 'Final video', changes: redone.length > 0 || missing.length > 0},
+        )
     if (jsonOutput()) log.json(found)
+}
+
+/** What --render asks for, as a dry run reads it. */
+export type RenderAsk = {render: Set<string>; refresh: Set<string>; only: Set<string>; again: boolean}
+
+/**
+ * What --render would render, with the estimate from the measured timings - into `found` and the log, the same for the music video
+ * and the film (#1151); `finalLabel` is how the last line names the video. `changes`: steps are redone or made, the counts can change.
+ */
+export async function sayRenders<C extends {id: string; frames: number; startsFrom?: string}>(
+    found: DryRun,
+    state: RenderState<C>,
+    ask: RenderAsk,
+    how: {config: RenderConfig; servers: string[]; finalLabel: string; changes: boolean},
+) {
+    const {render, refresh, only, again} = ask
+    const {config, servers} = how
+    const said = (text: string) => Bun.stripANSI(text)
+    const warn = (text: string) => {
+        found.warnings.push(said(text))
+        log.warn(text)
+    }
+    if (how.changes) warn('the renders below are counted from the requests of the last plan run - the steps redone now can change them')
+    if (render.has('images')) {
+        const stale = refresh.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
+        const estimate = state.missingPictures.length ? await pictureEstimate(state.missingPictures.length, config, servers) : undefined
+        found.pictures = {count: state.missingPictures.length, estimate: estimate && said(estimate)}
+        log.step('Pictures', estimate ? `${estimate}${stale}` : styles.muted('all rendered'))
+    }
+    if (render.has('videos')) {
+        const selected = onlyClips(state.clips, only)
+        const todo = selected.filter(c => again || state.missingClips.includes(c) || (refresh.has('clips') && state.staleClips.includes(c)))
+        for (const risk of clipFailureRisks(readTimings(), todo, config.videoWorkflow, servers)) warn(risk)
+        const estimate = todo.length ? await clipEstimate(todo, config, servers) : undefined
+        found.clips = {ids: todo.map(c => c.id), estimate: estimate && said(estimate)}
+        log.step('Clips', estimate ? `${estimate} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}` : styles.muted('all rendered'))
+    }
+    if (render.has('final')) {
+        found.final = {missingClips: state.missingClips.length}
+        log.step(
+            how.finalLabel,
+            state.missingClips.length ? styles.warning(`needs every clip - ${state.missingClips.length} missing`) : styles.muted('assembled from the clips'),
+        )
+    }
 }

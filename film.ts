@@ -1,16 +1,17 @@
 import {planFilmShots} from './lib/pipeline/film-shots.ts'
-import {extraArgument} from './lib/command-schema.ts'
+import {cli} from './lib/cli.ts'
 import {renderFilm} from './lib/pipeline/render-film.ts'
 import {checkPrompts} from './lib/prompt-check.ts'
 import {noProject} from './lib/usage.ts'
-import {cli} from './lib/cli.ts'
+import {extraArgument, parseArgsOptions, usageArgs} from './lib/command-schema.ts'
+import {filmCommand} from './lib/pipeline-commands.ts'
 // The short-film pipeline: a story idea or a screenplay (any language) -> screenplay, cast, locations.
 // Separate from the music-video pipeline (index.ts) - it shares the LLM client, the settings and the helpers, nothing else.
 // usage: bun film.ts <film-id> [--redo=screenplay,cast]
 import {copyFileSync, existsSync, mkdirSync, readdirSync, rmSync} from 'node:fs'
 import {join} from 'node:path'
 import {parseArgs} from 'node:util'
-import {FILM_RENDER, readRunOptions, RUN_OPTIONS} from './lib/run-options.ts'
+import {FILM_RENDER, readRunOptions} from './lib/run-options.ts'
 import {languageName} from './lib/config.ts'
 import {MAX_CLIP_SEC, maxClipFor, secondsAt} from './lib/frames.ts'
 import {buildFilmClipRequests, clipOverrides} from './lib/film/compose.ts'
@@ -23,13 +24,14 @@ import {filmPictures, filmRenderConfig, statePictureId} from './lib/film/picture
 import {takeOwnDescription} from './lib/own-picture.ts'
 import {filmRenderState} from './lib/film/render.ts'
 import {filmInputs, filmMode, filmStepUsed} from './lib/film/inputs.ts'
-import {clipEstimate, clipFailureRisks, pictureEstimate} from './lib/render-state.ts'
-import {keepTimingsIn, readTimings} from './lib/timings.ts'
+import {sayRenders} from './lib/pipeline/dry-run.ts'
+import {serverNames} from './lib/pipeline/render-steps.ts'
+import {keepTimingsIn} from './lib/timings.ts'
 import {formatSlotRanges} from './lib/assemble.ts'
 import {reviewed} from './lib/review.ts'
 import {stopAfter} from './lib/stages.ts'
 import {versionStamp} from './lib/archive.ts'
-import {onlyClips, unknownIds} from './lib/batch.ts'
+import {unknownIds} from './lib/batch.ts'
 import type {AssetKind} from './lib/asset-import.ts'
 import {applyLibraryText, castFromLibrary, copyKey} from './lib/casting.ts'
 import {libraryDir} from './lib/library.ts'
@@ -82,29 +84,18 @@ import {clipRequestsDir, clipRequestsIn, readRequests} from './lib/previous-outp
 import {messageOf} from './lib/text.ts'
 cli('film')
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--preview] [--retake=clip-007:3.2-5.0] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--debug] [--scenes=s6,s7] [--review] [--until=story|cast|look] [--dry-run [--json]] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+// the options of a film run: lib/pipeline-commands.ts
+const usage = `bun film.ts ${usageArgs(filmCommand)}
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
         return parseArgs({
             args: Bun.argv.slice(2),
             allowPositionals: true,
-            options: {
-                ...RUN_OPTIONS,
-                redo: {type: 'string', default: ''},
-                'fix-script': {type: 'boolean', default: false},
-                'allow-import-gaps': {type: 'boolean', default: false},
-                // read by failRun (lib/log.ts) from the raw arguments - declared here so parseArgs accepts it
-                debug: {type: 'boolean', default: false},
-                scenes: {type: 'string', default: ''},
-                comfy: {type: 'string'},
-                'llm-url': {type: 'string'},
-                'llm-key': {type: 'string'},
-                'llm-model': {type: 'string'},
-            },
+            options: parseArgsOptions(filmCommand.options),
         })
     } catch (e) {
-        return log.usageError(e instanceof Error ? e.message : String(e), usage)
+        return log.usageError(messageOf(e), usage)
     }
 })()
 // a word more than it takes is said before any work (#938)
@@ -115,7 +106,7 @@ const {render, refresh, only, retake, until} = (() => {
     try {
         return readRunOptions(args, FILM_RENDER, !!(process.stdin.isTTY && process.stdout.isTTY), positionals[0])
     } catch (e) {
-        return log.usageError((e as Error).message, usage)
+        return log.usageError(messageOf(e), usage)
     }
 })()
 if (until && (render.size || args.retake || args['dry-run']))
@@ -363,9 +354,7 @@ try {
         scriptNotes = await film.step('scriptNotes', `3c · READING THE REPAIRED SCRIPT (round ${round + 1})`, readScript)
     }
 } catch (e) {
-    log.warn(
-        `the script could not be checked for contradictions (${e instanceof Error ? e.message : String(e)}) - the film goes on without; --redo=scriptNotes tries again`,
-    )
+    log.warn(`the script could not be checked for contradictions (${messageOf(e)}) - the film goes on without; --redo=scriptNotes tries again`)
 }
 for (const note of scriptNotes) log.warn(`script: ${note}`)
 if (scriptNotes.length)
@@ -780,32 +769,12 @@ async function dryRun() {
 
     if (render.has('images') || render.has('videos') || render.has('final')) {
         const renderConfig = filmRenderConfig(config)
-        const state = await filmRenderState(film.dir, film.id, renderConfig)
-        const servers = settings.comfy.map(s => s.name)
-        if (redone.length || missing.length) warn('the renders below are counted from the requests of the last plan run - the steps redone now can change them')
-        if (render.has('images')) {
-            const stale = refresh.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
-            const estimate = state.missingPictures.length ? await pictureEstimate(state.missingPictures.length, renderConfig, servers) : undefined
-            found.pictures = {count: state.missingPictures.length, estimate: estimate && said(estimate)}
-            log.step('Pictures', estimate ? `${estimate}${stale}` : styles.muted('all rendered'))
-        }
-        if (render.has('videos')) {
-            const selected = onlyClips(state.clips, only)
-            const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refresh.has('clips') && state.staleClips.includes(c)))
-            for (const risk of clipFailureRisks(readTimings(), todo, renderConfig.videoWorkflow, servers)) warn(risk)
-            const estimate = todo.length ? await clipEstimate(todo, renderConfig, servers) : undefined
-            found.clips = {ids: todo.map(c => c.id), estimate: estimate && said(estimate)}
-            log.step('Clips', estimate ? `${estimate} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}` : styles.muted('all rendered'))
-        }
-        if (render.has('final')) {
-            found.final = {missingClips: state.missingClips.length}
-            log.step(
-                'Film',
-                state.missingClips.length
-                    ? styles.warning(`needs every clip - ${state.missingClips.length} missing`)
-                    : styles.muted('assembled from the clips'),
-            )
-        }
+        await sayRenders(
+            found,
+            await filmRenderState(film.dir, film.id, renderConfig),
+            {render, refresh, only, again: args.again},
+            {config: renderConfig, servers: serverNames(settings), finalLabel: 'Film', changes: redone.length > 0 || missing.length > 0},
+        )
     }
     if (jsonOutput()) log.json(found)
 }

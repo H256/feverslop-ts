@@ -20,7 +20,7 @@ export type OptionSpec = Common &
          * a text: `shown` is what the usage line gives as its value, `pattern` what the workspace's server lets through.
          * `emptyMeans`: an empty value is a value of its own and is passed on as `--name=` (the intro without a file: the one of the project)
          */
-        | {kind: 'text'; shown: string; pattern?: RegExp; emptyMeans?: string}
+        | {kind: 'text'; shown: string; pattern?: RegExp; emptyMeans?: string; default?: string}
         | {kind: 'number'; shown: string}
         | {kind: 'choice'; choices: readonly string[]}
         /** on, off or not said: --name / --no-name - a request's true or false, undefined leaves it to the settings */
@@ -44,6 +44,26 @@ export type CommandSchema = {
 }
 
 export class UsageError extends Error {}
+
+type ParseArgsOption<S extends OptionSpec> = S extends {kind: 'flag'}
+    ? {type: 'boolean'; default: false}
+    : S extends {default: string}
+      ? {type: 'string'; default: string}
+      : {type: 'string'}
+
+/**
+ * The options of a schema for node's parseArgs, for a tool that reads its values as one object (index.ts, film.ts): a flag is false
+ * unless given, a text its `default` - or undefined without one. Flags and texts only.
+ */
+export function parseArgsOptions<O extends Record<string, OptionSpec>>(options: O): {[K in keyof O]: ParseArgsOption<O[K]>} {
+    return Object.fromEntries(
+        Object.entries(options).map(([name, spec]) => {
+            if (spec.kind === 'flag') return [name, {type: 'boolean', default: false}]
+            if (spec.kind !== 'text') throw new Error(`--${name}: parseArgsOptions takes flags and texts`)
+            return [name, spec.default === undefined ? {type: 'string'} : {type: 'string', default: spec.default}]
+        }),
+    ) as {[K in keyof O]: ParseArgsOption<O[K]>}
+}
 
 /**
  * What is given after the arguments a command takes (#938): said as a usage error before any work - a word meant as an option (a
