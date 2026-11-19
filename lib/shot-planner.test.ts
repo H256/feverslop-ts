@@ -447,10 +447,18 @@ describe('the rules a beat needs (#825)', () => {
             'a shot whose picture shows the instrument has them at it',
             // zz-stille-261118 slot-007: "facing the proscenium wall" put the pianist at the back of the piano
             'their "frame" says how the camera sees them there',
+            // tides-261115 slot-028: "near the door wall, looking up at the stage" drew the crowd on the stage around the band
+            'from behind the crowd, over their heads toward the stage',
             // and the band came out big in front of the crowd it was seen over: each frame says how near
             'how near: in front, in the middle or small at the back of the picture',
         ])
             expect(instructions).toContain(rule)
+    })
+    // stille-im-spiegel 037/038: a guitar in one hand and the other on a friend's shoulder - the player drawn twice, or with three hands
+    test('the hands do one thing: who plays touches nobody, who touches has the prop out of the hands', () => {
+        expect(planInstructions).toContain(
+            'Their hands do one thing at a time: whoever plays or uses their prop in a shot touches nobody and nothing else with those hands',
+        )
     })
     // tides-261115: in the guitar solo Kael stood with his head bowed, "a slow, gentle pull across the strings", Sera in front
     test('a shot where somebody leads is about them, their whole body playing the part', () => {
