@@ -449,6 +449,12 @@ describe('the rules a beat needs (#825)', () => {
         ])
             expect(instructions).toContain(rule)
     })
+    // stille-im-spiegel 037/038: a guitar in one hand and the other on a friend's shoulder - the player drawn twice, or with three hands
+    test('the hands do one thing: who plays touches nobody, who touches has the prop out of the hands', () => {
+        expect(planInstructions).toContain(
+            'Their hands do one thing at a time: whoever plays or uses their prop in a shot touches nobody and nothing else with those hands',
+        )
+    })
     // tides-261115: in the guitar solo Kael stood with his head bowed, "a slow, gentle pull across the strings", Sera in front
     test('a shot where somebody leads is about them, their whole body playing the part', () => {
         // in the way of the song's genre, not of a rock guitar only
