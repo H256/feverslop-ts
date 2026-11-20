@@ -1,5 +1,5 @@
 import {existsSync, mkdirSync} from 'node:fs'
-import {dirname, join} from 'node:path'
+import {basename, dirname, extname, join} from 'node:path'
 import {resolveSeed, type PixelSize} from '../../comfy/helpers.ts'
 import h3StartFrame from '../../comfy/workflows/h3-startframe.ts'
 import {pictureAsset} from '../compose.ts'
@@ -7,7 +7,7 @@ import {log, styles} from '../log.ts'
 import {fileFingerprint} from '../provenance.ts'
 import {type RenderSpec, specId} from '../render-spec.ts'
 import type {Renderer} from '../render.ts'
-import {CHARACTER_SHEET_VIEWS, sequenceSheetDir, sheetFrame} from '../sequenceSheet.ts'
+import {CHARACTER_SHEET_VIEWS, sequenceSheetDir, sheetFrame, sheetLayout} from '../sequenceSheet.ts'
 import {START_PICTURE_MEGAPIXELS, type StartFrameRequest, type StartPicture} from '../startframe-prompt.ts'
 
 // The start pictures of the shots (#1187, lib/startframe-prompt.ts): one MiniMax H3-Image still per shot, in startframes/, made
@@ -17,6 +17,8 @@ export const START_FRAME_WORKFLOW = 'h3-startframe'
 export const startFrameFile = (clip: string, shot: number) => `startframes/${clip}-shot${shot + 1}.png`
 // the reference pictures as the start pictures take them (see startReference), made from the project's own pictures
 const REFS = 'startframes/refs'
+// a character sheet's top row as a share of its width: two panels of 288x512 (sheetLayout)
+const SHEET_ROW = (sheetLayout('character').panel.height / (2 * sheetLayout('character').panel.width)).toFixed(4)
 
 /** The size of a start picture: the area the picture model draws well (about 2.4 MP) in the video's aspect, on its 32 px grid. */
 export function startFrameSize(aspect: `${number}:${number}`): PixelSize {
@@ -37,7 +39,8 @@ export function startFrameSize(aspect: `${number}:${number}`): PixelSize {
  */
 /**
  * What a reference picture costs the text encoder, in megapixels after its 1024 px short edge - as startReference will make it:
- * a turnaround grid (2x 704x1248) 1.86, a character sheet without one (576x1536) 2.73, a place frame (16:9) 1.82, a prop's square 1.
+ * a turnaround grid (2x 704x1248) 1.86, the top row of a character sheet without one (576x512) 1.18, a place frame (16:9) 1.82, a
+ * prop's square 1.
  */
 export const startPictureMegapixels =
     (projectDir: string) =>
@@ -46,11 +49,11 @@ export const startPictureMegapixels =
         if (picture.kind === 'location') return 1.82
         const turnaround =
             picture.file === pictureAsset('character', picture.id) && existsSync(join(projectDir, sheetFrame(sequenceSheetDir('character', picture.id), 0)))
-        return turnaround ? 1.86 : 2.73
+        return turnaround ? 1.86 : 1.18
     }
 
 export async function startReference(projectDir: string, picture: StartPicture): Promise<string> {
-    const target = `${REFS}/${picture.kind}-${picture.id}.png`
+    const target = `${REFS}/${picture.kind}-${basename(picture.file, extname(picture.file))}.png`
     if (picture.kind === 'location') return picture.file
     // only the character's own sheet: another look of it, or a member of a group, is not what the turnaround shows
     const own = picture.file === pictureAsset('character', picture.id)
@@ -60,15 +63,21 @@ export async function startReference(projectDir: string, picture: StartPicture):
                   sheetFrame(sequenceSheetDir('character', picture.id), n),
               )
             : []
-    if (picture.kind === 'character' && !own) return picture.file
-    const sources = picture.kind === 'character' ? frames : [picture.file]
+    // without a turnaround (another look, a member of a group): the top row of its sheet - the full figure from the front and the face
+    const sheetOnly = picture.kind === 'character' && (!own || !frames.every(file => existsSync(join(projectDir, file))))
+    const sources = picture.kind === 'character' && !sheetOnly ? frames : [picture.file]
     if (!sources.every(file => existsSync(join(projectDir, file)))) return picture.file
     // made again when one of its sources changed: their fingerprints are in its name's sidecar
     const made = join(projectDir, target)
     const from = sources.map(file => fileFingerprint(join(projectDir, file))).join(',')
     if (existsSync(made) && existsSync(`${made}.json`) && ((await Bun.file(`${made}.json`).json()) as {from?: string}).from === from) return target
     mkdirSync(dirname(made), {recursive: true})
-    const filter = picture.kind === 'character' ? '[0][1]hstack[top];[2][3]hstack[bottom];[top][bottom]vstack' : "crop='min(iw,ih)':'min(iw,ih)'"
+    const filter =
+        picture.kind === 'character' && !sheetOnly
+            ? '[0][1]hstack[top];[2][3]hstack[bottom];[top][bottom]vstack'
+            : sheetOnly
+              ? `crop=iw:'min(ih,iw*${SHEET_ROW})':0:0`
+              : "crop='min(iw,ih)':'min(iw,ih)'"
     const proc = Bun.spawn(
         [
             'ffmpeg',

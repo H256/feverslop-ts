@@ -30,10 +30,12 @@ test('a character with a turnaround goes in as a 2x2 grid of its face, front, pr
     expect(await size(grid)).toBe('128x224')
     const square = await startReference(dir, {kind: 'prop', id: 'guitar', file: 'assets/props/guitar.png', label: '<Picture 3>'})
     expect(await size(square)).toBe('90x90')
-    // without a turnaround, another look of a character and the place: the picture as it is
-    expect(await startReference(dir, {kind: 'character', id: 'kael', file: 'assets/characters/kael.png', label: ''})).toBe('assets/characters/kael.png')
-    expect(await startReference(dir, {kind: 'character', id: 'maren', file: 'assets/characters/maren-wounded.png', label: ''})).toBe(
-        'assets/characters/maren-wounded.png',
-    )
+    // without a turnaround, and another look of a character: the top row of its sheet (front and face); the place as it is
+    const kael = await startReference(dir, {kind: 'character', id: 'kael', file: 'assets/characters/kael.png', label: ''})
+    expect(kael).toBe('startframes/refs/character-kael.png')
+    expect(await size(kael)).toBe('32x28')
+    const wounded = await startReference(dir, {kind: 'character', id: 'maren', file: 'assets/characters/maren-wounded.png', label: ''})
+    expect(wounded).toBe('startframes/refs/character-maren-wounded.png')
+    expect(await size(wounded)).toBe('32x28')
     expect(await startReference(dir, {kind: 'location', id: 'hall', file: 'assets/locations/hall.png', label: ''})).toBe('assets/locations/hall.png')
 })
