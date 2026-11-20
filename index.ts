@@ -127,7 +127,7 @@ if (!redoSteps.length && (only.size || retake)) {
         only: [...only],
         retake: retake?.clip,
         pictures: render.has('images'),
-        clips: render.has('videos') || render.has('final'),
+        clips: render.has('videos') || render.has('final') || render.has('startframes'),
     })
     if (wrong) log.usageError(wrong, usage)
 }
@@ -687,7 +687,7 @@ const {clipSlots, mapping, locationView, directedPlan, shotViews} = await planSh
 })
 
 // the requests: one per clip, built from the plan on every run, written to output/ (lib/pipeline/requests.ts)
-const {clips, outputDir, pictures} = await buildRequests({
+const {clips, outputDir, pictures, startFrames} = await buildRequests({
     project,
     config,
     args,
@@ -728,6 +728,7 @@ await renderAndAssemble({
     retake,
     clips,
     pictures,
+    startFrames,
     stemFiles,
     songFile,
     exportFormats,

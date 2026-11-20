@@ -399,7 +399,7 @@ export class Renderer implements Disposable {
         return serversWork.freeMemory(this)
     }
 
-    staleFile(kind: 'pictures' | 'clips', file: string, current: string, away: string[]): boolean {
+    staleFile(kind: 'pictures' | 'clips' | 'startframes', file: string, current: string, away: string[]): boolean {
         return picturesWork.staleFile(this, kind, file, current, away)
     }
 

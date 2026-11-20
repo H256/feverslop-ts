@@ -27,9 +27,18 @@ test('what is rendered: "all" is pictures, clips and the final video; a music vi
     expect([...read({render: 'all'}).render]).toEqual(['images', 'videos', 'final'])
     expect([...read({render: 'song,videos'}).render]).toEqual(['song', 'videos'])
     expect(() => read({render: 'song'}, FILM_RENDER)).toThrow('--render: unknown "song" - use images, videos, final or all')
-    expect(() => read({render: 'movie'})).toThrow('use song, images, videos, final or all')
+    expect(() => read({render: 'movie'})).toThrow('use song, images, startframes, videos, final or all')
     expect([...read({refresh: 'pictures,clips'}).refresh]).toEqual(['pictures', 'clips'])
-    expect(() => read({refresh: 'films'}, FILM_RENDER)).toThrow('--refresh: unknown "films" - use images, videos (or pictures, clips)')
+    expect(() => read({refresh: 'films'}, FILM_RENDER)).toThrow('--refresh: unknown "films" - use images, startframes, videos (or pictures, clips)')
+})
+
+// #1187: the start pictures of the shots are asked for by name - never part of "all", rendered again and refreshed like the others
+test('the start pictures: by name only, with --only, --again and --refresh', () => {
+    expect([...read({render: 'startframes', only: 'slot-028'}).render]).toEqual(['startframes'])
+    expect([...read({render: 'all'}).render]).not.toContain('startframes')
+    expect([...read({render: 'startframes', again: true, only: 'slot-028'}).render]).toEqual(['startframes'])
+    expect([...read({refresh: 'startframes'}).refresh]).toEqual(['startframes'])
+    expect(() => read({render: 'startframes'}, FILM_RENDER)).toThrow('--render: unknown "startframes"')
 })
 
 // #937: --render said images and videos, --refresh pictures and clips - each takes both words, and means the same as before
@@ -41,7 +50,7 @@ test('the words of what is rendered: images and pictures, videos and clips, are 
 })
 
 test('how the options go together', () => {
-    expect(() => read({again: true, only: 'slot-001'})).toThrow('--again goes with --render=videos or --render=images')
+    expect(() => read({again: true, only: 'slot-001'})).toThrow('--again goes with --render=videos, --render=images or --render=startframes')
     expect(() => read({again: true, render: 'videos'})).toThrow('--again needs --only=slot-001,...')
     expect(() => read({again: true, render: 'videos'}, FILM_RENDER)).toThrow('--again needs --only=clip-005,...')
     expect(() => read({preview: true})).toThrow('--preview goes with --render=videos or --render=final')

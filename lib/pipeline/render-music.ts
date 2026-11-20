@@ -10,6 +10,9 @@ import {finishOf} from '../finish.ts'
 import {FPS, secondsAt} from '../frames.ts'
 import {log, styles} from '../log.ts'
 import {type PictureAsk, renderPictures} from './pictures.ts'
+import {renderStartFrame, startFrameFile, startFrameSize} from '../render/startframes.ts'
+import type {StartFrameRequest} from '../startframe-prompt.ts'
+import {archiveFiles} from '../archive.ts'
 import {sayStaleClips, serverNames, startRenderer} from './render-steps.ts'
 import {archiveClip, archivePreview} from '../film/archive.ts'
 import type {ProjectStore} from '../project.ts'
@@ -38,15 +41,16 @@ export type MusicRenderRun = {
     retake?: RetakeAsk
     clips: ClipRequest[]
     pictures: PictureJob[]
+    startFrames: StartFrameRequest[]
     stemFiles: Record<string, string>
     songFile: string
     exportFormats: string[]
 }
 
 export async function renderAndAssemble(run: MusicRenderRun) {
-    const {project, config, settings, args, render, refresh, only, retake, clips, pictures, stemFiles, songFile, exportFormats} = run
+    const {project, config, settings, args, render, refresh, only, retake, clips, pictures, startFrames, stemFiles, songFile, exportFormats} = run
     ////////// RENDERING WITH COMFYUI
-    if (render.has('images') || render.has('videos') || retake) {
+    if (render.has('images') || render.has('startframes') || render.has('videos') || retake) {
         using renderer = new Renderer(project.id, project.dir, config, settings.comfy)
         log.section('13 · RENDERING WITH COMFYUI')
         log.step(
@@ -65,9 +69,24 @@ export async function renderAndAssemble(run: MusicRenderRun) {
 
         // everything at once - the renderer runs one job per server and queues the rest
         if (render.has('images')) await renderPictures(renderer, pictures, {dir: project.dir, config, servers: serverNames(settings), render, only, args})
+        // the start pictures of the shots (#1187): drawn from the pictures, so after them - and before the clips
+        if (render.has('startframes')) {
+            if (render.has('images')) await renderer.freeMemory()
+            const selected = only.size ? startFrames.filter(s => only.has(s.clip)) : startFrames
+            log.step('Start pictures', `${selected.length}${only.size ? styles.muted(` of ${startFrames.length} (--only)`) : ''}`)
+            if (args.again) {
+                const stamp = versionStamp()
+                for (const s of selected) {
+                    const file = startFrameFile(s.clip, s.shot)
+                    if (existsSync(join(project.dir, file))) archiveFiles(project.dir, `again-${stamp}-${file.replace(/[\/]/g, '-')}`, [file, `${file}.json`])
+                }
+            }
+            const size = startFrameSize(config.videoAspect)
+            await Promise.all(selected.map(s => renderStartFrame(renderer, s, size)))
+        }
         // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
         if (render.has('videos')) {
-            if (render.has('images')) await renderer.freeMemory()
+            if (render.has('images') || render.has('startframes')) await renderer.freeMemory()
             const selected = onlyClips(clips, only)
             log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${clips.length} (--only)`) : ''}`)
             // on request, and only for the clips named: the old version is put away in old/attempts/, then the clip is rendered again

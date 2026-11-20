@@ -1680,7 +1680,7 @@ function continueWith(moment: string) {
 }
 
 // the guide wants one or two style sentences before [Shot 1]
-function styleOpening(lookBrief: string) {
+export function styleOpening(lookBrief: string) {
     // only the first sentence: the second describes the world of every location - the video model draws the kitchen into the attic
     return splitSentences(lookBrief).slice(0, 1).join(' ')
 }

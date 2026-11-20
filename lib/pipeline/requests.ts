@@ -1,5 +1,8 @@
 import {formatSlotRanges} from '../assemble.ts'
-import {buildClipRequests} from '../compose.ts'
+import {buildClipRequests, styleOpening} from '../compose.ts'
+import {placeOf} from '../shot-planner.ts'
+import {startFrameRequests} from '../startframe-prompt.ts'
+import {startPictureMegapixels} from '../render/startframes.ts'
 import {formatTime, frameAt, secondsAt} from '../frames.ts'
 import {hideDetails, log, showsDetails, styles} from '../log.ts'
 import {cutAudio, mixStems} from '../music.ts'
@@ -252,5 +255,17 @@ export async function buildRequests(run: RequestsRun) {
                 )
         }
     }
-    return {clips, outputDir, pictures}
+    // the start pictures of the shots (#1187): rendered only with --render=startframes, built here from the same plan as the clips
+    const startFrames = clips.flatMap(clip => {
+        const place = clip.assets.pictures.find(p => p.kind === 'location')?.id
+        const set = place ? placeOf(place, cast.locations, locationDescriptions, locationLayouts, cast.characters).set : undefined
+        return startFrameRequests({
+            clip,
+            characters: cast.characters,
+            megapixels: startPictureMegapixels(project.dir),
+            look: styleOpening(lookBrief),
+            ...(set ? {set: {stage: set.stage, spots: set.spots ?? {}}} : {}),
+        })
+    })
+    return {clips, outputDir, pictures, startFrames}
 }

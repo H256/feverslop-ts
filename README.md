@@ -507,7 +507,17 @@ bun index.ts --render=videos                    # MiniMax H3 clips -> videos/
 bun index.ts --render=final                     # assemble <project-id>.mp4 from the rendered clips
 bun index.ts --render=videos --only=slot-001    # just some clips, to try things out
 bun index.ts --render=videos --only=slot-005 --again   # slot-005 once more, with a new seed - the old one is kept
+bun index.ts --render=startframes --only=slot-028      # the start picture of each shot of slot-028 -> startframes/
 ```
+
+- `startframes` (#1187, asked for by name, not part of `all`): one still per shot, drawn by MiniMax H3-Image
+  (`h3-startframe`) from the clip's own reference pictures and the shot plan - where the camera is, who stands where and
+  faces which way, who sings. It is the blocking as a picture, to look at before the GPU time of the clips: a crowd with
+  its back to the camera and the band small beyond it, each person once. Only the pictures of the shot's people, their
+  props and the place go in; a character with a turnaround goes in as a 2x2 grid of its face, front, profile and back
+  (`startframes/refs/`), a prop as the middle square of its picture - the picture model scales every reference picture to
+  a 1024 px short edge, so a tall sheet costs many tokens and its small faces break. About 6 minutes a picture on a 32 GB
+  Radeon, 2-3 on a 5090. The clips do not use them yet.
 
 - `all` is images, videos and final - never the song: `--render=song` makes a new one and is asked for by name.
 - In short: `--render` renders what is **missing**, a **stale** one stays until `--refresh`, and `--again` renders the ones
@@ -719,6 +729,7 @@ connection before anything is rendered. The same SDK runs the jobs: uploads, pro
 | `kroma-image`   | image | `kroma.json` (default)                              |
 | `krea2-image`   | image | `image_t2i_startframe_krea_v1.json`                |
 | `h3-image`      | image | `image_minimax_h3_image_t2i.json`, without its prompt enhancer - our prompts go in as they are; 6 steps euler/simple, 2 MP by default (`imageResolution`): `"imageWorkflow": "h3-image"` |
+| `h3-startframe` | start picture | the same model with reference pictures (`MiniMaxH3ImageConditioning` with `<Picture N>`), the text encoder unloaded before sampling (`VRAMCleanup`); used by `--render=startframes` (#1187), not a setting |
 | `h3-ref2video`  | video | `r2v_audio_fullmix_guide_1-pass_turbo.json`        |
 | `h3-ref2video-full` | video | `h3-ref2video` without the turbo LoRA, as the non-turbo branch of ComfyUI's template `video_minimax_h3_r2v`: res_multistep, simple, 20 steps, no shift - about 2.5× the sampling time, more detail for people far from the camera: `"videoWorkflow": "h3-ref2video-full"` |
 | `h3-ref2video-2pass` | video | two passes: the base model for 20 steps at a quarter of the final pixels, the video latent x2 with `MinimaxH3LatentUpscaler3D` (`minimax_h3_latent_upscaler_3d_bf16`), then the base model again for 4 steps (euler/beta, denoise 0.2, noise seed + 1, no turbo LoRA - it left a crosshatch on skin) at the final size, song and first frame anchored again on the large latent. `videoResolution` is the final size (`-1` = 2 MP, pass 1 at 0.5 MP): `"videoWorkflow": "h3-ref2video-2pass"` |

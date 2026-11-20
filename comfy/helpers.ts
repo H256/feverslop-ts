@@ -59,6 +59,17 @@ export type ImageWorkflowOptions = {
 }
 export type ImageWorkflow = (opts: ImageWorkflowOptions) => WorkflowResult
 
+// The start picture of a shot (#1187, lib/startframe-prompt.ts): a still drawn from the clip's reference pictures, in
+// <Picture N> order, at the size of the video
+export type StartFrameWorkflowOptions = {
+    prompt: string
+    seed: number
+    pictures: string[] // ComfyUI input names in <Picture N> order
+    size: PixelSize
+    filenamePrefix: string
+}
+export type StartFrameWorkflow = (opts: StartFrameWorkflowOptions) => WorkflowResult
+
 export type AudioWorkflowOptions = {
     style: string // musical style/genre/instrumentation caption
     lyrics: string // full lyrics with [Section] tags, sung words only

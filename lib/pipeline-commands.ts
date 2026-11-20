@@ -16,8 +16,11 @@ const flag = (help: string) => ({kind: 'flag', help}) as const
 const runOptions = (clip: string, render: {shown: string; help: string}, json: string) =>
     ({
         render: text(render.shown, render.help),
-        only: text(`${clip},…`, 'Only these clips or pictures (with --render=videos, final or images); try one before all - every clip is GPU time'),
-        again: flag('Render the clips or pictures in --only once more with a new seed; the old version is kept. Needs --render=videos or images'),
+        only: text(
+            `${clip},…`,
+            'Only these clips or pictures (with --render=videos, final, startframes or images); try one before all - every clip is GPU time',
+        ),
+        again: flag('Render the clips or pictures in --only once more with a new seed; the old version is kept. Needs --render=videos, startframes or images'),
         'new-anchor': flag('With --render=images --again: a reference sheet gets a new anchor too - another person or place, not only other views'),
         'picture-prompt': text('FILE', 'With --render=images --only=ID --again: render this one picture from the words in FILE and keep it (pinned)'),
         'picture-anchor': text(
@@ -66,8 +69,8 @@ export const planCommand = {
         ...runOptions(
             'slot-001',
             {
-                shown: 'song,images,videos,final|all',
-                help: 'Also render: the song, the pictures, the clips, the final video. all = images, videos and final - never the song: --render=song makes a new one and is asked for by name',
+                shown: 'song,images,startframes,videos,final|all',
+                help: 'Also render: the song, the pictures, the start pictures of the shots, the clips, the final video. all = images, videos and final - never the song: --render=song makes a new one and is asked for by name; nor the start pictures: --render=startframes',
             },
             'With --dry-run: what it would do as JSON - the reasons, the steps made again, the beats planned again, the renders',
         ),

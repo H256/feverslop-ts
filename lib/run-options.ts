@@ -30,7 +30,7 @@ export type RunOptionValues = {
  * the examples of the messages.
  */
 export type Renderable = {kinds: readonly string[]; clip: string; command: string}
-export const MUSIC_RENDER: Renderable = {kinds: ['song', 'images', 'videos', 'final'], clip: 'slot-001', command: 'bun index.ts'}
+export const MUSIC_RENDER: Renderable = {kinds: ['song', 'images', 'startframes', 'videos', 'final'], clip: 'slot-001', command: 'bun index.ts'}
 export const FILM_RENDER: Renderable = {kinds: ['images', 'videos', 'final'], clip: 'clip-005', command: 'bun film.ts'}
 
 /**
@@ -38,7 +38,13 @@ export const FILM_RENDER: Renderable = {kinds: ['images', 'videos', 'final'], cl
  * now. Inside, a render is images/videos and a refresh pictures/clips, as before.
  */
 const RENDER_WORD: Record<string, string> = {pictures: 'images', clips: 'videos'}
-const REFRESH_WORD: Record<string, 'pictures' | 'clips'> = {pictures: 'pictures', images: 'pictures', clips: 'clips', videos: 'clips'}
+const REFRESH_WORD: Record<string, 'pictures' | 'clips' | 'startframes'> = {
+    pictures: 'pictures',
+    images: 'pictures',
+    clips: 'clips',
+    videos: 'clips',
+    startframes: 'startframes',
+}
 
 /** The steps take --only and --refresh from here, never from the raw strings: one reading of each (#1148). */
 export type RunOptions = {render: Set<string>; refresh: Set<string>; only: Set<string>; retake?: RetakeAsk; until?: UntilStage}
@@ -60,11 +66,13 @@ export function readRunOptions(args: RunOptionValues, renderable: Renderable, in
     // --refresh=images,videos (or pictures,clips) renders what was made from another request than the plan has now (lib/provenance.ts) again
     const refreshWords = args.refresh.split(',').filter(Boolean)
     const unknownRefresh = refreshWords.filter(k => !REFRESH_WORD[k])
-    if (unknownRefresh.length) throw new Error(`--refresh: unknown "${unknownRefresh.join(', ')}" - use images, videos (or pictures, clips)`)
+    if (unknownRefresh.length) throw new Error(`--refresh: unknown "${unknownRefresh.join(', ')}" - use images, startframes, videos (or pictures, clips)`)
     const refresh = new Set(refreshWords.map(k => REFRESH_WORD[k]!))
     // --again renders the ones named in --only once more, with a new seed - the old version is put away in old/attempts/, never overwritten
-    if (args.again && !render.has('videos') && !render.has('images'))
-        throw new Error('--again goes with --render=videos or --render=images: it renders the clips or pictures named in --only again, with a new seed')
+    if (args.again && !render.has('videos') && !render.has('images') && !render.has('startframes'))
+        throw new Error(
+            '--again goes with --render=videos, --render=images or --render=startframes: it renders the clips, pictures or start pictures named in --only again, with a new seed',
+        )
     // --preview: cheap renders into previews/ that never replace a clip (config.json "preview"), or the video of the whole thing made of them
     if (args.preview && !render.has('videos') && !render.has('final')) throw new Error('--preview goes with --render=videos or --render=final')
     if (args.preview && render.has('videos') && render.has('final'))

@@ -26,7 +26,7 @@ import {type Renderer, EXTRA_VIEW_FRAMES, loadWorkflow, type PictureJob, sheetPl
  * An existing file made from another request than the one planned now (see lib/provenance.ts): said, and with
  * --refresh=<kind> put away in old/attempts and rendered again. True when the file has to be rendered again.
  */
-export function staleFile(r: Renderer, kind: 'pictures' | 'clips', file: string, current: string, away: string[]): boolean {
+export function staleFile(r: Renderer, kind: 'pictures' | 'clips' | 'startframes', file: string, current: string, away: string[]): boolean {
     if (kind === 'clips' && incompleteClip(join(r.projectDir, file))) {
         const keep = archiveFiles(r.projectDir, `stale-${versionStamp()}-${file.replace(/[\/]/g, '-')}`, away)
         log.warn(`${file} has no readable sidecar; incomplete take kept in ${keep}, rendering again. Own videos need a sidecar with source: "user"`)

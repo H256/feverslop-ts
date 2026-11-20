@@ -33,6 +33,9 @@ function beatTimestamps(totalShots: number, frames: number): number[] {
     return Array.from({length: totalShots}, (_, i) => i * step)
 }
 
+/** The frames of a character's turnaround (frames/frame_0N.png), in the order characterViews asks the video for them. */
+export const CHARACTER_SHEET_VIEWS = {front: 0, face: 1, left: 2, right: 3, rear: 4, expression: 5} as const
+
 /**
  * Six locked-off hard-cut views of one character from its hero image: full-body front, face close-up, left
  * profile, right profile, rear, and a medium close-up with one expression change on the last beat (expressionFor) (every
