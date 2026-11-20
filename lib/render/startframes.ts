@@ -44,24 +44,25 @@ export function startFrameSize(aspect: `${number}:${number}`): PixelSize {
  */
 export const startPictureMegapixels =
     (projectDir: string) =>
-    (picture: {kind: string; id: string; file: string}): number => {
+    (picture: {kind: string; id: string; file: string; small?: true}): number => {
         if (picture.kind === 'prop') return 1
         if (picture.kind === 'location') return 1.82
         const turnaround =
             picture.file === pictureAsset('character', picture.id) && existsSync(join(projectDir, sheetFrame(sequenceSheetDir('character', picture.id), 0)))
-        return turnaround ? 1.86 : 1.18
+        return turnaround ? (picture.small ? 1.4 : 1.86) : 1.18
     }
 
 export async function startReference(projectDir: string, picture: StartPicture): Promise<string> {
-    const target = `${REFS}/${picture.kind}-${basename(picture.file, extname(picture.file))}.png`
+    const target = `${REFS}/${picture.kind}-${basename(picture.file, extname(picture.file))}${picture.small ? '-front' : ''}.png`
     if (picture.kind === 'location') return picture.file
     // only the character's own sheet: another look of it, or a member of a group, is not what the turnaround shows
     const own = picture.file === pictureAsset('character', picture.id)
     const frames =
         picture.kind === 'character' && own
-            ? [CHARACTER_SHEET_VIEWS.face, CHARACTER_SHEET_VIEWS.front, CHARACTER_SHEET_VIEWS.left, CHARACTER_SHEET_VIEWS.rear].map(n =>
-                  sheetFrame(sequenceSheetDir('character', picture.id), n),
-              )
+            ? (picture.small
+                  ? [CHARACTER_SHEET_VIEWS.front]
+                  : [CHARACTER_SHEET_VIEWS.face, CHARACTER_SHEET_VIEWS.front, CHARACTER_SHEET_VIEWS.left, CHARACTER_SHEET_VIEWS.rear]
+              ).map(n => sheetFrame(sequenceSheetDir('character', picture.id), n))
             : []
     // without a turnaround (another look, a member of a group): the top row of its sheet - the full figure from the front and the face
     const sheetOnly = picture.kind === 'character' && (!own || !frames.every(file => existsSync(join(projectDir, file))))
@@ -74,7 +75,9 @@ export async function startReference(projectDir: string, picture: StartPicture):
     mkdirSync(dirname(made), {recursive: true})
     const filter =
         picture.kind === 'character' && !sheetOnly
-            ? '[0][1]hstack[top];[2][3]hstack[bottom];[top][bottom]vstack'
+            ? picture.small
+                ? "crop=iw:'min(ih,iw*4/3)':0:0"
+                : '[0][1]hstack[top];[2][3]hstack[bottom];[top][bottom]vstack'
             : sheetOnly
               ? `crop=iw:'min(ih,iw*${SHEET_ROW})':0:0`
               : "crop='min(iw,ih)':'min(iw,ih)'"

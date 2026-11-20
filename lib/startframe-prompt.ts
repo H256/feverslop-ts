@@ -13,7 +13,8 @@ import type {Character, LocationSet, ShotPlan} from './project.ts'
 import {replaceTokens} from './refs.ts'
 
 /** A reference picture of a start picture: which picture of the clip it is and what the prompt calls it. */
-export type StartPicture = {kind: 'location' | 'character' | 'prop'; id: string; file: string; label: string}
+// small: a person small in a wide shot - the front view alone does (lib/render/startframes.ts)
+export type StartPicture = {kind: 'location' | 'character' | 'prop'; id: string; file: string; label: string; small?: true}
 export type StartFrameRequest = {clip: string; shot: number; at: number; prompt: string; pictures: StartPicture[]; megapixels: number}
 
 type Shot = ClipRequest['shots'][number] & {plan?: ShotPlan}
@@ -64,9 +65,12 @@ function startFrameOf(input: Input, shot: Shot, n: number): StartFrameRequest | 
         const picture = character.prop ? all.find(p => p.kind === 'prop' && p.name === character.prop) : undefined
         return picture ? [{owner: character.id, picture}] : []
     })
+    // in a wide shot everybody is small: the front view is enough, and with the whole band and a crowd the grids are too much
+    const small = plan.size === 'wide'
     // over the budget the last props are left out, until it fits or none is left
     const cost = input.megapixels ?? roughly
-    const of = (kind: StartPicture['kind'], p: {id: string; file: string}) => cost({kind, id: p.id, file: p.file})
+    const of = (kind: StartPicture['kind'], p: {id: string; file: string}) =>
+        cost({kind, id: p.id, file: p.file, ...(small && kind === 'character' ? {small: true as const} : {})})
     let total = (location ? of('location', location) : 0) + cast.reduce((sum, c) => sum + of('character', c.picture), 0)
     const taken = props.filter(prop => {
         const more = of('prop', prop.picture)
@@ -76,7 +80,7 @@ function startFrameOf(input: Input, shot: Shot, n: number): StartFrameRequest | 
     })
     const pictures: StartPicture[] = []
     const add = (kind: StartPicture['kind'], id: string, file: string) => {
-        pictures.push({kind, id, file, label: label(pictures.length + 1)})
+        pictures.push({kind, id, file, label: label(pictures.length + 1), ...(small && kind === 'character' ? {small: true as const} : {})})
         return pictures.at(-1)!.label
     }
     const place = location ? add('location', location.id, location.file) : undefined

@@ -82,7 +82,12 @@ export async function renderAndAssemble(run: MusicRenderRun) {
                 }
             }
             const size = startFrameSize(config.videoAspect)
-            await Promise.all(selected.map(s => renderStartFrame(renderer, s, size)))
+            // one after the other, the servers' memory freed before each: what an earlier job left loaded ran the text encoder out of
+            // memory on the 32 GB Radeon - the same wide shot of six people went through after a free (314 s) and failed without one
+            for (const s of selected) {
+                await renderer.freeMemory()
+                await renderStartFrame(renderer, s, size)
+            }
         }
         // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
         if (render.has('videos')) {
