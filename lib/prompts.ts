@@ -539,13 +539,18 @@ Place: ${description}`,
 
 // The fixed layout of a place, written once from its look and used by every beat there (the shot planner stages people in
 // it instead of inventing a room per beat), and what each of the five views of its reference sheet shows of it.
-/** Who has a fixed spot in a place (LocationSet): a player of an instrument that stands there, a crowd that watches; and the other players, for the stage. */
-export type Performer = {name: string; role: string; prop?: string; standing?: boolean; group?: boolean}
+/**
+ * Who has a fixed spot in a place (LocationSet): a player of an instrument that stands there, a crowd that watches, and the other
+ * players and the singers, each at a place of their own on the stage. Without that, two of them were both "in the centre of the
+ * stage" (tides-261115 slot-033: Sera and Maren), and every start picture put them somewhere else.
+ */
+export type Performer = {name: string; role: string; prop?: string; standing?: boolean; group?: boolean; sings?: boolean}
 
 export function locationLayoutPrompt(name: string, look: string, description: string, performers: Performer[] = []): AskOptions {
-    const spotted = performers.filter(p => p.standing || p.group)
-    const players = performers.filter(p => p.prop)
-    const withSet = spotted.length > 0 || players.length > 1
+    const band = performers.filter(p => p.prop || p.sings)
+    // a band or a crowd: a stage, and everybody of them at a spot of their own - a story without them has no set, as before
+    const withSet = performers.some(p => p.standing || p.group) || band.length > 1
+    const spotted = withSet ? performers : []
     return {
         // measured (#820): answers up to 3870 tokens under a limit of 4096, one cut off - room for the long ones
         maxTokens: 8192,
@@ -561,9 +566,9 @@ ${
     withSet
         ? `- "set": where the people below have their fixed places when they are in this place, the same in every scene, named by the features of the layout (never a compass point):
   - "stage": one sentence - the area where the band plays, between which features, and where the camera of view 0 sees it.
-  - "spots": one entry per person below who has a fixed spot, "name" exactly as below: ${spotted.map(p => JSON.stringify(p.name)).join(', ') || 'nobody'}. "spot" is one sentence: for a player of an instrument that stands in the place, only where that instrument stands - on the stage, at one fixed feature - and nothing of its player or of which way anyone or anything faces: the player is always at it on the side it is played from, and the picture of the place shows how it stands - a direction written here ("the player facing the throne") put the player at its back; for a crowd that watches, where it stands or sits - off the stage, in front of it, never on it or among the players - and that it faces the band.
+  - "spots": one entry per person below who has a fixed spot, "name" exactly as below: ${spotted.map(p => JSON.stringify(p.name)).join(', ') || 'nobody'}. "spot" is one sentence: for a player of an instrument that stands in the place, only where that instrument stands - on the stage, at one fixed feature - and nothing of its player or of which way anyone or anything faces: the player is always at it on the side it is played from, and the picture of the place shows how it stands - a direction written here ("the player facing the throne") put the player at its back; for a player who carries the instrument or a singer, their own place on the stage, by a feature of the layout or the side of the stage it is on, where they play or sing from - every one of them at a different place, none of two in the same one ("in the centre of the stage" for two of them put them anywhere), a singer at the front of the stage, and nothing of which way they face; for a crowd that watches, where it stands or sits - off the stage, in front of it, never on it or among the players - and that it faces the band.
   People of this place:
-${performers.map(p => `  - ${p.name}: ${p.role}${p.prop ? ` - ${p.standing ? 'plays' : 'carries'} ${p.prop}${p.standing ? ', which stands in the place' : ''}` : ''}${p.group ? ' - a crowd' : ''}`).join('\n')}
+${performers.map(p => `  - ${p.name}: ${p.role}${p.prop ? ` - ${p.standing ? 'plays' : 'carries'} ${p.prop}${p.standing ? ', which stands in the place' : ''}` : ''}${p.sings ? ' - sings' : ''}${p.group ? ' - a crowd' : ''}`).join('\n')}
 `
         : ''
 }

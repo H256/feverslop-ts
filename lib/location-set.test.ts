@@ -25,12 +25,26 @@ describe('the set of a place', () => {
         // the kit stands in the hall, not in the forest - and is not in the drummer's hands there (zz-stille-261118)
         expect(performersOf(band, 'forest').find(p => p.name === 'Vex')).toEqual({name: 'Vex', role: 'drummer'})
         expect(performersOf([{id: 'a', name: 'Ann', role: 'a girl'}], 'hall')).toEqual([])
+        // a singer has a place on the stage too - slot-033: Maren and Sera were both "in the centre of the stage"
+        expect(performersOf(band, 'hall', ['maren'])[0]).toEqual({name: 'Maren', role: 'the singer', sings: true})
+    })
+
+    test('everybody of the band gets a place of their own on the stage, the singer and the players who carry theirs too', () => {
+        const prompt = locationLayoutPrompt('Hall', 'A hall.', 'A long hall.', performersOf(band, 'hall', ['maren'])).input
+        expect(prompt).toContain('"name" exactly as below: "Maren", "Kael", "Vex", "The audience"')
+        expect(prompt).toContain('- Maren: the singer - sings')
+        expect(prompt).toContain('every one of them at a different place, none of two in the same one')
+        // a singer and one guitarist, no crowd and no kit: a band, so a set
+        const duo = performersOf(band.slice(0, 2), 'hall', ['maren'])
+        expect(locationLayoutPrompt('Hall', 'A hall.', 'A long hall.', duo).input).toContain('"name" exactly as below: "Maren", "Kael"')
+        // a singer alone is no band: no set, as before
+        expect(locationLayoutPrompt('Hall', 'A hall.', 'A long hall.', performersOf(band.slice(0, 1), 'hall', ['maren'])).input).not.toContain('"set"')
     })
 
     test('the layout is asked for the set only when there is a band or a crowd', () => {
         const withSet = locationLayoutPrompt('Hall', 'A hall.', 'A long hall.', performersOf(band, 'hall'))
         expect(withSet.input).toContain('"set": where the people below have their fixed places')
-        expect(withSet.input).toContain('"name" exactly as below: "Vex", "The audience"')
+        expect(withSet.input).toContain('"name" exactly as below: "Kael", "Vex", "The audience"')
         expect(withSet.input).toContain('- Vex: drummer - plays coral drum kit, which stands in the place')
         // zz-stille-261118 slot-007: the piano player at the back of the piano; tides-261115: "Vex plays behind the kit, facing
         // the throne" - the spot says only where the instrument stands, the clip says the player is on its playing side
