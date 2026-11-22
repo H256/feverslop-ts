@@ -19,14 +19,14 @@ const VISION_MAX_WIDTH = 512
 export const characterViews = (sheetDir: string) =>
     [sheetAnchor(sheetDir), sheetFrame(sheetDir, 0), sheetFrame(sheetDir, 4)].map(file => join(file)).filter(existsSync)
 
-/** Pictures as data URLs for a vision-capable model, at a small size. */
-export function visionUrls(files: string[]): Promise<string[]> {
+/** Pictures as data URLs for a vision-capable model, at a small size - a wider one for a wide picture of small people (startframe-check). */
+export function visionUrls(files: string[], width = VISION_MAX_WIDTH): Promise<string[]> {
     return Promise.all(
         files.map(async (image, i) => {
             const small = `${image}.vision-${i}.png`
             // the small copy goes also when ffmpeg fails: left over, it looked like a picture of an asset of its own (lib/asset-import.ts)
             try {
-                await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', image, '-vf', `scale=${VISION_MAX_WIDTH}:-1`, small], {
+                await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', image, '-vf', `scale=${width}:-1`, small], {
                     errorMessage: err => `ffmpeg could not downscale ${image}:\n${err}`,
                 })
                 return `data:image/png;base64,${Buffer.from(await Bun.file(small).arrayBuffer()).toString('base64')}`

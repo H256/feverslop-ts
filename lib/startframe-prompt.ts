@@ -14,7 +14,8 @@ import {replaceTokens} from './refs.ts'
 
 /** A reference picture of a start picture: which picture of the clip it is and what the prompt calls it. */
 // small: a person small in a wide shot - the front view alone does (lib/render/startframes.ts)
-export type StartPicture = {kind: 'location' | 'character' | 'prop'; id: string; file: string; label: string; small?: true}
+// name, group: a person's, for the check that everybody is in the picture once (lib/startframe-check.ts) - a crowd is not counted
+export type StartPicture = {kind: 'location' | 'character' | 'prop'; id: string; file: string; label: string; small?: true; name?: string; group?: true}
 export type StartFrameRequest = {clip: string; shot: number; at: number; prompt: string; pictures: StartPicture[]; megapixels: number}
 
 type Shot = ClipRequest['shots'][number] & {plan?: ShotPlan}
@@ -79,12 +80,17 @@ function startFrameOf(input: Input, shot: Shot, n: number): StartFrameRequest | 
         return true
     })
     const pictures: StartPicture[] = []
-    const add = (kind: StartPicture['kind'], id: string, file: string) => {
-        pictures.push({kind, id, file, label: label(pictures.length + 1), ...(small && kind === 'character' ? {small: true as const} : {})})
+    const add = (kind: StartPicture['kind'], id: string, file: string, who?: Pick<StartPicture, 'name' | 'group'>) => {
+        pictures.push({kind, id, file, label: label(pictures.length + 1), ...(small && kind === 'character' ? {small: true as const} : {}), ...who})
         return pictures.at(-1)!.label
     }
     const place = location ? add('location', location.id, location.file) : undefined
-    const personLabel = new Map(cast.map(({character, picture}) => [character.id, add('character', character.id, picture.file)]))
+    const personLabel = new Map(
+        cast.map(({character, picture}) => [
+            character.id,
+            add('character', character.id, picture.file, {name: character.name, ...(character.isGroup ? {group: true as const} : {})}),
+        ]),
+    )
     const propLabel = new Map(taken.map(({owner, picture}) => [owner, add('prop', picture.id, picture.file)]))
 
     const words = (text: string | undefined) => clean(text && replaceTokens(text, input.characters as Character[], c => c.name))

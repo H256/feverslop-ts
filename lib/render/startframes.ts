@@ -1,5 +1,8 @@
-import {existsSync, mkdirSync} from 'node:fs'
-import {basename, dirname, extname, join} from 'node:path'
+import {existsSync, mkdirSync, renameSync} from 'node:fs'
+import {basename, dirname, extname, join, relative} from 'node:path'
+import {visionUrls} from '../describe-picture.ts'
+import {countPeople, describeCounts, notOnce} from '../startframe-check.ts'
+import {messageOf} from '../text.ts'
 import {resolveSeed, type PixelSize} from '../../comfy/helpers.ts'
 import h3StartFrame from '../../comfy/workflows/h3-startframe.ts'
 import {pictureAsset} from '../compose.ts'
@@ -16,6 +19,7 @@ import {START_PICTURE_MEGAPIXELS, type StartFrameRequest, type StartPicture} fro
 export const START_FRAME_WORKFLOW = 'h3-startframe'
 import {startFrameFile} from '../shot-pictures.ts'
 export {startFrameFile}
+const START_CHECK_WIDTH = 1280
 // the reference pictures as the start pictures take them (see startReference), made from the project's own pictures
 const REFS = 'startframes/refs'
 // a character sheet's top row as a share of its width: two panels of 288x512 (sheetLayout)
@@ -116,19 +120,57 @@ export async function renderStartFrame(r: Renderer, request: StartFrameRequest, 
     const current = specId(spec)
     if (existsSync(target) && !r.staleFile('startframes', file, current, [file, `${file}.json`])) return log.step('Exists', styles.muted(file))
     mkdirSync(dirname(target), {recursive: true})
-    const {seed} = await r.render({label: `start picture ${spec.id}`, spec, kind: 'picture', workflow: START_FRAME_WORKFLOW}, target, '.png', async () => {
-        const seed = resolveSeed(r.config.seed)
-        const remote = references.map(ref => `${r.remoteDir}/${ref}`)
-        const result = h3StartFrame({prompt: request.prompt, seed, pictures: remote, size, filenamePrefix: `${r.remoteDir}/startframes/${spec.id}`})
-        return {result, uploads: references.map((ref, i) => ({from: join(r.projectDir, ref), to: remote[i]!})), meta: {seed}}
-    })
-    await Bun.write(
-        `${target}.json`,
-        JSON.stringify(
-            {workflow: START_FRAME_WORKFLOW, seed, size, at: request.at, prompt: request.prompt, pictures: references, fingerprint: current},
-            null,
-            2,
-        ),
-    )
-    log.step('Saved', `${file} ${styles.muted(r.took(target))}`)
+    const draw = async (forced?: number) => {
+        const {seed} = await r.render({label: `start picture ${spec.id}`, spec, kind: 'picture', workflow: START_FRAME_WORKFLOW}, target, '.png', async () => {
+            const seed = forced ?? resolveSeed(r.config.seed)
+            const remote = references.map(ref => `${r.remoteDir}/${ref}`)
+            const result = h3StartFrame({prompt: request.prompt, seed, pictures: remote, size, filenamePrefix: `${r.remoteDir}/startframes/${spec.id}`})
+            return {result, uploads: references.map((ref, i) => ({from: join(r.projectDir, ref), to: remote[i]!})), meta: {seed}}
+        })
+        await Bun.write(
+            `${target}.json`,
+            JSON.stringify(
+                {workflow: START_FRAME_WORKFLOW, seed, size, at: request.at, prompt: request.prompt, pictures: references, fingerprint: current},
+                null,
+                2,
+            ),
+        )
+        log.step('Saved', `${file} ${styles.muted(r.took(target))}`)
+        return seed
+    }
+    const seed = await draw()
+    // everybody once (lib/startframe-check.ts): a person drawn twice or missing is drawn so in the whole shot. "qaRetries" draws
+    // such a picture again with another seed, as it renders a black or standing clip again; the take before goes to old/qa/
+    const people = request.pictures.flatMap((p, i) => (p.kind === 'character' && !p.group ? [{id: p.id, name: p.name ?? p.id, reference: references[i]!}] : []))
+    const check = async () => {
+        try {
+            // the picture wide enough for the small people of a wide shot: at 512 px Sera drawn twice was read as once (slot-033)
+            const [picture] = await visionUrls([target], START_CHECK_WIDTH)
+            const refs = await visionUrls(people.map(p => join(r.projectDir, p.reference)))
+            return notOnce(
+                await countPeople(
+                    picture!,
+                    people.map((p, n) => ({...p, reference: refs[n]!})),
+                ),
+            )
+        } catch (e) {
+            log.warn(`${file}: who is in it could not be checked (${messageOf(e)}) - the connected model may not take images`)
+            return []
+        }
+    }
+    let wrong = await check()
+    for (let k = 1, taken = seed; k <= r.config.qaRetries && wrong.length; k++) {
+        const kept = join(r.projectDir, 'old', 'qa', `${spec.id}-seed-${taken}`)
+        mkdirSync(kept, {recursive: true})
+        for (const suffix of ['', '.json']) renameSync(target + suffix, join(kept, basename(target) + suffix))
+        log.warn(
+            `${file}: ${describeCounts(wrong)} - drawn again (${k} of ${r.config.qaRetries}); this take is in ${relative(r.projectDir, kept).replace(/\\/g, '/')}`,
+        )
+        taken = await draw(seed + 7919 * k)
+        wrong = await check()
+    }
+    if (wrong.length)
+        log.warn(
+            `${file}: ${describeCounts(wrong)}${r.config.qaRetries ? '' : ' - "qaRetries": 1 in config.json draws such a picture again with another seed'}; --again draws it anew`,
+        )
 }
