@@ -87,7 +87,10 @@ describe('the start pictures of a clip', () => {
 
     test('the frame first, then everybody once with their words, their prop and their mouth; names instead of tokens', () => {
         const prompt = requests[0]!.prompt
-        expect(prompt.split('\n')[0]).toBe('A film still, 16:9: Live-action fantasy, golden light.')
+        // the medium comes from the look alone - no film still, no photograph of our own
+        expect(prompt.split('\n')[0]).toBe(
+            'One frame of the film itself, 16:9, made in exactly the medium and look it is filmed in: Live-action fantasy, golden light. Nothing more painted, polished or dramatic than that look says.',
+        )
         expect(prompt).toContain('The place is The hall of <Picture 1>, kept as it is there')
         expect(prompt).toContain('The stage: In front of the throne. Fixed places: Vex: The kit stands at the throne wall.')
         expect(prompt).not.toContain('Nobody')

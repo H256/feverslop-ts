@@ -117,7 +117,11 @@ function startFrameOf(input: Input, shot: Shot, n: number): StartFrameRequest | 
             ? `${crowd.name} are nearest to the camera with their backs to it, facing the band; far beyond them, small on the stage, ${band.map(({character}) => character.name).join(', ')} - nobody of the band is among ${crowd.name} or near the camera.`
             : ''
     const lines = [
-        `A film still, 16:9${input.look ? `: ${clean(input.look)}` : ''}.`,
+        // the look names the medium (live action, anime, stop-motion, ...) - the picture takes it literally and adds no
+        // medium or polish of its own: a style picked at random need not be realistic, nor cinematic
+        input.look
+            ? `One frame of the film itself, 16:9, made in exactly the medium and look it is filmed in: ${clean(input.look)}. Nothing more painted, polished or dramatic than that look says.`
+            : 'One frame of the film itself, 16:9.',
         place ? `The place is ${location!.name} of ${place}, kept as it is there: ${clean(location!.description)}.` : '',
         input.set?.stage ? `The stage: ${clean(input.set.stage)}.${fixed.length ? ` Fixed places: ${fixed.join('; ')}.` : ''}` : '',
         camera ? `The camera: ${camera}.` : '',
