@@ -79,8 +79,8 @@ describe('the start pictures of a clip', () => {
             '<Picture 3> kael',
             '<Picture 4> vex',
             '<Picture 5> crowd',
-            '<Picture 6> black-guitar',
-            '<Picture 7> coral-drum-kit',
+            '<Picture 6> coral-drum-kit',
+            '<Picture 7> black-guitar',
         ])
         expect(requests[1]!.pictures.map(p => `${p.label} ${p.id}`)).toEqual(['<Picture 1> hall', '<Picture 2> kael', '<Picture 3> black-guitar'])
     })
@@ -97,10 +97,10 @@ describe('the start pictures of a clip', () => {
         expect(prompt).toContain('The camera: from behind The audience, over their heads toward the stage; wide shot.')
         expect(prompt).toContain('- Maren, the person of <Picture 2>: on the stage, arms raised; in the picture: centre of the stage; singing, mouth open.')
         expect(prompt).toContain(
-            "- Kael, the person of <Picture 3>, with the black guitar of <Picture 6>: at Maren's left; in the picture: left of centre on the stage; mouth closed.",
+            "- Kael, the person of <Picture 3>, with the black guitar of <Picture 7>: at Maren's left; in the picture: left of centre on the stage; mouth closed.",
         )
         // a standing instrument: the player is at it, not holding it
-        expect(prompt).toContain('- Vex, the person of <Picture 4>, at the coral drum kit of <Picture 7>; mouth closed.')
+        expect(prompt).toContain('- Vex, the person of <Picture 4>, at the coral drum kit of <Picture 6>; mouth closed.')
         expect(prompt).toContain('- The audience: a crowd of different people - <Picture 5> shows one of them')
     })
 
@@ -123,6 +123,15 @@ test('over the budget of reference pictures the props go first, drawn from their
     expect(wide!.megapixels).toBe(9.5)
     expect(wide!.prompt).toContain('- Kael, the person of <Picture 3>, with the black guitar: ')
     expect(wide!.prompt).toContain('- Vex, the person of <Picture 4>, at the coral drum kit; mouth closed.')
+})
+
+// slot-033: room for one prop in the wide shots - the guitar took it, and the kit came out a plain red one from its words
+test('with room for one prop, the instrument that stands in the place gets it', () => {
+    const [wide] = startFrameRequests({clip, characters, look: '', megapixels: p => (p.kind === 'prop' ? 1 : p.kind === 'location' ? 1.8 : 1.6)})
+    // a place and four people: 8.2 MP, room for one prop
+    expect(wide!.pictures.filter(p => p.kind === 'prop').map(p => p.id)).toEqual(['coral-drum-kit'])
+    expect(wide!.prompt).toContain('- Vex, the person of <Picture 4>, at the coral drum kit of <Picture 6>')
+    expect(wide!.prompt).toContain('- Kael, the person of <Picture 3>, with the black guitar: ')
 })
 
 test('the size of a start picture: about 2.4 MP in the video aspect, on a 32 px grid', () => {

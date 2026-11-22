@@ -62,10 +62,14 @@ function startFrameOf(input: Input, shot: Shot, n: number): StartFrameRequest | 
     })
     if (!cast.length) return undefined
     // a prop goes with whoever has it in the shot: its picture is the one named like the character's prop
-    const props = cast.flatMap(({character}) => {
-        const picture = character.prop ? all.find(p => p.kind === 'prop' && p.name === character.prop) : undefined
-        return picture ? [{owner: character.id, picture}] : []
-    })
+    // an instrument that stands in the place (a drum kit) first: it is the biggest of them in the picture, and drawn from its words
+    // it came out a plain red kit instead of the coral one in the wide shots of slot-033, where only one prop fitted the budget
+    const props = cast
+        .flatMap(({character}) => {
+            const picture = character.prop ? all.find(p => p.kind === 'prop' && p.name === character.prop) : undefined
+            return picture ? [{owner: character.id, picture, standing: character.propCarried === false}] : []
+        })
+        .sort((a, b) => Number(b.standing) - Number(a.standing))
     // in a wide shot everybody is small: the front view is enough, and with the whole band and a crowd the grids are too much
     const small = plan.size === 'wide'
     // over the budget the last props are left out, until it fits or none is left
