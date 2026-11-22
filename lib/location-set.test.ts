@@ -164,4 +164,36 @@ describe('the set in a clip', () => {
         expect(without).not.toContain('far beyond')
         expect(without).not.toContain('far from the camera')
     })
+
+    // #1187: a start picture locked at the shot's first frame draws who stands where - the words that held slot-028 told only
+    // what moves: no crowd first, no band far beyond, no place in the frame
+    test('a shot with a start picture tells only what moves; without one it is told in full', () => {
+        const staged = input(['vex', 'kael', 'crowd'])
+        staged.shotMoments = {
+            b1: {
+                shots: [
+                    {
+                        action: 'The band plays.',
+                        characters: ['vex', 'kael', 'crowd'],
+                        view: 'from behind the audience',
+                        people: {kael: {state: 'on the left of the stage', frame: 'left of centre', motion: 'he rocks on his heels'}},
+                    },
+                ],
+            },
+        }
+        const pinned = buildClipRequests({...staged, pinnedShots: (clip, shot) => clip === 'slot-001' && shot === 0})[0]!.prompt
+        expect(pinned).toContain('The shot starts on its first frame as it is given: everyone is where that frame shows them and moves on from there.')
+        expect(pinned).toMatch(/<Subject \d+>, Kael, he rocks on his heels/)
+        expect(pinned).toMatch(/<Subject \d+>, Vex, where the first frame shows them/)
+        for (const told of ['far beyond', 'left of centre', 'on the left of the stage', 'Camera position:', 'nearest to the camera'])
+            expect(pinned).not.toContain(told)
+        const full = buildClipRequests(staged)[0]!.prompt
+        expect(full).not.toContain('as it is given')
+        expect(full).toContain('far beyond')
+        // one shot of two with a picture: the clip keeps its places for the other; all of them: the pictures hold the places
+        expect(pinned).toContain('Fixed places')
+        const all = buildClipRequests({...staged, pinnedShots: () => true})[0]!.prompt
+        expect(all).not.toContain('Fixed places')
+        expect(all).not.toContain('Layout of the place')
+    })
 })

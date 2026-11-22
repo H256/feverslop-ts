@@ -161,6 +161,9 @@ export type Input = {
     clipPrompt?: 'full' | 'compact'
     // config.propPictures: the prop of each character who has one, with a picture of its own (step props, lib/props.ts) - by character id
     props?: Record<string, Prop>
+    // whether a shot has a start picture locked at its first frame (#1187, lib/shot-pictures.ts): its text tells only what moves.
+    // By the clip's id and the shot's index; none: every shot is told in full
+    pinnedShots?: (clip: string, shot: number) => boolean
 }
 
 // Whether the clips of the beat go on from each other's last frame without a cut (config.continuity)
@@ -1152,6 +1155,11 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // lined up on their grey backdrop (roots-of-the-world), which a group of that size had no anchor against.
         const locationAnchor = locationSubject ? locationAnchors?.[locationSubject.id]?.trim() || undefined : undefined
 
+        // a start picture locked at the shot's first frame (#1187, lib/shot-pictures.ts) - not for the first shot of a clip that goes
+        // on from the one before: that one starts on its last frame
+        function pinnedAt(j: number) {
+            return !(j === 0 && startsFrom) && input.pinnedShots?.(slot.id, j) === true
+        }
         function buildShotTexts() {
             return shots.map((shot, j) => {
                 const moment = j > 0 && shot.moment === shots[j - 1]!.moment ? `The same action continues, seen closer: ${shot.moment}` : shot.moment
@@ -1203,6 +1211,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                         // callout tends to fall back to the character reference pictures' plain grey background
                         `${shot.label} At ${clipTime(shot.at)}, the shot cuts to a ${framed(`${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, ${the(locationSubject.name)}` : ''}`)}; ${shot.camera}.`
                 const fromFrame = j === 0 && framePicture ? ` The shot begins from ${framePicture} and goes on from there.` : ''
+                // a start picture locked at the shot's first frame (#1187, lib/shot-pictures.ts): who stands where is drawn in it, so the
+                // shot tells only what moves - the test that held slot-028 had no layout, no places and no place in the frame in its words
+                const pinned = pinnedAt(j)
                 // staged: each person's place, posture and movement as the planner wrote them (one position each); a shot without a
                 // plan keeps the fixed positions
                 const stagedPeople = shot.plan?.people
@@ -1226,6 +1237,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     const far = crowd !== undefined && onStage.includes(s)
                     // not for a singer the plan shows from behind (#822): "three-quarter back view" and "the face clearly visible" cannot both hold
                     const face = shot.singers.includes(s) && !p?.faceHidden && !far ? ', the face clearly visible' : ''
+                    if (pinned) return `${who}, ${p?.motion ? withLabels(p.motion, planTokens) : 'where the first frame shows them'}${face}`
                     if (!shot.plan) return `${who}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${face}`
                     // somebody in the picture the planner gave no entry of their own: the shot's "rest" says what they do
                     // A fixed place of theirs (#1119) is where they are: "The audience, in the frame" put the crowd on the stage between
@@ -1286,9 +1298,11 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                               ...shot.focus.filter(s => s !== crowd && !onStage.includes(s)).map(at),
                           ].join('; ')
                         : shot.focus.map(personInFrame).join('; ')
-                const inFrame = shot.focus.length
-                    ? `${viewClause} In frame: ${framedList}.${restClause}${stageClause}${behind}${propPictureClause}${holdClause}`
-                    : `${viewClause}${holdClause}`
+                const inFrame = pinned
+                    ? ` The shot starts on its first frame as it is given: everyone is where that frame shows them and moves on from there.${shot.focus.length ? ` In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${propPictureClause}` : ''}${holdClause}`
+                    : shot.focus.length
+                      ? `${viewClause} In frame: ${framedList}.${restClause}${stageClause}${behind}${propPictureClause}${holdClause}`
+                      : `${viewClause}${holdClause}`
 
                 if (performing) {
                     // only who is in the picture sings in it: a singer the plan left out is a voice off screen
@@ -1342,6 +1356,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         }
 
         const shotTexts = buildShotTexts()
+        // every shot with its start picture: the pictures hold the places, the clip says nothing of a layout or of fixed places
+        const allPinned = shots.length > 0 && shots.every((_, j) => pinnedAt(j))
 
         function buildPromptText() {
             const appearsIn = (label: string) =>
@@ -1527,7 +1543,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // on it, a wide shot of the singer walking down the corridor before [Shot 1] at the window (#740). A later clip of the beat
                 // gets the place's floor plan without people: by then they are where its shots put them.
                 // A staging that names people without a picture in this clip gives way to the place's floor plan without people, or to nothing
-                ...(staging && !slot.micro
+                ...(staging && !slot.micro && !allPinned
                     ? namesOnlyCast(staging, planTokens)
                         ? [layoutLine(opensScene, withLabels(staging, planTokens), placeLayout)]
                         : placeLayout
@@ -1538,7 +1554,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // with the kit drawn as a picture of its own and no spot for it in the place, every clip put it and the crowd elsewhere
                 ...(() => {
                     const spotted = castSubjects.filter(s => (s.stationary || s.isGroup) && placeSet?.spots[s.id])
-                    if (!spotted.length) return []
+                    if (!spotted.length || allPinned) return []
                     const said = spotted.map(
                         s =>
                             `${s.label}, ${s.name}${s.stationary ? `, at the ${s.stationary}, ${playedFrom}` : ''}: ${placeSet!.spots[s.id]!.replace(/[.\s]+$/, '')}`,

@@ -11,7 +11,8 @@ import {checkPrompts} from '../prompt-check.ts'
 import {readFineWaveform} from '../waveform.ts'
 import {MAX_REFERENCE_IMAGES} from '../../comfy/helpers.ts'
 import {MISSING_WORD_LEAD, RATE, voiceLead} from '../../shared/timing-fit.ts'
-import {mkdirSync} from 'node:fs'
+import {existsSync, mkdirSync} from 'node:fs'
+import {startFrameFile} from '../shot-pictures.ts'
 import {join} from 'node:path'
 import type {ProjectConfig} from '../config.ts'
 import type {
@@ -149,6 +150,8 @@ export async function buildRequests(run: RequestsRun) {
         clipPrompt: config.clipPrompt,
         props: config.propPictures ? project.data.props : undefined,
         shotViews,
+        // a shot with a start picture in startframes/ has it locked at its first frame (#1187): its words tell only what moves
+        pinnedShots: (clip, shot) => existsSync(join(project.dir, startFrameFile(clip, shot))),
     })
 
     // more people than reference pictures: whoever did not fit is in the scene without a picture - the video model invents them
