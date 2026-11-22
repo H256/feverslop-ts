@@ -3,6 +3,7 @@ import {
     refAudios,
     dyn,
     endGuide,
+    shotGuides,
     startImages,
     FPS,
     MAX_REFERENCE_IMAGES,
@@ -77,7 +78,14 @@ export function h3Ref2Video(opts: Options, variant: Variant): WorkflowResult {
     const start = startImages(wf, opts)
     if (start) positive = wf.MiniMaxH3AddGuide({positive, latent: references.LATENT, frame_idx: 0, vae: videoVae.VAE, image: start}).positive
     const attention = wf.ModelAttentionBackend({model, attention: 'comfy kitchen attention'})
-    const guider = wf.BasicGuider({model: attention.model, conditioning: endGuide(wf, positive, references.LATENT, videoVae.VAE, opts.endFrame)})
+    const guided = shotGuides(
+        wf,
+        endGuide(wf, positive, references.LATENT, videoVae.VAE, opts.endFrame),
+        references.LATENT,
+        videoVae.VAE,
+        'shotFrames' in opts ? opts.shotFrames : undefined,
+    )
+    const guider = wf.BasicGuider({model: attention.model, conditioning: guided})
     const noise = wf.RandomNoise({noise_seed: opts.seed})
     const sampler = wf.KSamplerSelect({sampler_name: variant.sampler})
     const sigmas = wf.BasicScheduler({scheduler: variant.scheduler, steps: variant.steps(opts), denoise: 1, model})

@@ -115,11 +115,31 @@ export type VideoWorkflowOptions = {
     preview?: PreviewOptions
     // part of a clip rendered again (--retake): the render is also guided to this picture at this frame - the frame right after the part
     endFrame?: EndFrame
+    // the start picture of each shot (#1187, lib/render/startframes.ts), locked with MiniMaxH3AddGuide at the shot's first frame of
+    // the render: the blocking is drawn once as a still, the video only moves it. tides-261115 slot-028: told only, the singer stood
+    // among the crowd in 3 renders of 3; with a picture per shot, 3 of 3 held
+    shotFrames?: EndFrame[]
     filenamePrefix: string
 }
 export type PreviewOptions = {scale: number; steps?: number}
 export type EndFrame = {image: string; at: number}
 export type VideoWorkflow = (opts: VideoWorkflowOptions) => WorkflowResult
+
+/** Each shot's start picture locked at its frame (opts.shotFrames), one MiniMaxH3AddGuide after the other. */
+export function shotGuides<C extends NodeRef>(
+    wf: WorkflowBuilder,
+    positive: C,
+    latent: NodeRef<'LATENT'>,
+    vae: NodeRef<'VAE'>,
+    shotFrames: EndFrame[] = [],
+): C {
+    return shotFrames.reduce(
+        (guided, shot) =>
+            wf.MiniMaxH3AddGuide({positive: guided as never, latent, frame_idx: shot.at, vae, image: wf.LoadImage({image: dyn(shot.image)}).IMAGE})
+                .positive as unknown as C,
+        positive,
+    )
+}
 
 /**
  * What a continuing clip starts on, as images for MiniMaxH3AddGuide at frame 0: the frames of opts.startClip (the last

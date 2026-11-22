@@ -1,5 +1,6 @@
 import {join} from 'node:path'
 import {fileFingerprint, fingerprint, recordedFingerprint} from './provenance.ts'
+import {shotPictures} from './shot-pictures.ts'
 
 // What one rendered file is made from, in one place per kind of file. The id of a spec is the fingerprint the sidecar of
 // the file records (lib/provenance.ts), the one a queued job is bound to (.pending.json) and the one the final video
@@ -79,11 +80,15 @@ export function clipSpec(
         prompt: string
         frames: number
         startsFrom?: string
+        shots?: {at: number}[]
         assets: {pictures: {kind: string; file: string}[]; audio: {stem?: string; songStart: number; songEnd: number}[]}
     },
     projectDir: string,
     config: VideoConfig,
 ): RenderSpec {
+    // the start pictures of the shots (#1187): a picture made again or taken away makes the clip stale; a clip without any keeps
+    // the request it had before they existed
+    const pinned = clip.shots ? shotPictures({id: clip.id, startsFrom: clip.startsFrom, shots: clip.shots}, projectDir) : []
     return {
         kind: 'clip',
         id: clip.id,
@@ -98,6 +103,7 @@ export function clipSpec(
             clip.assets.audio.map(a => [a.stem, a.songStart, a.songEnd]),
             predecessorId(projectDir, clip.startsFrom),
             ...(clip.startsFrom ? [['continuation', config.pinStartFrame === true, config.contextFrames ?? 0]] : []),
+            ...(pinned.length ? [['start pictures', pinned.map(p => [p.at, fileFingerprint(join(projectDir, p.file))])]] : []),
         ],
     }
 }

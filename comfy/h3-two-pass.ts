@@ -8,6 +8,7 @@ import {
     afterCleanup,
     refAudios,
     endGuide,
+    shotGuides,
     FPS,
     startImages,
     type Aspect,
@@ -137,7 +138,10 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
             startFrame && !(refine && opts.startClip)
                 ? wf.MiniMaxH3AddGuide({positive: guided, latent, frame_idx: 0, vae: videoVae.VAE, image: startFrame}).positive
                 : guided
-        return endGuide(wf, started, latent, videoVae.VAE, opts.endFrame)
+        const ended = endGuide(wf, started, latent, videoVae.VAE, opts.endFrame)
+        // the start pictures of the shots guide pass 1 only, like a part's end frame: pass 2 keeps what pass 1 laid out (#1187 -
+        // the test that held slot-028 pinned shot 2 at frame 96 in pass 1 alone)
+        return refine ? ended : shotGuides(wf, ended, latent, videoVae.VAE, opts.shotFrames)
     }
     const noise = wf.RandomNoise({noise_seed: opts.seed})
     // opts.steps / opts.refineSteps (config videoSteps, videoRefineSteps) replace the steps of the recipe, nothing else of it

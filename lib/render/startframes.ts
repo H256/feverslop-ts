@@ -14,7 +14,8 @@ import {START_PICTURE_MEGAPIXELS, type StartFrameRequest, type StartPicture} fro
 // only with --render=startframes. What each picture is made from is in its sidecar, like every other render (lib/provenance.ts).
 
 export const START_FRAME_WORKFLOW = 'h3-startframe'
-export const startFrameFile = (clip: string, shot: number) => `startframes/${clip}-shot${shot + 1}.png`
+import {startFrameFile} from '../shot-pictures.ts'
+export {startFrameFile}
 // the reference pictures as the start pictures take them (see startReference), made from the project's own pictures
 const REFS = 'startframes/refs'
 // a character sheet's top row as a share of its width: two panels of 288x512 (sheetLayout)

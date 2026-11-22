@@ -6,11 +6,12 @@ import {type AudioWorkflow, clipSeed, resolveSeed, type VideoWorkflowModule, typ
 import {boundaryFrameAsset, type ClipRequest, CONTEXT_SETTLE} from '../compose.ts'
 import {secondsAt} from '../frames.ts'
 import {type AudioPrints, LIPSYNC_DIR, type LipsyncClip, lipsyncFile, lipsyncFingerprint, recordedLipsync} from '../lipsync.ts'
-import {fingerprint} from '../provenance.ts'
+import {fileFingerprint, fingerprint} from '../provenance.ts'
 import {extractFrame, framesOnGrid, probeVideo, trimHead} from '../assemble.ts'
 import {backdropSeconds, hasBackdropRun} from '../leak.ts'
 import {bestTake, checkClip, describe as describeFindings, type Finding} from '../clip-qa.ts'
 import {clipSpec, type RenderSpec, songSpec, specId} from '../render-spec.ts'
+import {shotPictures} from '../shot-pictures.ts'
 import {matchColors} from '../colormatch.ts'
 import {archiveFiles, versionStamp} from '../archive.ts'
 import {runProcess} from '../process.ts'
@@ -106,7 +107,11 @@ export async function renderClip(r: Renderer, clip: ClipRequest, stemFiles: Reco
         const frames = renderFrames?.(clip.frames + lead) ?? clip.frames + lead
         if (frames < clip.frames + lead) throw new Error(`${r.config.videoWorkflow}: renderFrames(${clip.frames + lead}) returned only ${frames} frames`)
         if (context) uploads.push({from: context.file, to: `${r.remoteDir}/${context.asset}`})
+        // the start picture of each shot at its first frame, after the context frames (#1187)
+        const pinned = shotPictures(clip, r.projectDir)
+        uploads.push(...pinned.map(p => ({from: join(r.projectDir, p.file), to: `${r.remoteDir}/${p.file}`})))
         const result = videoWorkflow({
+            ...(pinned.length ? {shotFrames: pinned.map(p => ({image: `${r.remoteDir}/${p.file}`, at: p.at + lead}))} : {}),
             prompt: clip.prompt,
             // a pinned first frame (config.pinStartFrame) goes in as the guide only - as a reference picture too it is blended in twice
             pictures: clip.assets.pictures.filter(p => !((r.config.pinStartFrame || context) && p.kind === 'frame')).map(p => `${r.remoteDir}/${p.file}`),
@@ -213,6 +218,7 @@ export async function clipJob(
         startFrame?: string
         startClip?: string
         endFrame?: {image: string; at: number}
+        shotFrames?: {image: string; at: number}[]
         preview?: {scale: number; steps?: number}
         filenamePrefix: string
         extraUploads?: {from: string; to: string}[]
@@ -229,6 +235,7 @@ export async function clipJob(
         song: songRemote,
         ...(job.startClip ? {startClip: job.startClip} : job.startFrame ? {startFrame: job.startFrame} : {}),
         ...(job.endFrame ? {endFrame: job.endFrame} : {}),
+        ...(job.shotFrames?.length ? {shotFrames: job.shotFrames} : {}),
         ...(job.preview ? {preview: job.preview} : {}),
         songStart: job.songStart,
         frames: job.frames,
@@ -258,9 +265,19 @@ export async function renderClipPreview(r: Renderer, clip: ClipRequest, stemFile
     const start = clip.startsFrom ? await r.previewStart(clip.startsFrom) : undefined
     if (clip.startsFrom && !start) return log.warn(`${clip.id}: no preview - it goes on from ${clip.startsFrom}, which has neither a preview nor a render yet`)
     const preview = r.config.preview
+    // the start pictures of the shots, as in the clip's own render (#1187)
+    const pinned = shotPictures(clip, r.projectDir)
     const spec: RenderSpec = {
         ...clipSpec(clip, r.projectDir, r.config),
-        parts: ['preview', preview, clip.prompt, clip.frames, r.config.videoWorkflow, start ?? ''],
+        parts: [
+            'preview',
+            preview,
+            clip.prompt,
+            clip.frames,
+            r.config.videoWorkflow,
+            start ?? '',
+            ...(pinned.length ? [['start pictures', pinned.map(p => [p.at, fileFingerprint(join(r.projectDir, p.file))])]] : []),
+        ],
     }
     const what: RenderWhat = {label: `preview ${clip.id}`, spec, kind: 'clip', workflow: r.config.videoWorkflow, resolution: `preview ${preview.scale}`}
     mkdirSync(dirname(target), {recursive: true})
@@ -277,7 +294,12 @@ export async function renderClipPreview(r: Renderer, clip: ClipRequest, stemFile
             preview,
             workflow,
             filenamePrefix: `${r.remoteDir}/previews/${clip.id}`,
-            ...(start ? {startFrame: remote, extraUploads: [{from: join(r.projectDir, start), to: remote!}]} : {}),
+            ...(start ? {startFrame: remote} : {}),
+            ...(pinned.length ? {shotFrames: pinned.map(p => ({image: `${r.remoteDir}/${p.file}`, at: p.at}))} : {}),
+            extraUploads: [
+                ...(start ? [{from: join(r.projectDir, start), to: remote!}] : []),
+                ...pinned.map(p => ({from: join(r.projectDir, p.file), to: `${r.remoteDir}/${p.file}`})),
+            ],
         })
     })
     // what it was made from, as a clip's own render records it: the page says whether the preview still is the plan's (#1117)
