@@ -3,6 +3,7 @@ import {existsSync, readdirSync, readFileSync, statSync} from 'node:fs'
 import {isAbsolute, join, relative} from 'node:path'
 import {probeVideo} from '../assemble.ts'
 import {boundaryFrameAsset, type ClipRequest} from '../compose.ts'
+import {startFrameFile} from '../shot-pictures.ts'
 import {loadProjectConfig, type ProjectConfig} from '../config.ts'
 import {FPS, secondsAt, round} from '../frames.ts'
 import type {Project} from '../project.ts'
@@ -356,9 +357,11 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
             prompt: clip.prompt,
             shots: clip.shots.map((shot, n) => {
                 const planned = plan?.shots[offset + n]
+                const startFrame = media(dir, startFrameFile(clip.id, n))
                 return {
                     label: shot.label,
                     at: shot.at,
+                    ...(startFrame ? {startFrame} : {}),
                     framing: planned?.framing ?? shot.framing,
                     camera: planned?.camera ?? shot.camera,
                     subjects: shot.subjects,

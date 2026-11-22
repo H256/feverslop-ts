@@ -128,6 +128,7 @@ if (!redoSteps.length && (only.size || retake)) {
         retake: retake?.clip,
         pictures: render.has('images'),
         clips: render.has('videos') || render.has('final') || render.has('startframes'),
+        shots: render.has('startframes'),
     })
     if (wrong) log.usageError(wrong, usage)
 }

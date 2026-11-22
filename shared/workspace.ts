@@ -134,6 +134,8 @@ export type EditorShot = {
     people: EditorPerson[]
     directionId?: string
     cast?: EditorCast[]
+    // its start picture (#1187, --render=startframes): locked at the shot's first frame when the clip is rendered
+    startFrame?: Media
 }
 // a sung or spoken line: seconds from the clip's start
 export type EditorLine = {at: number; end?: number; text: string; who: string; line?: number}
@@ -573,6 +575,8 @@ export type TimingResult = {
 /** What the page may ask a run for. The server adds what only it sets (a picture's edited prompt, the look stage). */
 export type RunRequest =
     | {type: 'clips'; ids: string[]; again?: boolean; preview?: boolean}
+    // start pictures of shots (#1187): a clip's id for all its shots, <clip>-shot<N> for one - bun index.ts <id> --render=startframes
+    | {type: 'startframes'; ids: string[]; again?: boolean}
     | {type: 'direction'}
     | {type: 'lipsync'; only?: string[]; again?: boolean} // the lip-sync preview of the lyric timing (#1016): bun run lipsync
     | {type: 'look-pictures'}

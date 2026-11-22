@@ -273,6 +273,14 @@ describe('what can be started', () => {
             args: ['demo', '--render=videos', '--only=slot-001,slot-002', '--again'],
         })
         expect(runCommand(film, {type: 'clips', ids: ['clip-001']})).toEqual({script: 'film.ts', args: ['demo', '--render=videos', '--only=clip-001']})
+        // the start pictures of a clip's shots, or of one shot (#1187) - only a music video has them, only ids pass
+        expect(runCommand(music, {type: 'startframes', ids: ['slot-033-shot2'], again: true})).toEqual({
+            script: 'index.ts',
+            args: ['demo', '--render=startframes', '--only=slot-033-shot2', '--again'],
+        })
+        expect(runCommand(music, {type: 'startframes', ids: ['slot-033']}).args).toEqual(['demo', '--render=startframes', '--only=slot-033'])
+        expect(() => runCommand(music, {type: 'startframes', ids: ['--comfy=x']})).toThrow('no such shots')
+        expect(() => runCommand(film, {type: 'startframes', ids: ['clip-001']})).toThrow('for music videos')
         // the lip-sync preview (#1016): a tool of its own, asked for by clips and again - never by a dummy text or a size from the page
         expect(runCommand(music, {type: 'lipsync'})).toEqual({script: 'tools/lipsync.ts', args: ['demo']})
         expect(runCommand(music, {type: 'lipsync', only: ['slot-003'], again: true})).toEqual({

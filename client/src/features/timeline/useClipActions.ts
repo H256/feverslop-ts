@@ -250,9 +250,27 @@ export function useClipActions(timeline: Timeline) {
     if (versions[0]) timeline.compared.value = {clip: clips[0]!, version: versions[0], fresh: true}
   }
 
+  /** The start pictures of a clip's shots (#1187), all of them or the one of shot n: bun index.ts <id> --render=startframes. */
+  async function drawStartFrames(clip: EditorClip, n?: number) {
+    const one = n !== undefined
+    const again = one ? !!clip.shots[n]?.startFrame : clip.shots.some(s => s.startFrame)
+    const yes = await ask({
+      title: one ? `Draw the start picture of shot ${n + 1}${again ? ' again' : ''}?` : `Draw the start pictures of ${clip.id}${again ? ' again' : ''}?`,
+      lines: [
+        "A still per shot from the clip's own pictures: who stands where, drawn once. The clip is rendered from it - the shot's first frame is locked to the picture.",
+        again && 'A new seed. The picture there now is put away in old/.',
+      ],
+      warnings: [clip.video && 'The clip counts as stale then: it was rendered without this picture.'],
+      confirm: 'Draw',
+      render: true,
+    })
+    if (yes) await start({type: 'startframes', ids: [one ? `${clip.id}-shot${n + 1}` : clip.id], again})
+  }
+
   const guarded = <A extends unknown[]>(action: (...args: A) => Promise<unknown>) => toasts.guard(action)
   return {
     renderAgain: guarded(renderAgain),
+    drawStartFrames: guarded(drawStartFrames),
     renderMarked: guarded(renderMarked),
     replanBeats: guarded(replanBeats),
     bringPeople: guarded(bringPeople),

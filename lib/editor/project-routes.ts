@@ -100,6 +100,7 @@ export function findRoute(routes: readonly Route[], method: string, parts: reado
 
 export const RENDER_ACTIONS = new Set<RunAction['type']>([
     'clips',
+    'startframes',
     'lipsync',
     'final',
     'plan',

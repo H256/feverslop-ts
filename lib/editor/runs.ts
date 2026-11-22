@@ -29,6 +29,7 @@ export type {RunInfo} from '../../shared/workspace.ts'
 const ROOT = join(import.meta.dir, '..', '..')
 const LINES_KEPT = 4000
 export const CLIP_ID = /^[a-z]+-\d+$/
+const SHOT_ID = /^[a-z]+-\d+(-shot\d+)?$/
 const PICTURE_ID = /^[a-z0-9][a-z0-9-]*$/
 
 // what the page may ask for is the shared contract; a picture rendered again gets its edited prompt and its stage from the server only
@@ -88,6 +89,9 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
                 ...(action.again ? ['--again'] : []),
                 ...(action.preview ? ['--preview'] : []),
             )
+        case 'startframes':
+            if (kind !== 'music') throw new Error('start pictures are for music videos')
+            return run('--render=startframes', `--only=${checked(action.ids, SHOT_ID, 'shots')}`, ...(action.again ? ['--again'] : []))
         case 'pictures':
             return run(
                 '--render=images',

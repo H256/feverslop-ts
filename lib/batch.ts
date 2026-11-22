@@ -49,12 +49,15 @@ export function onlyClips<T extends {id: string}>(clips: T[], only: Set<string>)
 export async function unknownIds(
     projectDir: string,
     picturesFile: string,
-    asked: {only: string[]; retake?: string; pictures: boolean; clips: boolean},
+    // shots: a start picture of one shot may be named too (--render=startframes --only=slot-033-shot2)
+    asked: {only: string[]; retake?: string; pictures: boolean; clips: boolean; shots?: boolean},
 ): Promise<string | undefined> {
-    const clips = (await readClipRequests<{id: string}>(projectDir)).map(c => c.id)
+    const requests = await readClipRequests<{id: string; shots?: unknown[]}>(projectDir)
+    const clips = requests.map(c => c.id)
     if (!clips.length) return undefined
     const pictures = (await readPictureJobs(picturesFile)).map(p => p.id)
-    const known = [...(asked.clips ? clips : []), ...(asked.pictures ? pictures : [])]
+    const shots = asked.shots ? requests.flatMap(c => (c.shots ?? []).map((_, n) => `${c.id}-shot${n + 1}`)) : []
+    const known = [...(asked.clips ? clips : []), ...(asked.pictures ? pictures : []), ...shots]
     const there = [
         ...(asked.clips ? [`the clips are ${formatSlotRanges(clips)}`] : []),
         ...(asked.pictures && pictures.length ? [`the pictures are ${pictures.join(', ')}`] : []),

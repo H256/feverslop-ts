@@ -72,7 +72,8 @@ export async function renderAndAssemble(run: MusicRenderRun) {
         // the start pictures of the shots (#1187): drawn from the pictures, so after them - and before the clips
         if (render.has('startframes')) {
             if (render.has('images')) await renderer.freeMemory()
-            const selected = only.size ? startFrames.filter(s => only.has(s.clip)) : startFrames
+            // a clip names all its shots, <clip>-shot<N> one of them (the workspace's storyboard draws one shot again)
+            const selected = only.size ? startFrames.filter(s => only.has(s.clip) || only.has(`${s.clip}-shot${s.shot + 1}`)) : startFrames
             log.step('Start pictures', `${selected.length}${only.size ? styles.muted(` of ${startFrames.length} (--only)`) : ''}`)
             if (args.again) {
                 const stamp = versionStamp()
