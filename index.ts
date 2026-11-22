@@ -562,6 +562,7 @@ const {lookBrief, characterLooks, characterDescriptions, locationLooks, location
     cast,
     castLibrary,
     propPictures: config.propPictures,
+    singers: singing?.singers ?? [],
 })
 
 /**

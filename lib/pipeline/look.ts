@@ -37,6 +37,8 @@ export type LookRun = {
     castLibrary: Map<string, LibraryAsset>
     // config.propPictures: every prop has a picture of its own - the characters and the places are drawn without them (#944)
     propPictures: boolean
+    // the singers (step singing): each gets a place on the stage of their own, like the players
+    singers?: string[]
 }
 
 export async function planLook(run: LookRun) {
@@ -197,7 +199,7 @@ export async function planLook(run: LookRun) {
                 location.name,
                 locationLooks[location.id] ?? '',
                 locationDescriptions[location.id] ?? '',
-                performersOf(cast.characters, location.id),
+                performersOf(cast.characters, location.id, run.singers),
             )
             // an answer that cannot be read is asked once more; then the place has no layout and its beats write their own
             // staging, as before - a broken answer for one place does not stop the run
@@ -238,10 +240,10 @@ export async function planLook(run: LookRun) {
  * Who has a fixed place in a place of a music video (#1119): the players of the cast (for where the band plays), above all one
  * whose instrument stands there (a drum kit), and a crowd. A story without a band or a crowd has nobody - the layout is as before.
  */
-export function performersOf(characters: Character[], locationId: string): Performer[] {
+export function performersOf(characters: Character[], locationId: string, singers: string[] = []): Performer[] {
     const standing = (c: Character) => c.propCarried === false && !!c.prop && (!c.propPlace || c.propPlace === locationId)
     return characters
-        .filter(c => c.propStem || standing(c) || c.isGroup)
+        .filter(c => c.propStem || standing(c) || c.isGroup || singers.includes(c.id))
         .map(c => ({
             name: c.name,
             role: c.role,
@@ -249,6 +251,7 @@ export function performersOf(characters: Character[], locationId: string): Perfo
             ...(c.prop && (c.propCarried !== false || standing(c)) ? {prop: c.prop} : {}),
             ...(standing(c) ? {standing: true} : {}),
             ...(c.isGroup ? {group: true} : {}),
+            ...(singers.includes(c.id) && !c.isGroup ? {sings: true} : {}),
         }))
 }
 
