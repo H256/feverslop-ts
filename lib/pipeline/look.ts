@@ -200,6 +200,8 @@ export async function planLook(run: LookRun) {
                 locationLooks[location.id] ?? '',
                 locationDescriptions[location.id] ?? '',
                 performersOf(cast.characters, location.id, run.singers),
+                // whether the band plays here at all: a place of the story they only walk through has no stage (lib/prompts.ts)
+                storySummary,
             )
             // an answer that cannot be read is asked once more; then the place has no layout and its beats write their own
             // staging, as before - a broken answer for one place does not stop the run

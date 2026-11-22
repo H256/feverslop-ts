@@ -37,6 +37,16 @@ describe('the set of a place', () => {
         // a singer and one guitarist, no crowd and no kit: a band, so a set
         const duo = performersOf(band.slice(0, 2), 'hall', ['maren'])
         expect(locationLayoutPrompt('Hall', 'A hall.', 'A long hall.', duo).input).toContain('"name" exactly as below: "Maren", "Kael"')
+        // a place of the story they may only walk through: the model may leave its stage empty, read from the story - not where
+        // an instrument stands (the band plays there), not without a band (the prompt as before)
+        const story = 'The duo walks the road at night.'
+        const road = locationLayoutPrompt('Road', 'A road.', 'A long road.', duo, story).input
+        expect(road).toContain('Or "" when the band does not play or sing on a stage here in the story below')
+        expect(road).toContain(`The story of the video: ${story}\n\nPlace: Road`)
+        const hall = locationLayoutPrompt('Hall', 'A hall.', 'A long hall.', performersOf(band, 'hall', ['maren']), story).input
+        expect(hall).not.toContain('Or ""')
+        expect(hall).not.toContain('The story of the video')
+        expect(locationLayoutPrompt('Road', 'A road.', 'A long road.', [], story).input).toBe(locationLayoutPrompt('Road', 'A road.', 'A long road.', []).input)
         // a singer alone is no band: no set, as before
         expect(locationLayoutPrompt('Hall', 'A hall.', 'A long hall.', performersOf(band.slice(0, 1), 'hall', ['maren'])).input).not.toContain('"set"')
     })
