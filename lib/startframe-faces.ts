@@ -65,7 +65,7 @@ export type Area = {x: number; y: number; w: number; h: number}
  * head (the neck and the long hair below it), moved inside the picture where it would go over its edge. Under MIN_HEAD
  * pixels high a head is left as it is - upscaled that far, the picture model has nothing to keep of the pose.
  */
-export const HEAD_ROOM = 2.2
+export const HEAD_ROOM = 3.5
 export const MIN_HEAD = 40
 export function headArea(box: HeadBox['box'], size: {width: number; height: number}): Area | undefined {
     const [x1, y1, x2, y2] = [(box[0] / 1000) * size.width, (box[1] / 1000) * size.height, (box[2] / 1000) * size.width, (box[3] / 1000) * size.height]
@@ -89,7 +89,7 @@ export function headArea(box: HeadBox['box'], size: {width: number; height: numb
  */
 export const HEAD_SHIFT = 0.35
 export const HEAD_SCALE = 1.35
-export const HEAD_SETTLED = 0.2
+export const HEAD_SETTLED = 0.05
 export type Box = [number, number, number, number]
 export function headFit(was: Box, now: Box): {scale: number; x: number; y: number} | undefined {
     const [ww, wh, nw, nh] = [was[2] - was[0], was[3] - was[1], now[2] - now[0], now[3] - now[1]]
@@ -109,6 +109,6 @@ export function headFit(was: Box, now: Box): {scale: number; x: number; y: numbe
  * her portrait.
  */
 export function headEditPrompt(name: string, sings = false): string {
-    const mouth = sings ? 'singing, the mouth wide open as in <Picture 1>' : 'the mouth closed'
-    return `Edit <Picture 1>: the head of ${name}, the person in the middle of <Picture 1>, becomes exactly the head of the person in <Picture 2> - the same face shape, nose, eyes, brows, lips, skin, age, and the same hair color, length and style - seen at the angle and in the light of <Picture 1>, with the expression of <Picture 1>, not the calm one of <Picture 2>: ${mouth}. The head stays exactly where and as big as it is in <Picture 1>. Everything else in <Picture 1> stays exactly as it is: the body, the costume, the hands, whatever they hold, the background and the framing.`
+    const mouth = sings ? 'singing with the mouth wide open, as in <Picture 1>' : 'the mouth closed'
+    return `Swap the head of ${name}, the person in the middle of <Picture 1>, with the head of the person in <Picture 2>, which shows them close up, from the front, from the side and from behind: their face, skin, age and their hair - color, length and style. The new head holds exactly the pose, position, scale and gaze of the head it replaces: the same size in proportion to the shoulders and body, turned and tilted the same way, looking where it looks, ${mouth}, in the light of <Picture 1>. Everything else in <Picture 1> stays unchanged: the body, the costume, the hands, whatever they hold, the background and the framing.`
 }

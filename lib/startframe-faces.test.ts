@@ -71,9 +71,12 @@ describe('headFit', () => {
         expect(Math.abs(fit.x + 150 * fit.scale - 150)).toBeLessThanOrEqual(1)
         expect(Math.abs(fit.y + 146 * fit.scale - 160)).toBeLessThanOrEqual(1)
     })
-    // slot-001 shot 1: Kael the same size in both to the eye, boxes 0.86 times apart - put back as it is
-    test('a head that is where it was, give or take what the boxes vary, is put back as it is', () => {
-        expect(headFit([460, 210, 615, 450], [455, 195, 635, 475])).toEqual({scale: 1, x: 0, y: 0})
+    test('a head within a few pixels of where it was is put back as it is', () => {
+        expect(headFit([460, 210, 615, 450], [461, 212, 616, 451])).toEqual({scale: 1, x: 0, y: 0})
+    })
+    // slot-001 shot 1: Kael's edited head 0.86 times as big in its box - put back as it was, he looked like a head stuck on
+    test('a head grown in the edit is scaled back to the size it had', () => {
+        expect(headFit([460, 210, 615, 450], [455, 195, 635, 475])!.scale).toBeCloseTo(0.86, 2)
     })
     // slot-033 shot 3: Sera drawn again far up in her square, put back as it came she had two heads
     test('a head that moved off or changed size too much in the edit is not put back', () => {
@@ -82,11 +85,12 @@ describe('headFit', () => {
     })
 })
 
-test('the edit keeps everything but the head, which takes face and hair from the portrait and the mouth from the plan', () => {
+test('the edit swaps face and hair after the turnaround and keeps pose, scale, gaze and the mouth of the plan', () => {
     const prompt = headEditPrompt('Maren')
-    expect(prompt).toContain('the head of Maren, the person in the middle of <Picture 1>, becomes exactly the head of the person in <Picture 2>')
-    expect(prompt).toContain('the same hair color, length and style')
-    expect(prompt).toContain('Everything else in <Picture 1> stays exactly as it is')
-    expect(prompt).toContain(': the mouth closed.')
-    expect(headEditPrompt('Maren', true)).toContain(': singing, the mouth wide open as in <Picture 1>.')
+    expect(prompt).toContain('Swap the head of Maren, the person in the middle of <Picture 1>, with the head of the person in <Picture 2>')
+    expect(prompt).toContain('their hair - color, length and style')
+    expect(prompt).toContain('holds exactly the pose, position, scale and gaze of the head it replaces')
+    expect(prompt).toContain('Everything else in <Picture 1> stays unchanged')
+    expect(prompt).toContain('looking where it looks, the mouth closed,')
+    expect(headEditPrompt('Maren', true)).toContain('singing with the mouth wide open, as in <Picture 1>,')
 })

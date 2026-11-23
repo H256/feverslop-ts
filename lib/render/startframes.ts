@@ -114,10 +114,14 @@ const HEAD_SIZE: PixelSize = {width: 1024, height: 1024}
 const HEAD_OVAL = 1.4
 const HEAD_FEATHER = 0.3
 
-/** A person's portrait for the head pass: the face close-up of their own sheet, else the reference picture the start picture took. */
-function portraitOf(projectDir: string, picture: StartPicture, reference: string) {
-    const face = sheetFrame(sequenceSheetDir('character', picture.id), CHARACTER_SHEET_VIEWS.face)
-    return picture.file === pictureAsset('character', picture.id) && existsSync(join(projectDir, face)) ? face : reference
+/**
+ * A person's reference for the head pass: the 2x2 turnaround grid of their own sheet - face close-up, front, side and back - also
+ * where the start picture took the front view alone; else the reference picture the start picture took. The face close-up alone
+ * gave every head the size and the straight-on look of a portrait (slot-001 shot 1: four heads too big, all looking at the camera).
+ */
+async function portraitOf(projectDir: string, picture: StartPicture, reference: string) {
+    if (!picture.small) return reference
+    return startReference(projectDir, {kind: picture.kind, id: picture.id, file: picture.file, label: picture.label})
 }
 
 async function ffmpeg(args: string[], what: string) {
@@ -163,7 +167,7 @@ async function headPass(r: Renderer, request: Omit<StartFrameRequest, 'lighter'>
             continue
         }
         const person = people.find(p => p.picture.id === box.id)!
-        const portrait = portraitOf(r.projectDir, person.picture, person.reference)
+        const portrait = await portraitOf(r.projectDir, person.picture, person.reference)
         const crop = `${HEADS}/${id}-${box.id}-crop.png`
         const drawn = `${HEADS}/${id}-${box.id}.png`
         await ffmpeg(
