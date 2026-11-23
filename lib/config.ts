@@ -46,6 +46,13 @@ export type RenderConfig = {
     // a rendered clip with black frames or a picture that stands still for seconds (lib/clip-qa.ts) is rendered again with
     // another, derived seed, and the better take kept - up to this many times. 0 = off: every retry costs a whole clip
     qaRetries: number
+    // the start pictures of the shots (#1187, --render=startframes) are used by the clips: each is locked at its shot's first
+    // frame and the shot's words tell only what moves. Off (default): the clips are rendered as without them, also when
+    // pictures are there
+    startFrames: boolean
+    // a start picture gets a head pass after it is drawn (lib/startframe-faces.ts): each person's head is found by the vision
+    // model, edited by H3-Image after their portrait and put back - H3-Image draws faces of its own. Off by default: a job per person
+    startFrameFaces: boolean
     // the frame rate of a second final video, <id>-<fps>fps.mp4 next to the 24 fps one: the clips get more frames by
     // frame interpolation (lib/interpolate.ts, a ComfyUI job per clip). 24 (default) = off
     finalFps: number
@@ -127,6 +134,8 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     vocalGap: 1.5,
     leakRetries: 0,
     qaRetries: 0,
+    startFrames: false,
+    startFrameFaces: false,
     finalFps: 24,
     interpolationModel: 'rife_v4.26_heavy.safetensors',
     finish: false,
@@ -283,6 +292,8 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     if (typeof config.vocalGap !== 'number' || config.vocalGap < 0)
         fail(`vocalGap must be 0 (off) or a number of seconds like 1.5, got ${JSON.stringify(config.vocalGap)}`)
     if (typeof config.fightClips !== 'boolean') fail(`fightClips must be true or false, got ${JSON.stringify(config.fightClips)}`)
+    for (const key of ['startFrames', 'startFrameFaces'] as const)
+        if (typeof config[key] !== 'boolean') fail(`${key} must be true or false, got ${JSON.stringify(config[key])}`)
     for (const problem of [finalFpsProblem(config.finalFps), finishSettingProblem(config.finish), interpolationModelProblem(config.interpolationModel)])
         if (problem) fail(problem)
     for (const problem of [

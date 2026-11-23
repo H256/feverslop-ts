@@ -108,7 +108,7 @@ export async function renderClip(r: Renderer, clip: ClipRequest, stemFiles: Reco
         if (frames < clip.frames + lead) throw new Error(`${r.config.videoWorkflow}: renderFrames(${clip.frames + lead}) returned only ${frames} frames`)
         if (context) uploads.push({from: context.file, to: `${r.remoteDir}/${context.asset}`})
         // the start picture of each shot at its first frame, after the context frames (#1187)
-        const pinned = shotPictures(clip, r.projectDir)
+        const pinned = r.config.startFrames ? shotPictures(clip, r.projectDir) : []
         uploads.push(...pinned.map(p => ({from: join(r.projectDir, p.file), to: `${r.remoteDir}/${p.file}`})))
         const result = videoWorkflow({
             ...(pinned.length ? {shotFrames: pinned.map(p => ({image: `${r.remoteDir}/${p.file}`, at: p.at + lead}))} : {}),
@@ -266,7 +266,7 @@ export async function renderClipPreview(r: Renderer, clip: ClipRequest, stemFile
     if (clip.startsFrom && !start) return log.warn(`${clip.id}: no preview - it goes on from ${clip.startsFrom}, which has neither a preview nor a render yet`)
     const preview = r.config.preview
     // the start pictures of the shots, as in the clip's own render (#1187)
-    const pinned = shotPictures(clip, r.projectDir)
+    const pinned = r.config.startFrames ? shotPictures(clip, r.projectDir) : []
     const spec: RenderSpec = {
         ...clipSpec(clip, r.projectDir, r.config),
         parts: [

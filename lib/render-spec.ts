@@ -27,6 +27,7 @@ type VideoConfig = {
     videoRefineSteps?: number
     pinStartFrame?: boolean
     contextFrames?: number
+    startFrames?: boolean // the shots' start pictures are locked in (#1187) - only then are they part of the request
 }
 const aspectPart = (config: VideoConfig) => (config.videoAspect && config.videoAspect !== '16:9' ? [config.videoAspect] : [])
 const stepsPart = (config: VideoConfig) =>
@@ -88,7 +89,7 @@ export function clipSpec(
 ): RenderSpec {
     // the start pictures of the shots (#1187): a picture made again or taken away makes the clip stale; a clip without any keeps
     // the request it had before they existed
-    const pinned = clip.shots ? shotPictures({id: clip.id, startsFrom: clip.startsFrom, shots: clip.shots}, projectDir) : []
+    const pinned = config.startFrames && clip.shots ? shotPictures({id: clip.id, startsFrom: clip.startsFrom, shots: clip.shots}, projectDir) : []
     return {
         kind: 'clip',
         id: clip.id,

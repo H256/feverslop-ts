@@ -681,7 +681,7 @@ export type RunLines = {lines: string[]; next: number}
 export type SettingView = {
     key: string
     label: string
-    group: 'Workflows' | 'Size' | 'Sampling' | 'Continuing clips' | 'Seed and retries' | 'Language model' | 'Final video' | 'Finish' | 'Lip-sync preview'
+    group: 'Workflows' | 'Size' | 'Sampling' | 'Continuing clips' | 'Start pictures' | 'Seed and retries' | 'Language model' | 'Final video' | 'Finish' | 'Lip-sync preview'
     /** select: one of `choices`; text: a free value (a size, a ratio, a file name); number: a number, whole unless `step` says otherwise */
     control: 'select' | 'text' | 'number'
     multiline?: boolean

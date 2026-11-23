@@ -150,8 +150,9 @@ export async function buildRequests(run: RequestsRun) {
         clipPrompt: config.clipPrompt,
         props: config.propPictures ? project.data.props : undefined,
         shotViews,
-        // a shot with a start picture in startframes/ has it locked at its first frame (#1187): its words tell only what moves
-        pinnedShots: (clip, shot) => existsSync(join(project.dir, startFrameFile(clip, shot))),
+        // config.startFrames: a shot with a start picture in startframes/ has it locked at its first frame (#1187), its words tell
+        // only what moves. Off: the prompts are as without pictures
+        ...(config.startFrames ? {pinnedShots: (clip: string, shot: number) => existsSync(join(project.dir, startFrameFile(clip, shot)))} : {}),
     })
 
     // more people than reference pictures: whoever did not fit is in the scene without a picture - the video model invents them

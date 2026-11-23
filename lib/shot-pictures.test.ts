@@ -27,7 +27,7 @@ describe('shotPictures', () => {
 })
 
 describe('the request of a clip', () => {
-    const config = {videoWorkflow: 'h3-ref2video-prism-2pass', videoResolution: '1280x720'} as Parameters<typeof clipSpec>[2]
+    const config = {videoWorkflow: 'h3-ref2video-prism-2pass', videoResolution: '1280x720', startFrames: true} as Parameters<typeof clipSpec>[2]
     const request = (shots?: {at: number}[]) =>
         clipSpec({id: 'slot-033', prompt: 'p', frames: 194, assets: {pictures: [], audio: []}, ...(shots ? {shots} : {})}, dir, config)
     test('a start picture made again makes the clip stale; a clip without any keeps the request it had', () => {
@@ -36,5 +36,9 @@ describe('the request of a clip', () => {
         expect(JSON.stringify(request(clip.shots))).not.toBe(before)
         const none = {...request(undefined), id: 'x'}
         expect(JSON.stringify(none.parts)).not.toContain('start pictures')
+    })
+    test('with "startFrames" off the pictures are not used: the clip keeps the request it had', () => {
+        const off = clipSpec({id: 'slot-033', prompt: 'p', frames: 194, shots: clip.shots, assets: {pictures: [], audio: []}}, dir, {...config, startFrames: false})
+        expect(JSON.stringify(off.parts)).not.toContain('start pictures')
     })
 })

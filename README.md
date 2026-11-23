@@ -517,7 +517,14 @@ bun index.ts --render=startframes --only=slot-028      # the start picture of ea
   props and the place go in; a character with a turnaround goes in as a 2x2 grid of its face, front, profile and back
   (`startframes/refs/`), a prop as the middle square of its picture - the picture model scales every reference picture to
   a 1024 px short edge, so a tall sheet costs many tokens and its small faces break. About 6 minutes a picture on a 32 GB
-  Radeon, 2-3 on a 5090. The clips do not use them yet.
+  Radeon, 2-3 on a 5090. `--only=slot-028-shot2` draws one shot. The vision model counts who is in a picture: a person drawn
+  twice or missing is said, and drawn again with `qaRetries`.
+  - `"startFrames": true` in `config.json` (off by default): the clips use them. Each is locked at its shot's first frame
+    (`MiniMaxH3AddGuide`, in pass 1 of a two-pass workflow) and the shot's words tell only what moves. Off, the clips are
+    rendered as without pictures, also when pictures are there.
+  - `"startFrameFaces": true` (off by default): after a picture is drawn, each person's head is found by the vision model
+    and drawn again by H3-Image after their portrait, then put back. H3-Image draws faces of its own, and a pinned picture
+    hands its faces to the clip. One more job per person.
 
 - `all` is images, videos and final - never the song: `--render=song` makes a new one and is asked for by name.
 - In short: `--render` renders what is **missing**, a **stale** one stays until `--refresh`, and `--again` renders the ones
