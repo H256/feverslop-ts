@@ -26,15 +26,22 @@ export function spotCases(
     )
 }
 
-/** One call for all cases of a beat, thinking off. A call that fails costs only this check. */
+/**
+ * One call for all cases of a beat, with a little thinking. A call that fails costs only this check. Measured on 14 cases of the
+ * zz-tides-sf run, three runs each: thinking off and "another place" flagged 14 of 42 that were right ("on the right side of the
+ * stage behind Kael"); judged by the side the words name, 4 off and none with a little thinking (one jump missed) - every false
+ * alarm asks the planner again, a minute or more, the thinking costs about 15 s a beat.
+ */
 export async function spotIssues(cases: SpotCase[], moments: string[] = [], ask: <T>(options: AskOptions) => Promise<T> = askJson): Promise<Issue[]> {
     if (!cases.length) return []
     const answer = await ask<{kept?: unknown[]}>({
-        maxTokens: 512 + cases.length * 16,
-        reasoning: 'none',
+        // thinking and answer share the limit: 512 was cut off with low
+        maxTokens: 4096 + cases.length * 16,
+        reasoning: 'low',
         input: `Each entry below is one person in one shot of a music video: their fixed place on the stage ("spot") and what the shot says of them ("state"). Does the state keep them at their spot?
-true when the state puts them at their spot, or names no place at all, or has them go somewhere a moment of the scene below takes them.
-false when the state puts them at another place on the stage or in the place than their spot - another side, the centre when their spot is a side, another feature.
+Judge only by the side or part of the stage the state names for the person. Words about light, steam, posture, which way they face or who is near them ("behind Kael", "in the white light", "leaning into the light at the centre of the nave") do not move them: "on the right side of the stage, in the centre of the white light" is on the right side.
+true when the state names their spot's side or part, or names none, or has them go where a moment of the scene below takes them.
+false only when it names another side or part of the stage than their spot - the other side, the centre when their spot is a side, between two others who stand on both sides of it - and no moment takes them there.
 Answer only with JSON: {"kept": [true or false per entry, in order]} - exactly ${cases.length} values.
 ${moments.length ? `Moments of the scene:\n${moments.map(m => `- ${m}`).join('\n')}\n` : ''}---
 ${JSON.stringify(cases.map(c => ({person: c.name, spot: c.spot, state: c.state})))}`,
