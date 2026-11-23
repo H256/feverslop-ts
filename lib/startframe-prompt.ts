@@ -29,7 +29,16 @@ export type StartPicture = {
     hidden?: true
     sings?: true
 }
-export type StartFrameRequest = {clip: string; shot: number; at: number; prompt: string; pictures: StartPicture[]; megapixels: number}
+// lighter: the same shot without its prop pictures, drawn when the text encoder runs out of memory on this one (lib/render/startframes.ts)
+export type StartFrameRequest = {
+    clip: string
+    shot: number
+    at: number
+    prompt: string
+    pictures: StartPicture[]
+    megapixels: number
+    lighter?: Omit<StartFrameRequest, 'lighter'>
+}
 
 type Shot = ClipRequest['shots'][number] & {plan?: ShotPlan}
 type Input = {
@@ -63,6 +72,13 @@ export function startFrameRequests(input: Input): StartFrameRequest[] {
 }
 
 function startFrameOf(input: Input, shot: Shot, n: number): StartFrameRequest | undefined {
+    const request = drawnFrom(input, shot, n, true)
+    const lighter = request?.pictures.some(p => p.kind === 'prop') ? drawnFrom(input, shot, n, false) : undefined
+    return request && lighter ? {...request, lighter} : request
+}
+
+// withProps false: the props are drawn from their words, as when none fits the budget
+function drawnFrom(input: Input, shot: Shot, n: number, withProps: boolean): Omit<StartFrameRequest, 'lighter'> | undefined {
     const plan = shot.plan
     const ids = plan?.characters?.length ? plan.characters : []
     if (!plan || !ids.length) return undefined
@@ -91,6 +107,7 @@ function startFrameOf(input: Input, shot: Shot, n: number): StartFrameRequest | 
         cost({kind, id: p.id, file: p.file, ...(small && kind === 'character' ? {small: true as const} : {})})
     let total = (location ? of('location', location) : 0) + cast.reduce((sum, c) => sum + of('character', c.picture), 0)
     const taken = props.filter(prop => {
+        if (!withProps) return false
         const more = of('prop', prop.picture)
         if (total + more > START_PICTURE_MEGAPIXELS) return false
         total += more

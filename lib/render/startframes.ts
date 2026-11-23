@@ -8,7 +8,7 @@ import {resolveSeed, type PixelSize} from '../../comfy/helpers.ts'
 import h3StartFrame from '../../comfy/workflows/h3-startframe.ts'
 import {pictureAsset} from '../compose.ts'
 import {log, styles} from '../log.ts'
-import {fileFingerprint} from '../provenance.ts'
+import {fileFingerprint, freshness} from '../provenance.ts'
 import {type RenderSpec, specId} from '../render-spec.ts'
 import type {Renderer} from '../render.ts'
 import {CHARACTER_SHEET_VIEWS, sequenceSheetDir, sheetFrame, sheetLayout} from '../sequenceSheet.ts'
@@ -130,7 +130,7 @@ async function ffmpeg(args: string[], what: string) {
  * Works on the picture as it was drawn (kept in startframes/raw/), so a pass again starts from the same picture. A person seen
  * from behind, a crowd, a head the model did not find or too small to draw again keeps what the picture has.
  */
-async function headPass(r: Renderer, request: StartFrameRequest, references: string[], size: PixelSize, id: string, seed: number) {
+async function headPass(r: Renderer, request: Omit<StartFrameRequest, 'lighter'>, references: string[], size: PixelSize, id: string, seed: number) {
     const file = startFrameFile(request.clip, request.shot)
     const target = join(r.projectDir, file)
     const people = request.pictures.flatMap((picture, i) =>
@@ -245,19 +245,46 @@ async function noteHeads(target: string, heads: {id: string; box: HeadBox['box']
     await Bun.write(sidecar, JSON.stringify({...record, heads}, null, 2))
 }
 
-export async function renderStartFrame(r: Renderer, request: StartFrameRequest, size: PixelSize) {
-    const file = startFrameFile(request.clip, request.shot)
-    if (request.megapixels > START_PICTURE_MEGAPIXELS)
-        log.warn(
-            `${file}: its people alone are ${request.megapixels} MP of reference pictures (the budget is ${START_PICTURE_MEGAPIXELS}) - a 32 GB Radeon runs out of memory on that; a card with more room may draw it`,
-        )
-    const target = join(r.projectDir, file)
+async function startSpec(r: Renderer, request: Omit<StartFrameRequest, 'lighter'>, size: PixelSize) {
     const references = await Promise.all(request.pictures.map(picture => startReference(r.projectDir, picture)))
     const spec: RenderSpec = {
         kind: 'startframe',
         id: `${request.clip}-shot${request.shot + 1}`,
         parts: [request.prompt, size, START_FRAME_WORKFLOW, references.map(ref => fileFingerprint(join(r.projectDir, ref)))],
     }
+    return {references, spec}
+}
+
+/**
+ * The start picture of a shot. Where the text encoder runs out of memory, the shot is drawn without its prop pictures (the
+ * request's lighter one): slot-001 of tides - a place, five people and the drum kit (9.8 MP) with 3490 characters of prompt - ran
+ * out of memory on the 32 GB Radeon every time; slot-033 with the same pictures and 3141 characters went through. A picture
+ * drawn so is kept in the next run, not tried again with the props.
+ */
+export async function renderStartFrame(r: Renderer, request: StartFrameRequest, size: PixelSize) {
+    const file = startFrameFile(request.clip, request.shot)
+    const lighter = request.lighter
+    const drawnLighter = async () =>
+        !!lighter && existsSync(join(r.projectDir, file)) && freshness(join(r.projectDir, file), specId((await startSpec(r, lighter, size)).spec)) === 'current'
+    if (await drawnLighter()) return drawStartFrame(r, lighter!, size)
+    try {
+        await drawStartFrame(r, request, size)
+    } catch (e) {
+        if (!lighter || !/out of memory/i.test(messageOf(e))) throw e
+        log.warn(`${file}: out of memory with its prop pictures - drawn without them, the props from their words`)
+        await r.freeMemory()
+        await drawStartFrame(r, lighter, size)
+    }
+}
+
+async function drawStartFrame(r: Renderer, request: Omit<StartFrameRequest, 'lighter'>, size: PixelSize) {
+    const file = startFrameFile(request.clip, request.shot)
+    if (request.megapixels > START_PICTURE_MEGAPIXELS)
+        log.warn(
+            `${file}: its people alone are ${request.megapixels} MP of reference pictures (the budget is ${START_PICTURE_MEGAPIXELS}) - a 32 GB Radeon runs out of memory on that; a card with more room may draw it`,
+        )
+    const target = join(r.projectDir, file)
+    const {references, spec} = await startSpec(r, request, size)
     const current = specId(spec)
     // the head pass of a picture made before it was on is done on that picture, not by drawing it again
     const heads = async (seed: number) => {

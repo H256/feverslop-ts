@@ -146,3 +146,16 @@ test('the size of a start picture: about 2.4 MP in the video aspect, on a 32 px 
     expect(startFrameSize('9:16')).toEqual({width: 1152, height: 2048})
     expect(startFrameSize('1:1')).toEqual({width: 1536, height: 1536})
 })
+
+// slot-001 of tides: a place, five people and the drum kit ran the text encoder out of memory - drawn again without the prop pictures
+test('a shot with prop pictures has a lighter one without them, the props from their words', () => {
+    const [wide, close] = requests
+    const lighter = wide!.lighter!
+    expect(lighter.pictures.some(p => p.kind === 'prop')).toBe(false)
+    expect(lighter.pictures.map(p => p.id)).toEqual(wide!.pictures.filter(p => p.kind !== 'prop').map(p => p.id))
+    expect(lighter.prompt).toContain('- Vex, the person of <Picture 4>, at the coral drum kit; mouth closed.')
+    expect(lighter.megapixels).toBeLessThan(wide!.megapixels)
+    expect(close!.lighter?.pictures.some(p => p.kind === 'prop')).toBe(false)
+    // with no prop picture there is nothing lighter
+    expect(startFrameRequests({clip, characters, look: '', megapixels: p => (p.kind === 'prop' ? 1 : 1.9)})[0]!.lighter).toBeUndefined()
+})
