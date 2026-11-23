@@ -2,7 +2,7 @@ import {copyFileSync, existsSync, mkdirSync, renameSync} from 'node:fs'
 import {basename, dirname, extname, join, relative} from 'node:path'
 import {visionUrls} from '../describe-picture.ts'
 import {countPeople, describeCounts, notOnce} from '../startframe-check.ts'
-import {headArea, headBoxes, headEditPrompt, type HeadBox} from '../startframe-faces.ts'
+import {type Box, headArea, headBoxes, headEditPrompt, headFit, type HeadBox} from '../startframe-faces.ts'
 import {messageOf} from '../text.ts'
 import {resolveSeed, type PixelSize} from '../../comfy/helpers.ts'
 import h3StartFrame from '../../comfy/workflows/h3-startframe.ts'
@@ -109,7 +109,9 @@ export async function startReference(projectDir: string, picture: StartPicture):
 const RAW = 'startframes/raw'
 const HEADS = 'startframes/heads'
 const HEAD_SIZE: PixelSize = {width: 1024, height: 1024}
-// the edited head is put back opaque within this share of its radius, fading out to the edge of its square
+// the edited head is put back in an ellipse HEAD_OVAL times its box, opaque to 1 - HEAD_FEATHER of it and fading out to its rim: only
+// the head - the square around it, put back whole, brought the edit's own shoulders and background along
+const HEAD_OVAL = 1.4
 const HEAD_FEATHER = 0.3
 
 /** A person's portrait for the head pass: the face close-up of their own sheet, else the reference picture the start picture took. */
@@ -174,7 +176,7 @@ async function headPass(r: Renderer, request: StartFrameRequest, references: str
             ],
             `the head of ${box.name} could not be cut out of ${file}`,
         )
-        const prompt = headEditPrompt(box.name)
+        const prompt = headEditPrompt(box.name, !!person.picture.sings)
         const spec: RenderSpec = {
             kind: 'startframe',
             id: `${id}-head-${box.id}`,
@@ -191,8 +193,31 @@ async function headPass(r: Renderer, request: StartFrameRequest, references: str
                 return {result, uploads: [crop, portrait].map((f, i) => ({from: join(r.projectDir, f), to: remote[i]!})), meta: {seed}}
             },
         )
-        // put back: scaled to its square, opaque in the middle and fading out to the edge, over the picture so far
-        const alpha = `255*clip((1-hypot(X-W/2,Y-H/2)/(W/2))/${HEAD_FEATHER},0,1)`
+        // where the head is in the edit: laid over where it was, or - moved or resized too far - not put back at all
+        const px = (v: number, of: number, from: number) => (v / 1000) * of - from
+        const was: Box = [
+            px(box.box[0], size.width, area.x),
+            px(box.box[1], size.height, area.y),
+            px(box.box[2], size.width, area.x),
+            px(box.box[3], size.height, area.y),
+        ]
+        let fit: ReturnType<typeof headFit>
+        try {
+            const [edited, face] = await visionUrls([join(r.projectDir, drawn), join(r.projectDir, portrait)], START_CHECK_WIDTH)
+            const [now] = await headBoxes(edited!, [{id: box.id, name: box.name, reference: face!}])
+            fit = now && headFit(was, now.box.map(v => (v / 1000) * area.w) as Box)
+        } catch (e) {
+            log.warn(`${file}: the head of ${box.name} could not be found in its edit (${messageOf(e)}) - kept as drawn`)
+            continue
+        }
+        if (!fit) {
+            log.warn(`${file}: ${box.name}'s head moved or changed size in its edit (${drawn}) - kept as drawn`)
+            continue
+        }
+        const side = Math.round(area.w * fit.scale)
+        const [cx, cy] = [(was[0] + was[2]) / 2 - fit.x, (was[1] + was[3]) / 2 - fit.y]
+        const [rx, ry] = [((was[2] - was[0]) / 2) * HEAD_OVAL, ((was[3] - was[1]) / 2) * HEAD_OVAL]
+        const alpha = `255*clip((1-hypot((X-${cx.toFixed(1)})/${rx.toFixed(1)},(Y-${cy.toFixed(1)})/${ry.toFixed(1)}))/${HEAD_FEATHER},0,1)`
         const next = `${target}.head.png`
         await ffmpeg(
             [
@@ -201,7 +226,7 @@ async function headPass(r: Renderer, request: StartFrameRequest, references: str
                 '-i',
                 join(r.projectDir, drawn),
                 '-filter_complex',
-                `[1]scale=${area.w}:${area.h}:flags=lanczos,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='${alpha}'[head];[0][head]overlay=${area.x}:${area.y}`,
+                `[1]scale=${side}:${side}:flags=lanczos,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='${alpha}'[head];[0][head]overlay=${area.x + fit.x}:${area.y + fit.y}`,
                 next,
             ],
             `the head of ${box.name} could not be put back into ${file}`,

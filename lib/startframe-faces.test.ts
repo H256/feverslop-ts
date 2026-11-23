@@ -1,6 +1,6 @@
 import {describe, expect, test} from 'bun:test'
 import type {AskOptions} from './llm.ts'
-import {headArea, headBoxes, headEditPrompt, MIN_HEAD} from './startframe-faces.ts'
+import {headArea, headBoxes, headEditPrompt, headFit, MIN_HEAD} from './startframe-faces.ts'
 
 const people = [
     {id: 'maren', name: 'Maren', reference: 'data:maren', where: 'centre of frame'},
@@ -62,9 +62,27 @@ describe('headArea', () => {
     })
 })
 
-test('the edit keeps everything but the head, which takes face and hair from the portrait', () => {
+describe('headFit', () => {
+    test('the head of the edit is scaled and moved onto the head it replaces', () => {
+        // drawn 10 px higher and a fifth smaller
+        const fit = headFit([100, 100, 200, 220], [110, 98, 190, 194])!
+        expect(fit.scale).toBeCloseTo(1.25, 2)
+        // the middle of the head lands on the middle of the one it replaces, to the pixel
+        expect(Math.abs(fit.x + 150 * fit.scale - 150)).toBeLessThanOrEqual(1)
+        expect(Math.abs(fit.y + 146 * fit.scale - 160)).toBeLessThanOrEqual(1)
+    })
+    // slot-033 shot 3: Sera drawn again far up in her square, put back as it came she had two heads
+    test('a head that moved off or changed size too much in the edit is not put back', () => {
+        expect(headFit([100, 100, 200, 220], [100, 20, 200, 140])).toBeUndefined()
+        expect(headFit([100, 100, 200, 220], [120, 130, 170, 190])).toBeUndefined()
+    })
+})
+
+test('the edit keeps everything but the head, which takes face and hair from the portrait and the mouth from the plan', () => {
     const prompt = headEditPrompt('Maren')
     expect(prompt).toContain('the head of Maren, the person in the middle of <Picture 1>, becomes exactly the head of the person in <Picture 2>')
     expect(prompt).toContain('the same hair color, length and style')
     expect(prompt).toContain('Everything else in <Picture 1> stays exactly as it is')
+    expect(prompt).toContain(': the mouth closed.')
+    expect(headEditPrompt('Maren', true)).toContain(': singing, the mouth wide open as in <Picture 1>.')
 })

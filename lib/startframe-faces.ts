@@ -79,7 +79,31 @@ export function headArea(box: HeadBox['box'], size: {width: number; height: numb
     return {x: even(clamp(cx - side / 2, size.width - side)), y: even(clamp(cy - side / 2, size.height - side)), w: even(side), h: even(side)}
 }
 
-/** What H3-Image is asked to do with the cut-out head (<Picture 1>) and the person's portrait (<Picture 2>). */
-export function headEditPrompt(name: string): string {
-    return `Edit <Picture 1>: the head of ${name}, the person in the middle of <Picture 1>, becomes exactly the head of the person in <Picture 2> - the same face shape, nose, eyes, brows, lips, skin, age, and the same hair color, length and style - seen at the angle, with the expression and the open or closed mouth, and in the light of <Picture 1>. Everything else in <Picture 1> stays exactly as it is: the body, the costume, the hands, whatever they hold, the background and the framing.`
+/**
+ * How the head drawn again is laid over the one it replaces, both boxes in pixels of the cut-out: scaled by `scale` and put
+ * with its top left corner at (x, y). H3-Image does not keep the framing of what it edits - on slot-033 shot 3 it drew Sera's
+ * head higher up in the square, and put back as it came, the picture had her head twice. A head moved further than SHIFT of its
+ * size, or grown or shrunk past SCALE, is not the same head any more: none, the picture keeps what it drew.
+ */
+export const HEAD_SHIFT = 0.35
+export const HEAD_SCALE = 1.35
+export type Box = [number, number, number, number]
+export function headFit(was: Box, now: Box): {scale: number; x: number; y: number} | undefined {
+    const [ww, wh, nw, nh] = [was[2] - was[0], was[3] - was[1], now[2] - now[0], now[3] - now[1]]
+    const scale = Math.sqrt((ww * wh) / (nw * nh))
+    if (scale > HEAD_SCALE || scale < 1 / HEAD_SCALE) return undefined
+    const centre = (b: Box) => [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] as const
+    const [[wx, wy], [nx, ny]] = [centre(was), centre(now)]
+    if (Math.hypot(wx - nx, wy - ny) > HEAD_SHIFT * Math.max(ww, wh)) return undefined
+    return {scale, x: Math.round(wx - nx * scale), y: Math.round(wy - ny * scale)}
+}
+
+/**
+ * What H3-Image is asked to do with the cut-out head (<Picture 1>) and the person's portrait (<Picture 2>). The mouth is said, from
+ * the shot plan: told only to keep the expression of <Picture 1>, Maren singing in slot-033 came back with the closed mouth of
+ * her portrait.
+ */
+export function headEditPrompt(name: string, sings = false): string {
+    const mouth = sings ? 'singing, the mouth wide open as in <Picture 1>' : 'the mouth closed'
+    return `Edit <Picture 1>: the head of ${name}, the person in the middle of <Picture 1>, becomes exactly the head of the person in <Picture 2> - the same face shape, nose, eyes, brows, lips, skin, age, and the same hair color, length and style - seen at the angle and in the light of <Picture 1>, with the expression of <Picture 1>, not the calm one of <Picture 2>: ${mouth}. The head stays exactly where and as big as it is in <Picture 1>. Everything else in <Picture 1> stays exactly as it is: the body, the costume, the hands, whatever they hold, the background and the framing.`
 }

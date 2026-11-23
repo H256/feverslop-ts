@@ -104,6 +104,13 @@ describe('the start pictures of a clip', () => {
         expect(prompt).toContain('- The audience: a crowd of different people - <Picture 5> shows one of them')
     })
 
+    // the head pass (lib/startframe-faces.ts) finds each one where the plan puts them and keeps the singer's mouth open
+    test('who sings and where the plan puts them go with their picture', () => {
+        const maren = requests[0]!.pictures.find(p => p.id === 'maren')!
+        expect(maren).toMatchObject({name: 'Maren', where: 'centre of the stage', sings: true})
+        expect(requests[0]!.pictures.find(p => p.id === 'kael')!.sings).toBeUndefined()
+    })
+
     // slot-028: told the band in its places, the singer stood among the crowd - the crowd first, the band far beyond it
     test('a crowd with the band: the crowd nearest with its back to the camera, the band small on the stage beyond it', () => {
         expect(requests[0]!.prompt).toContain(
