@@ -174,7 +174,7 @@ const DEFINITIONS: Definition[] = [
         control: 'select',
         for: 'music',
         choices: () => yesNo,
-        note: 'The clips use the start pictures of their shots (drawn in the Shots tab or with --render=startframes): each is locked at its shot\'s first frame, and the shot\'s words tell only what moves. A change makes the clips with pictures stale.',
+        note: "The clips use the start pictures of their shots (drawn in the Shots tab or with --render=startframes): each is locked at its shot's first frame, and the shot's words tell only what moves. A change makes the clips with pictures stale.",
     },
     {
         key: 'startFrameFaces',
@@ -183,7 +183,7 @@ const DEFINITIONS: Definition[] = [
         control: 'select',
         for: 'music',
         choices: () => yesNo,
-        note: 'After a start picture is drawn, each person\'s head is found by the vision model and drawn again after their portrait - the picture model draws faces of its own. One more job per person.',
+        note: "After a start picture is drawn, each person's head is found by the vision model and drawn again after their portrait - the picture model draws faces of its own. One more job per person.",
     },
     {
         key: 'clipPrompt',

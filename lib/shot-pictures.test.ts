@@ -38,7 +38,10 @@ describe('the request of a clip', () => {
         expect(JSON.stringify(none.parts)).not.toContain('start pictures')
     })
     test('with "startFrames" off the pictures are not used: the clip keeps the request it had', () => {
-        const off = clipSpec({id: 'slot-033', prompt: 'p', frames: 194, shots: clip.shots, assets: {pictures: [], audio: []}}, dir, {...config, startFrames: false})
+        const off = clipSpec({id: 'slot-033', prompt: 'p', frames: 194, shots: clip.shots, assets: {pictures: [], audio: []}}, dir, {
+            ...config,
+            startFrames: false,
+        })
         expect(JSON.stringify(off.parts)).not.toContain('start pictures')
     })
 })
