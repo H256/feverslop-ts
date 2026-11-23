@@ -106,3 +106,33 @@ test('a resume-probe connection blip falls through to protected recovery (#666)'
         rmSync(dir, {recursive: true, force: true})
     }
 })
+
+test('a job its server says failed leaves no record to take up again - the fallback after it starts fresh', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'failed-http-'))
+    const server = Bun.serve({
+        port: 0,
+        hostname: '127.0.0.1',
+        fetch(req) {
+            const path = new URL(req.url).pathname
+            if (path === '/prompt') return Response.json({prompt_id: 'job'})
+            if (path === '/history/job')
+                return Response.json({
+                    job: {
+                        status: {completed: false, status_str: 'error', messages: [['execution_error', {exception_message: 'HIP out of memory'}]]},
+                        outputs: {},
+                    },
+                })
+            if (path === '/system_stats') return Response.json({})
+            return Response.json({queue_running: [], queue_pending: []})
+        },
+    })
+    try {
+        const target = join(dir, 'result.png')
+        using renderer = new HttpRenderer(dir, server.url.origin)
+        await expect(renderer.run(target)).rejects.toThrow(/out of memory/)
+        expect(existsSync(`${target}.pending.json`)).toBe(false)
+    } finally {
+        void server.stop(true)
+        rmSync(dir, {recursive: true, force: true})
+    }
+})
