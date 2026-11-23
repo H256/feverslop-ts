@@ -83,10 +83,13 @@ export function headArea(box: HeadBox['box'], size: {width: number; height: numb
  * How the head drawn again is laid over the one it replaces, both boxes in pixels of the cut-out: scaled by `scale` and put
  * with its top left corner at (x, y). H3-Image does not keep the framing of what it edits - on slot-033 shot 3 it drew Sera's
  * head higher up in the square, and put back as it came, the picture had her head twice. A head moved further than SHIFT of its
- * size, or grown or shrunk past SCALE, is not the same head any more: none, the picture keeps what it drew.
+ * size, or grown or shrunk past SCALE, is not the same head any more: none, the picture keeps what it drew. Within SETTLED of
+ * either the edit is put back as it is: the vision model's boxes vary that much for the same head - the four heads of slot-001
+ * shot 1, the same size in both to the eye, came 0.86 to 0.93 times as big.
  */
 export const HEAD_SHIFT = 0.35
 export const HEAD_SCALE = 1.35
+export const HEAD_SETTLED = 0.2
 export type Box = [number, number, number, number]
 export function headFit(was: Box, now: Box): {scale: number; x: number; y: number} | undefined {
     const [ww, wh, nw, nh] = [was[2] - was[0], was[3] - was[1], now[2] - now[0], now[3] - now[1]]
@@ -94,7 +97,9 @@ export function headFit(was: Box, now: Box): {scale: number; x: number; y: numbe
     if (scale > HEAD_SCALE || scale < 1 / HEAD_SCALE) return undefined
     const centre = (b: Box) => [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] as const
     const [[wx, wy], [nx, ny]] = [centre(was), centre(now)]
-    if (Math.hypot(wx - nx, wy - ny) > HEAD_SHIFT * Math.max(ww, wh)) return undefined
+    const shift = Math.hypot(wx - nx, wy - ny) / Math.max(ww, wh)
+    if (shift > HEAD_SHIFT) return undefined
+    if (shift <= HEAD_SETTLED && Math.abs(Math.log(scale)) <= Math.log(1 + HEAD_SETTLED)) return {scale: 1, x: 0, y: 0}
     return {scale, x: Math.round(wx - nx * scale), y: Math.round(wy - ny * scale)}
 }
 

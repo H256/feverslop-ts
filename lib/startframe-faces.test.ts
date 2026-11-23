@@ -71,6 +71,10 @@ describe('headFit', () => {
         expect(Math.abs(fit.x + 150 * fit.scale - 150)).toBeLessThanOrEqual(1)
         expect(Math.abs(fit.y + 146 * fit.scale - 160)).toBeLessThanOrEqual(1)
     })
+    // slot-001 shot 1: Kael the same size in both to the eye, boxes 0.86 times apart - put back as it is
+    test('a head that is where it was, give or take what the boxes vary, is put back as it is', () => {
+        expect(headFit([460, 210, 615, 450], [455, 195, 635, 475])).toEqual({scale: 1, x: 0, y: 0})
+    })
     // slot-033 shot 3: Sera drawn again far up in her square, put back as it came she had two heads
     test('a head that moved off or changed size too much in the edit is not put back', () => {
         expect(headFit([100, 100, 200, 220], [100, 20, 200, 140])).toBeUndefined()

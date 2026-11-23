@@ -193,9 +193,11 @@ async function headPass(r: Renderer, request: Omit<StartFrameRequest, 'lighter'>
                 return {result, uploads: [crop, portrait].map((f, i) => ({from: join(r.projectDir, f), to: remote[i]!})), meta: {seed}}
             },
         )
-        // where the head is in the edit: laid over where it was, or - moved or resized too far - not put back at all
+        // where the head is in the edit: laid over where it was, or - moved or resized too far - not put back at all. Both found in
+        // the cut-out at the same size: the box in the whole picture is rough for a small head - Maren in the wide slot-001 shot 1
+        // came twice as big as in the cut-out, and every head was turned down
         const px = (v: number, of: number, from: number) => (v / 1000) * of - from
-        const was: Box = [
+        let was: Box = [
             px(box.box[0], size.width, area.x),
             px(box.box[1], size.height, area.y),
             px(box.box[2], size.width, area.x),
@@ -203,9 +205,15 @@ async function headPass(r: Renderer, request: Omit<StartFrameRequest, 'lighter'>
         ]
         let fit: ReturnType<typeof headFit>
         try {
-            const [edited, face] = await visionUrls([join(r.projectDir, drawn), join(r.projectDir, portrait)], START_CHECK_WIDTH)
-            const [now] = await headBoxes(edited!, [{id: box.id, name: box.name, reference: face!}])
-            fit = now && headFit(was, now.box.map(v => (v / 1000) * area.w) as Box)
+            const [before, edited, face] = await visionUrls(
+                [join(r.projectDir, crop), join(r.projectDir, drawn), join(r.projectDir, portrait)],
+                HEAD_SIZE.width,
+            )
+            const inCrop = async (picture: string) =>
+                (await headBoxes(picture, [{id: box.id, name: box.name, reference: face!}]))[0]?.box.map(v => (v / 1000) * area.w) as Box | undefined
+            was = (await inCrop(before!)) ?? was
+            const now = await inCrop(edited!)
+            fit = now && headFit(was, now)
         } catch (e) {
             log.warn(`${file}: the head of ${box.name} could not be found in its edit (${messageOf(e)}) - kept as drawn`)
             continue
