@@ -62,11 +62,11 @@ describe('spotIssues', () => {
         expect(issues[0]!.message).toContain('"On the basalt-wall side of the stage."')
         expect(await spotIssues(cases, [], answering([true, true]))).toEqual([])
     })
-    test('one call for the beat, thinking off, with the moments that may move somebody; nothing to check asks nothing', async () => {
+    test('one call for the beat, a little thinking, with the moments that may move somebody; nothing to check asks nothing', async () => {
         asked.length = 0
         await spotIssues(cases, ['Maren walks down into the crowd'], answering([true, true]))
         expect(asked).toHaveLength(1)
-        expect(asked[0]!.reasoning).toBe('none')
+        expect(asked[0]!.reasoning).toBe('low')
         expect(asked[0]!.input).toContain('- Maren walks down into the crowd')
         expect(await spotIssues([], [], answering([]))).toEqual([])
         expect(asked).toHaveLength(1)
