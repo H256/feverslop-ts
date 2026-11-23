@@ -302,6 +302,9 @@ export async function render<M>(
                 log.warn(`${label}: ${failure.message.slice(0, 160)} - asking ${server.name} again (${timeouts}/2)`)
             }
             if (!again) {
+                // a job its server says failed (out of memory, say) is no job to take up again: a fallback drawn right
+                // after it, or the next run, starts fresh instead of finding a record of another request
+                if (pending && (await r.jobState(server, pending.promptId).catch(() => undefined)) === 'failed') rmSync(pendingFile, {force: true})
                 runEvent({type: 'job', state: 'failed', kind: what.kind, id: what.spec.id, server: server.name})
                 throw nameService(failure, `${label} on ${server.name} (${server.url})`, label)
             }

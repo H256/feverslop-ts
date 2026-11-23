@@ -274,7 +274,8 @@ const dependsOn: Record<StepName, StepName[]> = {
     characterDescriptions: ['characterLooks'],
     locationDescriptions: ['locationLooks'],
     locationAnchors: ['locationDescriptions'],
-    locationLayouts: ['locationLooks', 'locationDescriptions', 'cast'],
+    // the singers get a place on the stage of their own
+    locationLayouts: ['locationLooks', 'locationDescriptions', 'cast', 'singing'],
     // the loudness and the instruments heard along the song (musicStretches) shape the story's curve
     beats: ['story', 'cast', 'singing', 'music', 'lyricsTiming', 'propActivity'],
     timeline: ['music', 'lyricsTiming'],

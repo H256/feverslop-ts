@@ -12,6 +12,7 @@ import {crowdViewCases, crowdViewIssues} from '../crowd-view-check.ts'
 import {handsCases, handsIssues} from '../hands-check.ts'
 import {directionCases, directionIssues} from '../direction-check.ts'
 import {placementCases, placementIssues} from '../placement-check.ts'
+import {spotCases, spotIssues} from '../spot-check.ts'
 import {type BeatShots, type Blocking, type ShotPlan} from '../project.ts'
 import {readTokens, resolveUnknownTokens} from '../refs.ts'
 import {LOCATION_VIEWS} from '../sequenceSheet.ts'
@@ -377,8 +378,17 @@ export async function planShots(run: ShotRun) {
                                 return []
                             })
                           : []
+                      // a player or singer put elsewhere than their place on the stage: a jump at every cut (lib/spot-check.ts)
+                      const moved = read
+                          ? await spotIssues(spotCases(read.plan.shots, cast.characters, locationLayouts[beat.locationId]?.set), beat.moments).catch(
+                                (e: unknown) => {
+                                    log.warn(`${beat.id}: the check of the places on the stage failed (${messageOf(e)}) - they stay unchecked`)
+                                    return []
+                                },
+                            )
+                          : []
                       if (read)
-                          for (const issue of [...idle, ...busy, ...crowdView, ...placed, ...aimless]) {
+                          for (const issue of [...idle, ...busy, ...crowdView, ...placed, ...aimless, ...moved]) {
                               read.issues.push(issue)
                               read.problems.push(issue.message)
                           }
