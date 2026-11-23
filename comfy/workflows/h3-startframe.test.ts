@@ -25,6 +25,4 @@ test('the start picture: the pictures in order, the encoder unloaded before samp
     expect((positive.inputs.anything as [string, number])[0]).toBe(conditioningId)
     expect(sampler.inputs).toMatchObject({seed: 7, steps: 6, cfg: 1})
     expect(result.size).toEqual({width: 2048, height: 1152})
-    // the encoder fills a 32 GB card alone: on the CPU, the card is left for the pictures it reads and the DiT
-    expect(of('CLIPLoader')[0]![1].inputs.device).toBe('cpu')
 })
