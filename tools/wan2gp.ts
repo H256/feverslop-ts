@@ -31,7 +31,13 @@ if (!where) log.usageError(action === 'install' ? 'which wan2gp folder?' : 'whic
 // the plugin is its own repository, kept as a git checkout in the wan2gp folder; its folder name starts with wangp-: wan2gp's
 // .gitignore ignores it, so a git pull of wan2gp is not disturbed
 const PLUGIN_FOLDER = 'wangp-feverslop'
-const PLUGIN_REPO = 'ssh://git@forgejo.elysium.lan:2227/H256/wangp-feverslop.git'
+// no git host is written in here: the plugin's repository is taken to sit beside this checkout's own, on the same server
+// (<origin of feverslop-ts> with wangp-feverslop for feverslop-ts) - --repo names another
+function pluginRepo(): string | undefined {
+    const origin = Bun.spawnSync(['git', '-C', import.meta.dir, 'remote', 'get-url', 'origin'], {stdout: 'pipe', stderr: 'pipe'})
+    const url = new TextDecoder().decode(origin.stdout).trim()
+    return /feverslop-ts(.git)?$/.test(url) ? url.replace(/feverslop-ts(.git)?$/, 'wangp-feverslop.git') : undefined
+}
 
 function git(gitArgs: string[]) {
     const done = Bun.spawnSync(['git', ...gitArgs], {stdout: 'pipe', stderr: 'pipe'})
@@ -50,7 +56,9 @@ if (action === 'install') {
     } else if (existsSync(target)) {
         log.fatal(`${target} is there but is no git checkout - move it away, then install again`)
     } else {
-        git(['clone', args.repo ?? PLUGIN_REPO, target])
+        const repo = args.repo ?? pluginRepo()
+        if (!repo) log.usageError('which repository? This checkout has no origin to find the plugin beside - give --repo=<git url of wangp-feverslop>', usage)
+        git(['clone', repo!, target])
         log.step('Cloned', target)
     }
     log.next(`restart wan2gp   ${styles.muted('- then: bun run wan2gp health <its address>')}`)
