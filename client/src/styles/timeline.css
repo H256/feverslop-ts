@@ -834,7 +834,7 @@
 .board-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-half);
   padding: 0 var(--space-2);
   font-size: var(--text-s);
 }
@@ -847,7 +847,7 @@
 }
 .board-cast {
   display: flex;
-  gap: 2px;
+  gap: var(--space-half);
   padding: 0 var(--space-2);
 }
 .board-cast img {

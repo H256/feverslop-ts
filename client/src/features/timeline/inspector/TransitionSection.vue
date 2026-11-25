@@ -51,7 +51,7 @@ const command = computed(
     </div>
     <label v-if="clip.transition" class="btn-row u-mt-1">
       <span class="muted">Seconds</span>
-      <input v-model.number="seconds" class="input" type="number" min="0.1" max="3" step="0.1" style="width: 80px" @change="setSeconds" />
+      <input v-model.number="seconds" class="input transition-seconds" type="number" min="0.1" max="3" step="0.1" @change="setSeconds" />
     </label>
     <p class="muted">
       Over the frames {{ before.id }} was rendered past its end<template v-if="room !== undefined">: {{ room.toFixed(2) }} s</template>. Longer is shortened,
