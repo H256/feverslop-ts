@@ -47,7 +47,11 @@ function git(gitArgs: string[]) {
 
 if (action === 'install') {
     const root = resolve(where!)
-    if (!existsSync(join(root, 'wgp.py')) || !existsSync(join(root, 'plugins'))) log.usageError(`${root} is no wan2gp folder (no wgp.py and plugins/)`, usage)
+    if (!existsSync(join(root, 'wgp.py')) || !existsSync(join(root, 'plugins')))
+        log.usageError(
+            `${root} is no wan2gp folder (no wgp.py and plugins/) - install works on a wan2gp of this machine only; for one on another machine use its Apps & PlugIn Manager (docs/wan2gp.md)`,
+            usage,
+        )
     const target = join(root, 'plugins', PLUGIN_FOLDER)
     if (existsSync(join(target, '.git'))) {
         // there already: brought up to date, never overwritten - changes made in it stop the pull
