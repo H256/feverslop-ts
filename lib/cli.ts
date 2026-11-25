@@ -105,6 +105,11 @@ const commands: Record<string, CommandSpec> = {
         args: '<film-id> <clip-id> [--view=<n>] [--order=<picture>,...] [--without=<picture>,...] [--clear]',
         description: 'The own view of its place and choice of references of a film clip, from the next plan run on.',
     },
+    wan2gp: {
+        args: 'install <wangp-folder> [--repo=<git-url>] | health <wangp-url> | render <wangp-url> --settings=<file.json> [--out=<folder>]',
+        description:
+            'wan2gp as a render engine: clone or update the bridge plugin (its own repository) in a wan2gp folder, check that a server answers, or render one job of wan2gp settings through it (local inputs uploaded, outputs downloaded).',
+    },
     transition: {
         args: '<project-id> [<clip-id> [--type=crossfade|fade-black|fade-white] [--seconds=0.5] [--cut]]',
         description:
