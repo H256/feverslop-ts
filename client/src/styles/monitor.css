@@ -413,3 +413,7 @@ select.source {
   border-radius: var(--radius-round);
   object-fit: cover;
 }
+/* the seconds of a transition into a clip (#1195) */
+.transition-seconds {
+  width: 80px;
+}
