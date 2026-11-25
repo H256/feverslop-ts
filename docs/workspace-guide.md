@@ -129,6 +129,8 @@ bun run plan my-video
 
 **The bar under the lanes** shows and hides, under **Show**, the player and every lane but the clips: **Player**, **Sections** (**Scenes**), **Beats**, **Song** (**Sound**), **Sung** (**Lines**), **Cast**. The browser keeps the choice. Without the player the timeline has all the room; the sound goes on. On the right of the bar are **Fit** (the whole video) and **Zoom** (also `Ctrl`+mouse wheel over the timeline). The top edge of the timeline is dragged to make it taller or lower.
 
+**Storyboard** (in the same bar) puts large cards of the clips in the place of the picture, in rows under their beats (under the sections or scenes when there are no beats). A row folds with a click on its head and shows how many of its clips are rendered and current. A card shows the first frame, or before a render what happens over the dimmed place picture, with its number, state, length, the first sung or spoken line, the camera and the cast. The mouse on a card plays it without sound. A click goes to the clip as on the timeline (Ctrl/Shift+click marks clips); **All**, **To look at** and **Failed** filter the cards.
+
 Useful keys: `Space` plays and pauses, `←` and `→` jump to the clip before or after, `,` and `.` step a frame back or on, `O` loops the clip.
 
 **The bar above the lanes** groups the buttons by what they do:
@@ -160,6 +162,10 @@ Useful keys: `Space` plays and pauses, `←` and `→` jump to the clip before o
 ### Rendering only a part again
 
 When only one moment is bad, give its seconds in the **Render** tab under **Render a part again** and click **Render this part**. A clip with several shots has a button for each. The rest of the clip stays; the finished video is not assembled again.
+
+**Transition into this clip** (Render tab, music videos) makes the clip come in with a **Crossfade**, **Through black** or **Through white** instead of a **Cut**, 0.1 to 3 seconds. The song is the clock: the clip stays on its song frame, and the transition plays over the frames the clip before it was rendered past its end (the section says how many seconds that is). A longer one is shortened, none at all stays a cut. Only the next final video changes; the clips are not rendered again. In the terminal: `bun run transition <project> <clip> --type=crossfade --seconds=0.5` (`--cut` takes it away, no clip id lists them all). They are kept in `transitions.json` of the project.
+
+The head of the clip panel shows who is in the clip, as a round picture with the name.
 
 > **Careful:** this is not well tried yet. On the Radeon the job ran out of memory, and one try took the server down. For a film a part with dialogue does not work, because the sound belongs to the picture there.
 

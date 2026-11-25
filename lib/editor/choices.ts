@@ -7,6 +7,7 @@ import {readPictureJobs} from '../render-state.ts'
 import {type EditorOverride, type EditorTarget, overrideFile} from './project.ts'
 import {picturesFile, sheetOf} from './references.ts'
 import {CLIP_ID} from './runs.ts'
+import {type Transition, writeTransition} from '../transitions.ts'
 
 // The choices made by hand on a rendered project, as the workspace makes them and the commands do (CLI first, #549): an older
 // version of a clip or picture made the current one again, and a film clip's own choice of view and references. Nothing is
@@ -59,4 +60,11 @@ export async function writeOverride(target: EditorTarget, clipId: string, overri
             writeFileSync(file, JSON.stringify(override, null, 2) + '\n')
         }
     })
+}
+
+/** How a music video's clip comes in at the export (#1195, bun run transition), or a cut again (null): only the next final video changes. */
+export async function writeClipTransition(target: EditorTarget, clipId: string, transition: Transition | null) {
+    if (target.kind !== 'music') throw new Error('transitions are for music videos so far')
+    if (!CLIP_ID.test(clipId) || !existsSync(clipRequestFile(target.dir, clipId))) throw new Error(`no clip ${clipId}`)
+    await withProjectLock(target.dir, target.id, () => writeTransition(target.dir, clipId, transition))
 }

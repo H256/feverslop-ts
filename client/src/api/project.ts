@@ -15,6 +15,7 @@ import type {
   ConfigView,
   DryRun,
   EditorFreshness,
+  EditorClip,
   EditorOverride,
   EditorReference,
   Estimate,
@@ -146,5 +147,6 @@ export function projectApi(root: string) {
       post<TimingRefinement>('timing-refine', {language, ...(passage ? {passage} : {})}),
     applyTimingRefinement: (id: string, lines?: number[]) => post<AppliedRefinement>('timing-refine-apply', {id, ...(lines ? {lines} : {})}),
     override: (clip: string, override: EditorOverride | null) => post<{written: true}>(`override/${id(clip)}`, override),
+    transition: (clip: string, transition: EditorClip['transition'] | null) => post<{written: true}>(`transition/${id(clip)}`, transition ?? null),
   }
 }

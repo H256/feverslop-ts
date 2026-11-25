@@ -9,6 +9,7 @@ import {TimelineService, timelineContext} from './context'
 import FailBar from './FailBar.vue'
 import HelpDialog from './HelpDialog.vue'
 import ShotDirector from '../direction/ShotDirector.vue'
+import StoryboardBoard from './StoryboardBoard.vue'
 import ClipInspector from './inspector/ClipInspector.vue'
 import PlayerMonitor from './PlayerMonitor.vue'
 import SummaryChips from './SummaryChips.vue'
@@ -127,7 +128,9 @@ const closeDirector = () => {
   <div :class="['timeline-view view', {'no-player': !lanes.player}]">
     <!-- hidden, not removed: its video elements play the sound of the timeline (#772) -->
     <main v-show="lanes.player" class="work">
-      <PlayerMonitor ref="monitor" />
+      <!-- the storyboard takes the place of the picture; the monitor stays, hidden: it plays the sound (#772) -->
+      <StoryboardBoard v-if="lanes.board" />
+      <PlayerMonitor v-show="!lanes.board" ref="monitor" />
       <ClipInspector />
     </main>
     <FailBar />

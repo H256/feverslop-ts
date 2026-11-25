@@ -110,6 +110,11 @@ const commands: Record<string, CommandSpec> = {
         description:
             'wan2gp as a render engine: clone or update the bridge plugin (its own repository) in a wan2gp folder, check that a server answers, or render one job of wan2gp settings through it (local inputs uploaded, outputs downloaded).',
     },
+    transition: {
+        args: '<project-id> [<clip-id> [--type=crossfade|fade-black|fade-white] [--seconds=0.5] [--cut]]',
+        description:
+            'How a clip of a music video comes in at the export: a cut, or a crossfade or fade from the clip before it, over the frames that clip has past its end. Only the next final video changes.',
+    },
     direction: {
         args: '<project-id> [--film] [--json | --set=FILE | --add=TEXT --scope=SCOPE [--character=ID] | --edit=ID --text=TEXT | --remove=ID | --without=CHARACTER --scope=SCOPE | --size=wide|medium|close|extreme --scope=SCOPE | --unedit=ID] [--preview] [--take] [--no-rebuild] [--drop | --restore=VERSION] [--show=SHOT]',
         description:

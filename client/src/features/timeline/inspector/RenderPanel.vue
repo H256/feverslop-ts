@@ -10,6 +10,7 @@ import {useViewer} from '../../../services/viewer'
 import {stateOf} from '../clips'
 import {useTimeline} from '../context'
 import RetakeSection from './RetakeSection.vue'
+import TransitionSection from './TransitionSection.vue'
 
 /** Rendering the clip again, a part of it or a preview; its files, the clips it goes on from and into, its frames, the command. */
 const props = defineProps<{clip: EditorClip}>()
@@ -59,6 +60,7 @@ const compareRefined = (version: EditorClip['refined'][number]) =>
     <button class="btn" @click="actions.preview([clip], clip.id)">{{ clip.preview ? 'Preview again' : 'Preview' }}</button>
   </div>
   <RetakeSection v-if="clip.video" :key="clip.id" :clip="clip" />
+  <TransitionSection v-if="project.kind === 'music'" :key="`t-${clip.id}`" :clip="clip" />
   <div v-if="clip.refined.length" class="section">
     <h3>Larger versions</h3>
     <article v-for="version in clip.refined" :key="version.variant" class="version version-one">

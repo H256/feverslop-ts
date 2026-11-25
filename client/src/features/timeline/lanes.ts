@@ -7,7 +7,8 @@ import {defineService} from '../../services/service'
  * browser - a viewer's own arrangement, nothing a project depends on. Made by the timeline page and handed down to what is on it (a
  * service, not a module-wide object: its watcher ends with the page, #1007).
  */
-export type LaneKey = 'player' | 'groups' | 'beats' | 'wave' | 'lines' | 'cast'
+// board: the storyboard (#1194) in the place of the monitor - large cards of the clips under their beats
+export type LaneKey = 'player' | 'board' | 'groups' | 'beats' | 'wave' | 'lines' | 'cast'
 export type Lanes = Record<LaneKey, boolean>
 const KEY = 'timeline.lanes'
 const read = (): Partial<Lanes> => {
@@ -21,7 +22,7 @@ const read = (): Partial<Lanes> => {
 
 /** The lanes as the viewer left them, written back when one is toggled; call it in a component's setup. */
 export function makeLanes(): Lanes {
-  const lanes = reactive<Lanes>({player: true, groups: true, beats: true, wave: true, lines: true, cast: true, ...read()})
+  const lanes = reactive<Lanes>({player: true, board: false, groups: true, beats: true, wave: true, lines: true, cast: true, ...read()})
   watch(lanes, now => viewerStore.set(KEY, JSON.stringify(now)))
   return lanes
 }

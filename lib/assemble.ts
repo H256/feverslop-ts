@@ -4,6 +4,7 @@ import {join} from 'node:path'
 import {log, startSpinner, styles} from './log.ts'
 import {FPS, formatTime, frameAt, secondsAt} from './frames.ts'
 import type {ClipRequest} from './compose.ts'
+import {joinGraph, type Transitions} from './transitions.ts'
 import {captureProcess, runProcess, SHORT_PROCESS_TIMEOUT_MS} from './process.ts'
 
 export type VideoInfo = {frames: number; width: number; height: number; fps: number; hasAudio: boolean}
@@ -185,6 +186,7 @@ export async function assembleFinal({
     target,
     interpolated,
     sources,
+    transitions = {},
 }: {
     clips: ClipRequest[]
     projectDir: string
@@ -195,6 +197,8 @@ export async function assembleFinal({
     interpolated?: {files: string[]; multiplier: number; fps: number}
     // other files for the clips than the ones in videos/ - the preview video
     sources?: string[]
+    // how clips come in (#1195): a dissolve or a fade over the frames the clip before was rendered past its end; under the song only
+    transitions?: Transitions
 }) {
     const m = interpolated?.multiplier ?? 1
     const outFps = interpolated?.fps ?? FPS
@@ -252,16 +256,46 @@ export async function assembleFinal({
     const resampled = interpolated ? 0 : infos.filter(i => Math.abs(i.fps - FPS) > 0.01).length
     if (resampled) log.warn(`${resampled} clip(s) have another frame rate than ${FPS} fps and are resampled`)
 
+    // a transition needs the song under the clips: their own sound would have to be faded as well, so then the clips are cut
+    const fading = clips.some((c, i) => i > 0 && transitions[c.id])
+    if (fading && !songAudio) log.warn('transitions are made under the song only ("songAudio": true) - the clips are cut')
+    const rate = FPS * m
+    const joined =
+        fading && songAudio
+            ? joinGraph(
+                  clips.map(c => c.id),
+                  clips.map(c => c.frames * m),
+                  rate,
+                  transitions,
+                  clips.map((c, i) => Math.max(0, (interpolated ? infos[i]!.frames : framesOnGrid(infos[i]!)) - c.frames * m)),
+                  interpolated ? 'vc' : 'v',
+              )
+            : undefined
+    for (const [id, frames] of Object.entries(joined?.used ?? {})) {
+        const wanted = Math.round(transitions[id]!.seconds * rate)
+        if (frames < wanted)
+            log.warn(
+                frames
+                    ? `${id}: the transition is ${(frames / rate).toFixed(2)} s, not ${transitions[id]!.seconds} s - the clip before it has no more frames past its end`
+                    : `${id}: no transition - the clip before it has no frames past its end, it stays a cut`,
+            )
+    }
+
     const filters = clips.map((clip, i) =>
         [
-            `[${i}:v]${!interpolated && Math.abs(infos[i]!.fps - FPS) > 0.01 ? `fps=${FPS},` : ''}trim=end_frame=${clip.frames * m},setpts=PTS-STARTPTS,scale=${width}:${height},setsar=1,format=yuv420p[v${i}]`,
+            `[${i}:v]${!interpolated && Math.abs(infos[i]!.fps - FPS) > 0.01 ? `fps=${FPS},` : ''}trim=end_frame=${clip.frames * m + (joined?.extra[i] ?? 0)},setpts=PTS-STARTPTS,scale=${width}:${height},setsar=1,format=yuv420p${joined ? `,settb=AVTB,fps=${rate}` : ''}[v${i}]`,
             ...(songAudio ? [] : [`[${i}:a]atrim=end=${secondsAt(clip.frames)},asetpts=PTS-STARTPTS[a${i}]`]),
         ].join(';'),
     )
-    const concatInputs = clips.map((_, i) => (songAudio ? `[v${i}]` : `[v${i}][a${i}]`)).join('')
-    // more frames: all clips at FPS * multiplier, then down to the frame rate of the video (60 fps: every 2nd of 120)
-    const concatOut = interpolated ? `[vc];[vc]fps=${outFps}[v]` : songAudio ? '[v]' : '[v][a]'
-    filters.push(`${concatInputs}concat=n=${clips.length}:v=1:a=${songAudio ? 0 : 1}${concatOut}`)
+    if (joined) {
+        filters.push(...joined.graph)
+        if (interpolated) filters.push(`[vc]fps=${outFps}[v]`)
+    } else {
+        const concatInputs = clips.map((_, i) => (songAudio ? `[v${i}]` : `[v${i}][a${i}]`)).join('')
+        // more frames: all clips at FPS * multiplier, then down to the frame rate of the video (60 fps: every 2nd of 120)
+        const concatOut = interpolated ? `[vc];[vc]fps=${outFps}[v]` : songAudio ? '[v]' : '[v][a]'
+        filters.push(`${concatInputs}concat=n=${clips.length}:v=1:a=${songAudio ? 0 : 1}${concatOut}`)
+    }
 
     const partial = `${target}.partial.mp4`
     // about 170 characters of filter per clip: 150+ clips come near the 32k limit of a Windows command line - ffmpeg reads the graph from a file (#992)
