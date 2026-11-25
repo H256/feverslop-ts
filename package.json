@@ -21,6 +21,7 @@
         "parts": "bun tools/parts.ts",
         "versions": "bun tools/versions.ts",
         "override": "bun tools/override.ts",
+        "wan2gp": "bun tools/wan2gp.ts",
         "import-asset": "bun tools/import-asset.ts",
         "export-asset": "bun tools/export-asset.ts",
         "export-song": "bun tools/export-song.ts",
