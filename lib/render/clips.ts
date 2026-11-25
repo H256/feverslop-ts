@@ -16,7 +16,18 @@ import {archiveFiles, versionStamp} from '../archive.ts'
 import {runProcess} from '../process.ts'
 import {produceMedia} from '../media-file.ts'
 import {clipRequestRef} from '../previous-output.ts'
-import {type Renderer, DEFAULT_SONG_DURATION, loadWorkflow, contextLength, stepOptions, type RenderWhat, type ClipContext} from '../render.ts'
+import {
+    type Renderer,
+    DEFAULT_SONG_DURATION,
+    loadWorkflow,
+    contextLength,
+    stepOptions,
+    type RenderWhat,
+    type ClipContext,
+    type Wan2gpPrepared,
+} from '../render.ts'
+import {wan2gpClipSettings} from '../wan2gp-clip.ts'
+import {pixelSize, type PixelSize} from '../../comfy/helpers.ts'
 
 // The work of a Renderer (lib/render.ts, #841): the clips and the song: a clip, its preview, its takes and retries, the frames it goes on from. The renderer keeps the state; these take it as `r`.
 
@@ -133,7 +144,9 @@ export async function renderClip(r: Renderer, clip: ClipRequest, stemFiles: Reco
     // context frames (config.contextFrames): the tail of the clip before, cut out now so the job is made from it
     const context = clip.startsFrom && r.config.contextFrames > 0 ? await r.contextOf(clip.startsFrom, r.config.contextFrames) : undefined
     const what: RenderWhat = {label: `clip ${clip.id}`, spec, kind: 'clip', workflow: r.config.videoWorkflow, resolution: r.config.videoResolution}
-    let {seed, size: expected} = await r.render(what, target, '.mp4', prepare)
+    // its wan2gp form, for a wan2gp server (#1204): only when config.json names the template; the takes and retries after it stay as they were
+    const wan2gp = r.config.videoWorkflowWan2gp ? () => wan2gpForm(r, clip, stemFiles, !!context) : undefined
+    let {seed, size: expected} = await r.render(what, target, '.mp4', prepare, wan2gp)
     seed = await r.retryLeaks(what, clip.id, file, seed, prepare, `bun run leak-scan ${r.projectId} lists it again`)
     if (context) await r.joinContext(target, clip.id, clip.startsFrom!, context)
     seed = await r.checkTakes(clip.id, file, seed, clip, async derived => {
@@ -574,6 +587,54 @@ export async function renderLipsync(
  * What a music-video clip's job puts on the server and names to its workflow (#1008): its pictures (the frame pictures only when
  * `withFrames`), one whole stem per track and the full song under its real extension - the same for a render, a preview and a retake.
  */
+/**
+ * A clip in its wan2gp form (#1204): the same prompt and pictures, its stems cut here to the clip's span (wan2gp takes them as audio
+ * references, not whole songs to trim), the size the ComfyUI workflow would render at. The whole song as a guide has no counterpart.
+ */
+async function wan2gpForm(
+    r: Renderer,
+    clip: ClipRequest,
+    stemFiles: Record<string, string>,
+    context: boolean,
+): Promise<Wan2gpPrepared<{seed: number; size?: PixelSize}>> {
+    const template = r.config.videoWorkflowWan2gp!
+    const {renderFrames, recommendedResolution} = await loadWorkflow<VideoWorkflowModule>(r.config.videoWorkflow)
+    const frames = renderFrames?.(clip.frames) ?? clip.frames
+    const seed = clipSeed(r.config.seed, clip.id)
+    const pinned = r.config.pinStartFrame && clip.startsFrom ? join(r.projectDir, boundaryFrameAsset(clip.startsFrom, 'lf')) : undefined
+    const input = {
+        template,
+        prompt: clip.prompt,
+        pictures: clip.assets.pictures.filter(p => !(pinned && p.kind === 'frame')).map(p => join(r.projectDir, p.file)),
+        audios: clip.assets.audio.map(a => stemFiles[a.stem!]!),
+        ...(pinned ? {startFrame: pinned} : {}),
+        contextFrames: context,
+        frames,
+        fps: 24,
+        seed,
+        size: pixelSize(r.config.videoResolution, r.config.videoAspect, recommendedResolution ?? '1344x768'),
+    }
+    // asked first with the whole stems: a clip without a wan2gp form cuts nothing
+    const refused = wan2gpClipSettings(input)
+    if (typeof refused === 'string') return refused
+    const dir = join(r.projectDir, 'output', 'wan2gp')
+    mkdirSync(dir, {recursive: true})
+    const cuts = await Promise.all(
+        clip.assets.audio.map(async (a, i) => {
+            const cut = join(dir, `${clip.id}-audio${i + 1}.wav`)
+            await runProcess(
+                ['ffmpeg', '-y', '-v', 'error', '-ss', String(secondsAt(clip.frameStart)), '-t', String(secondsAt(frames)), '-i', stemFiles[a.stem!]!, cut],
+                {
+                    errorMessage: stderr => `${clip.id}: cutting ${a.stem} for wan2gp failed: ${stderr}`,
+                },
+            )
+            return cut
+        }),
+    )
+    const settings = wan2gpClipSettings({...input, audios: cuts})
+    return typeof settings === 'string' ? settings : {settings, meta: {seed}, engine: `wan2gp:${template}`}
+}
+
 function clipInputs(r: Renderer, clip: ClipRequest, stemFiles: Record<string, string>, withFrames: boolean) {
     const songRemote = `${r.remoteDir}/stems/song${extname(stemFiles.song!)}`
     const uploads = [

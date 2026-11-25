@@ -74,7 +74,8 @@ if (command === 'show') {
         const variable = option(`${name}-env`)
         if (variable !== undefined) {
             const value = process.env[variable]
-            if (value === undefined) log.usageError(`--${name}-env: the environment variable ${variable} is not set`, 'usage: bun run setup llm --url= [--key-env=NAME]')
+            if (value === undefined)
+                log.usageError(`--${name}-env: the environment variable ${variable} is not set`, 'usage: bun run setup llm --url= [--key-env=NAME]')
             return value
         }
         return option(name)
@@ -345,7 +346,8 @@ async function showComfyStatus(servers: ComfyServer[]) {
     const lines = servers.map((s, i) => {
         const result = results[i]!
         const auth = s.credentials ? styles.muted(s.credentials.type === 'basic' ? ' (password)' : ' (token)') : ''
-        return `${result instanceof Error ? '✗' : '✓'} ${s.name}  ${styles.muted(s.url)}${auth}\n    ${result instanceof Error ? `unreachable - ${result.message}` : result}`
+        const engine = s.engine === 'wan2gp' ? styles.muted(' (wan2gp)') : ''
+        return `${result instanceof Error ? '✗' : '✓'} ${s.name}  ${styles.muted(s.url)}${engine}${auth}\n    ${result instanceof Error ? `unreachable - ${result.message}` : result}`
     })
     p.note(lines.join('\n'), 'Servers')
 }
@@ -360,6 +362,16 @@ async function addComfy(entries: ComfyEntry[]) {
             }),
         ),
         'URL',
+    )
+    // what renders there (#1204): ComfyUI, or wan2gp with the FeverSlop bridge plugin (docs/wan2gp.md)
+    const engine = answer(
+        await p.select({
+            message: 'Engine',
+            options: [
+                {value: 'comfy', label: 'ComfyUI'},
+                {value: 'wan2gp', label: 'wan2gp', hint: 'with the bridge plugin: bun run wan2gp install <its folder>'},
+            ],
+        }),
     )
     const host = new URL(url).host
     const name =
@@ -381,7 +393,7 @@ async function addComfy(entries: ComfyEntry[]) {
             ],
         }),
     )
-    const entry: Exclude<ComfyEntry, string> = {url, ...(name !== host ? {name} : {})}
+    const entry: Exclude<ComfyEntry, string> = {url, ...(name !== host ? {name} : {}), ...(engine === 'wan2gp' ? {engine: 'wan2gp' as const} : {})}
     if (auth === 'token') entry.token = answer(await p.password({message: 'Token', validate: v => (v ? undefined : 'required')}))
     if (auth === 'basic') {
         entry.username = answer(await p.text({message: 'Username', validate: v => (v ? undefined : 'required')}))
@@ -398,7 +410,7 @@ async function addComfy(entries: ComfyEntry[]) {
         if (!answer(await p.confirm({message: 'The server does not answer - save anyway?', initialValue: false}))) return
     }
     // a plain URL stays a plain string in the file
-    entries.push(entry.name || entry.token || entry.username ? entry : url)
+    entries.push(entry.name || entry.token || entry.username || entry.engine ? entry : url)
     file.comfy = entries
     await save(`the server ${server!.name}`)
 }

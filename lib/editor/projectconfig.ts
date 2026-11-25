@@ -78,6 +78,14 @@ const DEFINITIONS: Definition[] = [
         note: 'Every character and place gets a multi-view sheet from a short turnaround video, not one flat picture. Off saves render time while you iterate.',
     },
     {
+        key: 'videoWorkflowWan2gp',
+        label: 'Clip template on wan2gp',
+        group: 'Workflows',
+        control: 'text',
+        for: 'music',
+        note: 'The wan2gp template a clip renders with on a wan2gp server (docs/wan2gp.md), e.g. gen_video_with_refs/MiniMax H3 Ref2VA Pruned PDD 8 Steps. Empty: clips go to ComfyUI servers only.',
+    },
+    {
         key: 'sequenceWorkflow',
         label: 'Sheet workflow',
         group: 'Workflows',

@@ -20,6 +20,9 @@ export type RenderConfig = {
     videoRefineSteps: number
     imageWorkflow: string // file name in comfy/workflows/, without .ts
     videoWorkflow: string
+    // the clip's form on a wan2gp server (#1204): a Deepy template of that wan2gp, as it names it ("gen_video_with_refs/MiniMax H3 Ref2VA
+    // Pruned PDD 8 Steps"); '' or none = clips go to ComfyUI servers only. Taken literally, nothing resolves it
+    videoWorkflowWan2gp?: string
     songAudio: boolean // final video: the original song replaces the clips' own audio
     songWorkflow: string // file name in comfy/workflows/, without .ts - used by --render=song
     songDuration: number // seconds - the maximum length of a generated song, it is cut off there; -1 = the workflow's own default
@@ -116,6 +119,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     videoRefineSteps: -1,
     imageWorkflow: 'kroma-image',
     videoWorkflow: 'h3-ref2video',
+    videoWorkflowWan2gp: '',
     songAudio: true,
     songWorkflow: 'yue2-song',
     songDuration: -1,
@@ -299,6 +303,10 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     const qaNote = qaRetriesNote(config.qaRetries)
     if (qaNote) log.warn(`${file}: ${qaNote}`)
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
+    if (typeof config.videoWorkflowWan2gp !== 'string' || (config.videoWorkflowWan2gp && !/^[\w-]+\/\S/.test(config.videoWorkflowWan2gp)))
+        fail(
+            `videoWorkflowWan2gp must be a wan2gp template as "<task>/<name>" (e.g. "gen_video_with_refs/MiniMax H3 Ref2VA Pruned PDD 8 Steps") or "", got ${JSON.stringify(config.videoWorkflowWan2gp)}`,
+        )
     for (const key of ['imageWorkflow', 'videoWorkflow', 'songWorkflow', 'sequenceWorkflow'] as const) {
         const wrong = workflowProblem(key, config[key])
         if (wrong) fail(wrong)
