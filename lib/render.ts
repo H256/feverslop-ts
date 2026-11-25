@@ -24,6 +24,7 @@ import {
     sheetVideo,
 } from './sequenceSheet.ts'
 import {type ComfyServer} from './settings.ts'
+import type {BridgeClient, BridgeSettings} from './wan2gp.ts'
 import {runProcess} from './process.ts'
 import {messageOf} from './text.ts'
 
@@ -210,6 +211,15 @@ export const pictureFingerprint = (picture: PictureJob, projectDir: string, conf
     config.sequenceSheets && picture.kind !== 'prop' ? sheetPlan(picture, projectDir, config).sheetFingerprint : specId(pictureSpec(picture, config))
 
 export type Server = ComfyServer & {api: ComfyApi}
+/** A wan2gp server (#1204): it renders through the FeverSlop bridge plugin, only the jobs that have a wan2gp form. */
+export type Wan2gpServer = ComfyServer & {engine: 'wan2gp'; bridge: BridgeClient}
+export type AnyServer = Server | Wan2gpServer
+export const onWan2gp = (server: AnyServer): server is Wan2gpServer => 'bridge' in server
+/**
+ * A job in its wan2gp form (#1204): the settings for the bridge (local input files are uploaded first), the meta it records as its
+ * ComfyUI form would, and the engine name kept in the take's record. A string: why this job has no wan2gp form - it waits for ComfyUI.
+ */
+export type Wan2gpPrepared<M> = {settings: BridgeSettings; meta: M; engine: string} | string
 
 /** What a render is, for the log and the statistics: the kind of result and the workflow (config name) that makes it. */
 export type RenderWhat = {label: string; spec: RenderSpec; kind: Timing['kind']; workflow: string; resolution?: Timing['resolution']}
@@ -309,6 +319,8 @@ export class Renderer implements Disposable {
     readonly remoteDir: string
     ready?: Promise<Server[]>
     connected: Server[] = []
+    // the wan2gp servers that answered (#1204): only jobs with a wan2gp form go to them
+    bridges: Wan2gpServer[] = []
     machines = new Map<string, ReturnType<typeof describeMachine>>() // server name -> GPU and versions
     // what this run put into a server's input folder: server + remote path -> the source file (path, size, time) - sent once, not per clip
     uploaded = new Map<string, string>()
@@ -323,7 +335,7 @@ export class Renderer implements Disposable {
     // new clip, with no pending file to read, asked first, and a finished job of the run before waited hours (#335)
     held = new Map<string, number>() // server name -> jobs still to come for it
     announced = new Map<string, string>() // target -> the server it is held on
-    waiting: {pin?: string; resolve: (server: Server) => void; reject: (error: Error) => void}[] = []
+    waiting: {pin?: string; wan2gp?: boolean; resolve: (server: AnyServer) => void; reject: (error: Error) => void}[] = []
     stopQueueNote?: () => void
     /** What is rendered again although it exists, when it is stale: "pictures" and/or "clips" (--refresh) - the old ones are put away in old/attempts. */
     refresh = new Set<string>()
@@ -368,24 +380,26 @@ export class Renderer implements Disposable {
         return serversWork.settle(this, target)
     }
 
-    // the first free server - with a pin only that one (see pickServer)
-    acquire(pin?: string) {
-        return serversWork.acquire(this, pin)
+    // the first free server - with a pin only that one (see pickServer); a wan2gp server only for a job with a wan2gp form
+    acquire(pin?: string): Promise<Server>
+    acquire(pin: string | undefined, wan2gp: boolean): Promise<AnyServer>
+    acquire(pin?: string, wan2gp = false) {
+        return serversWork.acquire(this, pin, wan2gp)
     }
 
     allDown() {
         return serversWork.allDown(this)
     }
 
-    answers(server: Server): Promise<boolean> {
+    answers(server: AnyServer): Promise<boolean> {
         return serversWork.answers(this, server)
     }
 
-    markDown(server: Server) {
+    markDown(server: AnyServer) {
         return serversWork.markDown(this, server)
     }
 
-    release(server: Server) {
+    release(server: AnyServer) {
         return serversWork.release(this, server)
     }
 
@@ -561,11 +575,12 @@ export class Renderer implements Disposable {
         target: string,
         extension: string | string[],
         prepare: () => Promise<{result: WorkflowResult; uploads: {from: string; to: string}[]; meta: M}>,
+        wan2gp?: () => Promise<Wan2gpPrepared<M>>,
     ): Promise<M> {
-        return serversWork.render(this, what, target, extension, prepare)
+        return serversWork.render(this, what, target, extension, prepare, wan2gp)
     }
 
-    keepRender(what: RenderWhat, server: Server, job: PendingJob<unknown> | undefined, trace: Trace, started: number, failure?: Error) {
+    keepRender(what: RenderWhat, server: AnyServer, job: PendingJob<unknown> | undefined, trace: Trace, started: number, failure?: Error) {
         return serversWork.keepRender(this, what, server, job, trace, started, failure)
     }
 

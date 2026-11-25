@@ -11834,6 +11834,7 @@ exports[`the config music video: the defaults 1`] = `
   "videoResolution": -1,
   "videoSteps": -1,
   "videoWorkflow": "h3-ref2video",
+  "videoWorkflowWan2gp": "",
   "vocalGap": 1.5,
 }
 `;
@@ -11878,6 +11879,7 @@ exports[`the config music video: the defaults 2`] = `
   "videoResolution": -1,
   "videoSteps": -1,
   "videoWorkflow": "h3-ref2video",
+  "videoWorkflowWan2gp": "",
   "vocalGap": 1.5,
 }
 `;
@@ -11925,6 +11927,7 @@ exports[`the config music video: every render setting set 1`] = `
   "videoResolution": 1.2,
   "videoSteps": -1,
   "videoWorkflow": "h3-ref2video-2pass",
+  "videoWorkflowWan2gp": "",
   "vocalGap": 1.5,
 }
 `;
@@ -12015,6 +12018,7 @@ exports[`the config film: the defaults and what the renderer is given 2`] = `
   "videoResolution": -1,
   "videoSteps": -1,
   "videoWorkflow": "h3-ref2video-film",
+  "videoWorkflowWan2gp": "",
   "vocalGap": 1.5,
 }
 `;

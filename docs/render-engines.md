@@ -97,7 +97,7 @@ picks as today. A server that fails a job is marked down and the job goes back t
 then land on another server. Whether to retry it on another engine is a project setting (a take on another engine looks different),
 off by default.
 
-## Steps to build (steps 1-3: #1204)
+## Steps to build (steps 1-2 built in #1204, see [wan2gp](wan2gp.md); step 3 open)
 
 1. Engine field in the settings and the pool; `bun run setup` asks for it. Bridge `health` in the server check.
 2. The engine step in `Renderer` for wan2gp, with the H3 clip builder (single driving audio), CLI first:

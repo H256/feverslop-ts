@@ -1,13 +1,14 @@
 import {nameService} from '../service-error.ts'
 import {ComfyApi, type ImageInfo} from '@saintno/comfyui-sdk'
-import {renameSync, rmSync} from 'node:fs'
+import {existsSync, renameSync, rmSync} from 'node:fs'
 import {basename, posix} from 'node:path'
 import {recordTiming} from '../timings.ts'
 import {accumulatePhases, describeGraph, describeMachine, type Graph} from '../graph.ts'
 import {formatDuration, log, startSpinner, styles} from '../log.ts'
 import {type WorkflowResult} from '../../comfy/helpers.ts'
 import {specId} from '../render-spec.ts'
-import {type ComfyServer, probeComfy} from '../settings.ts'
+import {type ComfyServer, isWan2gp, probeComfy} from '../settings.ts'
+import {bridgeClient, waitForJob as waitForBridgeJob, withUploads} from '../wan2gp.ts'
 import {runEvent} from '../run-events.ts'
 import {trackJob, untrackJob} from '../comfy-cancel.ts'
 import {describeRejection} from '../comfy-rejection.ts'
@@ -17,6 +18,9 @@ import {
     SERVER_SILENT_MS,
     workflowHash,
     type Server,
+    type AnyServer,
+    type Wan2gpPrepared,
+    onWan2gp,
     type RenderWhat,
     type Trace,
     dispatchOrder,
@@ -44,15 +48,17 @@ export function connect(r: Renderer) {
             ),
         )
         const reachable = r.servers.filter((server, i) => {
-            if (problems[i]) log.warn(`ComfyUI ${server.name} (${server.url}) is unreachable - ${problems[i]}`)
+            if (problems[i]) log.warn(`${isWan2gp(server) ? 'wan2gp' : 'ComfyUI'} ${server.name} (${server.url}) is unreachable - ${problems[i]}`)
             return !problems[i]
         })
-        const connections = await Promise.allSettled(reachable.map(server => r.connectServer(server)))
+        // a wan2gp server is talked to through its bridge plugin (#1204): no ComfyUI connection, only the jobs with a wan2gp form go there
+        r.bridges = reachable.filter(isWan2gp).map(server => ({...server, engine: 'wan2gp' as const, bridge: bridgeClient(server.url)}))
+        const connections = await Promise.allSettled(reachable.filter(server => !isWan2gp(server)).map(server => r.connectServer(server)))
         for (const c of connections) {
             if (c.status === 'fulfilled') r.connected.push(c.value)
             else log.warn((c.reason as Error).message)
         }
-        if (!r.connected.length) {
+        if (!r.connected.length && !r.bridges.length) {
             throw new Error(
                 `No ComfyUI server reachable (${r.servers.map(s => s.url).join(', ')}) - start ComfyUI, or check the servers with: bun run setup comfy`,
             )
@@ -125,12 +131,21 @@ export function settle(r: Renderer, target: string) {
     r.dispatch()
 }
 
-export function acquire(r: Renderer, pin?: string) {
-    return new Promise<Server>((resolve, reject) => {
-        if (r.connected.length && r.connected.every(s => r.down.has(s.name))) return reject(r.allDown())
-        r.waiting.push({pin, resolve, reject})
+export function acquire(r: Renderer, pin?: string, wan2gp = false) {
+    return new Promise<AnyServer>((resolve, reject) => {
+        const usable = wan2gp ? [...r.connected, ...r.bridges] : r.connected
+        if (!usable.length) return reject(noServerFor())
+        if (usable.every(s => r.down.has(s.name))) return reject(r.allDown())
+        r.waiting.push({pin, wan2gp, resolve, reject})
         r.dispatch()
     })
+}
+
+/** Only wan2gp servers answer, and the job has no wan2gp form (a picture, a song, a clip it cannot take - #1204). */
+function noServerFor() {
+    return new Error(
+        'no ComfyUI server answers, and this job has no wan2gp form (so far only music-video clips with videoWorkflowWan2gp in config.json have one) - add a ComfyUI server, or check the wan2gp ones with: bun run setup comfy',
+    )
 }
 
 export function allDown(r: Renderer) {
@@ -140,7 +155,12 @@ export function allDown(r: Renderer) {
 }
 
 /** Whether a server still answers at all - asked after a job on it failed. */
-export async function answers(r: Renderer, server: Server): Promise<boolean> {
+export async function answers(r: Renderer, server: AnyServer): Promise<boolean> {
+    if (onWan2gp(server))
+        return server.bridge.health().then(
+            () => true,
+            () => false,
+        )
     let timer: ReturnType<typeof setTimeout> | undefined
     const timeout = new Promise<false>(resolve => {
         timer = setTimeout(() => resolve(false), PROBE_TIMEOUT_MS)
@@ -159,28 +179,30 @@ export async function answers(r: Renderer, server: Server): Promise<boolean> {
 }
 
 /** No job goes to `server` any more in this run; with no server left, everybody still waiting is told so. */
-export function markDown(r: Renderer, server: Server) {
+export function markDown(r: Renderer, server: AnyServer) {
     if (r.down.has(server.name)) return
     r.down.add(server.name)
-    const left = r.connected.filter(s => !r.down.has(s.name)).map(s => s.name)
+    const left = [...r.connected, ...r.bridges].filter(s => !r.down.has(s.name)).map(s => s.name)
     log.warn(
-        `ComfyUI ${server.name} (${server.url}) does not answer - no more jobs go to it in this run${left.length ? `, they go to ${left.join(', ')}` : ''}. Start it again and run again to use it`,
+        `${onWan2gp(server) ? 'wan2gp' : 'ComfyUI'} ${server.name} (${server.url}) does not answer - no more jobs go to it in this run${left.length ? `, they go to ${left.join(', ')}` : ''}. Start it again and run again to use it`,
     )
-    if (!left.length) {
-        for (const waiter of r.waiting.splice(0)) waiter.reject(r.allDown())
-        return
+    // a waiter none of whose servers is left is told so: a job without a wan2gp form when only wan2gp servers answer
+    const stuck = r.waiting.filter(w => ![...r.connected, ...(w.wan2gp ? r.bridges : [])].some(s => !r.down.has(s.name)))
+    for (const waiter of stuck) {
+        r.waiting.splice(r.waiting.indexOf(waiter), 1)
+        waiter.reject(left.length ? noServerFor() : r.allDown())
     }
     r.dispatch()
 }
 
-export function release(r: Renderer, server: Server) {
+export function release(r: Renderer, server: AnyServer) {
     r.busy.delete(server.name)
     r.dispatch()
 }
 
 export function dispatch(r: Renderer) {
     for (const waiter of dispatchOrder(r.waiting)) {
-        const free = pickServer(r.connected, r.busy, r.down, waiter.pin, r.held)
+        const free = pickServer<AnyServer>(waiter.wan2gp ? [...r.connected, ...r.bridges] : r.connected, r.busy, r.down, waiter.pin, r.held)
         if (!free) continue
         r.busy.add(free.name)
         r.waiting.splice(r.waiting.indexOf(waiter), 1)
@@ -215,8 +237,16 @@ export async function render<M>(
     target: string,
     extension: string | string[],
     prepare: () => Promise<{result: WorkflowResult; uploads: {from: string; to: string}[]; meta: M}>,
+    wan2gp?: () => Promise<Wan2gpPrepared<M>>,
 ): Promise<M> {
     const label = what.label
+    // its wan2gp form, when there are wan2gp servers and the job has one (#1204); else it waits for a ComfyUI server as always
+    let onBridge: Exclude<Wan2gpPrepared<M>, string> | undefined
+    if (wan2gp && (await r.connect(), r.bridges.length)) {
+        const prepared = await wan2gp()
+        if (typeof prepared === 'string') log.step('ComfyUI only', `${styles.name(label)} ${styles.muted(`- ${prepared}`)}`)
+        else onBridge = prepared
+    }
     // a fingerprint of what the job is made from: a job queued for another request is not the one to take the result of
     const request = specId(what.spec)
     const servers = await r.connect()
@@ -269,8 +299,13 @@ export async function render<M>(
 
     let timeouts = 0
     for (;;) {
-        const server = await r.acquire(home?.name)
+        const server = await r.acquire(home?.name, !!onBridge)
         r.settle(target)
+        if (onWan2gp(server)) {
+            const done = await onWan2gpServer(r, what, target, extension, server, onBridge!)
+            if (done.ok) return done.meta
+            continue
+        }
         const started = Date.now()
         const trace: Trace = []
         let pending: PendingJob<M> | undefined
@@ -327,11 +362,63 @@ export async function render<M>(
     }
 }
 
+/**
+ * One job on a wan2gp server, through its bridge (#1204): its local inputs uploaded, the job queued in that wan2gp's own queue, waited
+ * for, its video downloaded to `target`. Not resumable across runs - the bridge forgets its jobs when wan2gp restarts. ok false: the
+ * server stopped answering and is out of this run, the job goes to another server.
+ */
+async function onWan2gpServer<M>(
+    r: Renderer,
+    what: RenderWhat,
+    target: string,
+    extension: string | string[],
+    server: Extract<AnyServer, {bridge: unknown}>,
+    job: Exclude<Wan2gpPrepared<M>, string>,
+): Promise<{ok: true; meta: M} | {ok: false}> {
+    const label = what.label
+    const started = Date.now()
+    let failure: Error | undefined
+    let id: string | undefined
+    try {
+        log.step('Rendering', `${styles.name(label)} ${styles.muted(`@${server.name} (wan2gp: ${job.engine})`)}`)
+        runEvent({type: 'job', state: 'running', kind: what.kind, id: what.spec.id, server: server.name})
+        const settings = await withUploads(server.bridge, job.settings, value => existsSync(value))
+        const queued = await server.bridge.generate(settings)
+        id = queued.id
+        const done = await waitForBridgeJob(server.bridge, queued.id)
+        const extensions = [extension].flat()
+        const file = done.files.findLast(f => extensions.some(e => f.name.endsWith(e)))
+        if (!file) throw new Error(`${label}: wan2gp made no ${extensions.join(' or ')} file (got ${done.files.map(f => f.name).join(', ') || 'nothing'})`)
+        // written next to the target first, so an interrupted download never looks like a finished file
+        await Bun.write(`${target}.download`, await server.bridge.download(done.id, file.index))
+        renameSync(`${target}.download`, target)
+        runEvent({type: 'job', state: 'done', kind: what.kind, id: what.spec.id, server: server.name})
+        return {ok: true, meta: job.meta}
+    } catch (e) {
+        failure = e instanceof Error ? e : new Error(String(e))
+        if (!(await r.answers(server))) {
+            r.markDown(server)
+            if ([...r.connected, ...r.bridges].some(s => !r.down.has(s.name))) {
+                log.warn(`${label}: rendered again on another server (${failure.message.slice(0, 160)})`)
+                return {ok: false}
+            }
+        }
+        runEvent({type: 'job', state: 'failed', kind: what.kind, id: what.spec.id, server: server.name})
+        throw nameService(failure, `${label} on ${server.name} (${server.url})`, label)
+    } finally {
+        // a stop of this run leaves no job behind on wan2gp
+        if (failure && id) await server.bridge.cancel(id).catch(() => undefined)
+        r.release(server)
+        r.renderMs.set(target, (r.renderMs.get(target) ?? 0) + Date.now() - started)
+        await r.keepRender({...what, workflow: job.engine}, server, undefined, [], started, failure)
+    }
+}
+
 /** Keeps the measurement of one job: the setup the graph says, where it ran, queue vs. compute, the phases. Numbers and names only. */
 export async function keepRender(
     r: Renderer,
     what: RenderWhat,
-    server: Server,
+    server: AnyServer,
     job: PendingJob<unknown> | undefined,
     trace: Trace,
     started: number,

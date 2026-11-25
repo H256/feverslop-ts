@@ -1,7 +1,7 @@
 import {existsSync, statfsSync} from 'node:fs'
 import {libraryDir} from './library.ts'
 import {listModels, takesPictures} from './llm.ts'
-import {loadSettings, probeComfy, type Settings, settingsPath} from './settings.ts'
+import {isWan2gp, loadSettings, probeComfy, type Settings, settingsPath} from './settings.ts'
 import {defaults} from './config.ts'
 import {filmDefaults} from './film/config.ts'
 import {missingOn, serverOffers, workflowNeeds} from './workflow-needs.ts'
@@ -183,7 +183,8 @@ export async function doctor(probes: Probes = realProbes): Promise<Check[]> {
     const library = await libraryDir()
     const free = probes.freeGb('.')
     const [llm, comfy] = await Promise.all([llmChecks(settings, probes), comfyChecks(settings, probes)])
-    const ready = settings.comfy.filter(server => comfy.some(check => check.what === `ComfyUI ${server.name}` && check.state === 'ready'))
+    // the nodes and models of the workflows are a ComfyUI thing: a wan2gp server (#1204) is not asked for them
+    const ready = settings.comfy.filter(server => !isWan2gp(server) && comfy.some(check => check.what === `ComfyUI ${server.name}` && check.state === 'ready'))
     const workflows = await workflowChecks(settings, probes, ready)
     return [
         existsSync(file)

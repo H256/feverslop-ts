@@ -16,5 +16,33 @@ bun run wan2gp render http://127.0.0.1:7860 --settings=job.json --out=renders
 `"template": "gen_video_with_refs/MiniMax H3 Ref2VA Pruned PDD 8 Steps"`, plus `prompt`, `image_refs`, `audio_guide`,
 `resolution`, `video_length` and so on. Input files on this machine are uploaded first; the outputs are downloaded into `--out`.
 
-So far this renders one job by hand. Choosing wan2gp per render server, and spreading a project's jobs over ComfyUI and wan2gp
-servers, is #1193.
+## wan2gp servers in a project's runs (#1204)
+
+A render server says its engine in the settings file (`bun run setup comfy` asks for it); a plain URL stays ComfyUI:
+
+```json
+{"comfy": ["http://127.0.0.1:8188", {"url": "http://radeon-box:7860", "name": "radeon", "engine": "wan2gp"}]}
+```
+
+A project sends its music-video clips to wan2gp servers too when its `config.json` names the template:
+
+```json
+{"videoWorkflowWan2gp": "gen_video_with_refs/MiniMax H3 Ref2VA Pruned PDD 8 Steps"}
+```
+
+Then a clip goes to whichever server is free first, ComfyUI or wan2gp. On wan2gp it gets the same prompt and pictures; its stems are
+cut to the clip's span here and go in as audio references `<Audio 1>` to `<Audio 3>`. What stays on ComfyUI, with the reason in the
+log ("ComfyUI only"):
+
+- a clip with more than three audio references (most band clips) or more than nine pictures,
+- a clip that starts on context frames of the clip before (`contextFrames`),
+- pictures, reference sheets, songs, upscales and interpolation: they have no wan2gp form yet.
+
+With only wan2gp servers, such a job fails at once and says so. Differences to the ComfyUI clip:
+
+- the whole song is not locked into the latent as a guide (`MiniMaxH3AddGuide`): wan2gp has no counterpart;
+- wan2gp may round the size to its own grid, so its takes are not checked against the size the ComfyUI workflow would render;
+- a wan2gp job is not resumed by the next run (the bridge forgets its jobs when wan2gp restarts), and a take does not yet record
+  which engine made it: switching `videoWorkflowWan2gp` does not make clips stale.
+
+Compare the two before relying on it: render the same clips on both and look at them (A/B, #1204).

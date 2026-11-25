@@ -9,7 +9,9 @@ import {postworkProblem} from './postwork/config.ts'
 // settings file (written by `bun run setup`), overridable per project (llm.model), by env vars and by CLI flags.
 // Documented in the README, section "Setup".
 
-export type ComfyEntry = string | {url: string; name?: string; token?: string; username?: string; password?: string}
+// engine: what renders there - ComfyUI (the default), or wan2gp with the FeverSlop bridge plugin (#1204, docs/wan2gp.md)
+export type ComfyEntry = string | {url: string; name?: string; token?: string; username?: string; password?: string; engine?: RenderEngine}
+export type RenderEngine = 'comfy' | 'wan2gp'
 
 // the settings file as written by `bun run setup`
 export type SettingsFile = {
@@ -34,7 +36,9 @@ export type WhisperSettings = {model?: string; beamSize?: number; temperatures?:
 // a missing url is the text server (with its key), a missing model the server's only model
 export type VisionSettings = {url?: string; apiKey?: string; model?: string}
 
-export type ComfyServer = {url: string; name: string; credentials?: BasicCredentials | BearerTokenCredentials}
+export type ComfyServer = {url: string; name: string; credentials?: BasicCredentials | BearerTokenCredentials; engine?: 'wan2gp'}
+/** A server that renders with wan2gp through the bridge plugin, not with ComfyUI. */
+export const isWan2gp = (server: Pick<ComfyServer, 'engine'>) => server.engine === 'wan2gp'
 
 export type Source = 'default' | 'file' | 'project' | 'env' | 'flag'
 
@@ -291,10 +295,12 @@ export function parseComfyEntries(entries: unknown[], where: string): ComfyServe
         if (!entry || typeof entry !== 'object' || Array.isArray(entry))
             return fail(`${at} must be a URL or an object like {"url": …}, got ${JSON.stringify(entry)}`)
         const e = entry as Exclude<ComfyEntry, string>
-        warnUnknownKeys(e, ['url', 'name', 'token', 'username', 'password'], `${where}, ${at}`)
+        warnUnknownKeys(e, ['url', 'name', 'token', 'username', 'password', 'engine'], `${where}, ${at}`)
         for (const key of ['url', 'name', 'token', 'username', 'password'] as const) {
             if (e[key] !== undefined && typeof e[key] !== 'string') fail(`${at}: ${key} must be a string, got ${JSON.stringify(e[key])}`)
         }
+        if (e.engine !== undefined && e.engine !== 'comfy' && e.engine !== 'wan2gp')
+            fail(`${at}: engine is "comfy" or "wan2gp", got ${JSON.stringify(e.engine)}`)
         if (!e.url) fail(`${at} has no url`)
         const url = normalizeUrl(e.url, `${where}, ${at}`)
         if (e.token && (e.username || e.password)) fail(`${at}: use either token or username/password, not both`)
@@ -306,7 +312,7 @@ export function parseComfyEntries(entries: unknown[], where: string): ComfyServe
               : undefined
         const name = e.name?.trim() || new URL(url).host
         if (!/^[\w.:-]+$/.test(name)) fail(`${at}: name "${name}" may only contain letters, digits, ".", ":", "_" and "-"`)
-        return {url, name, ...(credentials ? {credentials} : {})}
+        return {url, name, ...(credentials ? {credentials} : {}), ...(e.engine === 'wan2gp' ? {engine: 'wan2gp' as const} : {})}
     })
     // the name ends up in the client id - the same server listed twice gets gpu, gpu-2, …
     const seen = new Map<string, number>()
@@ -352,14 +358,25 @@ export function authHeaders(server: ComfyServer): Record<string, string> {
 /** GET /system_stats - throws when the server doesn't answer in time or rejects the credentials. */
 export async function probeComfy(server: ComfyServer, timeoutMs = 5000): Promise<SystemStatsResponse> {
     let response: Response
+    // a wan2gp server answers through its bridge plugin: its versions stand in for the device ComfyUI would name
+    const path = isWan2gp(server) ? '/feverslop/api/health' : '/system_stats'
     try {
-        response = await fetch(`${server.url}/system_stats`, {headers: authHeaders(server), signal: AbortSignal.timeout(timeoutMs)})
+        response = await fetch(`${server.url}${path}`, {headers: authHeaders(server), signal: AbortSignal.timeout(timeoutMs)})
     } catch (e) {
         const error = e as Error
         throw new Error(error.name === 'TimeoutError' ? `no answer within ${timeoutMs / 1000} s` : error.message)
     }
     if (response.status === 401 || response.status === 403) throw new Error(`${response.status} ${response.statusText} - wrong or missing token/password`)
-    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`)
+    if (!response.ok)
+        throw new Error(
+            isWan2gp(server) && response.status === 404
+                ? 'no FeverSlop bridge at /feverslop - bun run wan2gp install <wan2gp folder>, then restart wan2gp'
+                : `${response.status} ${response.statusText}`,
+        )
+    if (isWan2gp(server)) {
+        const said = (await response.json()) as {bridge: number; wangp: string}
+        return {system: {}, devices: [{name: `wan2gp ${said.wangp} (bridge ${said.bridge})`}]} as unknown as SystemStatsResponse
+    }
     return (await response.json()) as SystemStatsResponse
 }
 

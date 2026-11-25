@@ -128,6 +128,17 @@ describe('settings', () => {
 })
 
 test('authHeaders: basic credentials with non-ASCII characters are UTF-8 base64 (#976)', () => {
-  const header = authHeaders({credentials: {type: 'basic', username: 'jörg', password: 'pä$$'}} as never)
-  expect(Buffer.from(header.Authorization!.slice(6), 'base64').toString('utf8')).toBe('jörg:pä$$')
+    const header = authHeaders({credentials: {type: 'basic', username: 'jörg', password: 'pä$$'}} as never)
+    expect(Buffer.from(header.Authorization!.slice(6), 'base64').toString('utf8')).toBe('jörg:pä$$')
+})
+
+describe('the engine of a render server (#1204)', () => {
+    test('a plain URL and engine "comfy" are ComfyUI, engine "wan2gp" is kept, anything else is refused', () => {
+        const servers = parseComfyEntries(
+            ['gpu:8188', {url: 'http://a:8188', engine: 'comfy'}, {url: 'http://w:7860', name: 'radeon', engine: 'wan2gp'}],
+            'test',
+        )
+        expect(servers.map(s => s.engine)).toEqual([undefined, undefined, 'wan2gp'])
+        expect(() => parseComfyEntries([{url: 'http://w', engine: 'forge' as never}], 'test')).toThrow('engine is "comfy" or "wan2gp"')
+    })
 })
