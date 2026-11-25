@@ -697,3 +697,178 @@
   background: var(--accent);
   clip-path: polygon(0 0, 100% 0, 100% 45%, 50% 100%, 0 45%);
 }
+
+/* The storyboard (#1194): large clip cards in rows under their beat, in the place of the monitor. */
+.board {
+  overflow: auto;
+  min-height: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg);
+}
+.board-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.board-head .spacer {
+  flex: 1;
+}
+.board-empty {
+  margin: var(--space-4) 0;
+}
+.board-row {
+  margin-bottom: var(--space-4);
+}
+.board-row-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: var(--space-1) 0;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.board-caret {
+  width: 1em;
+  color: var(--muted);
+}
+.board-progress {
+  width: 80px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--line);
+  overflow: hidden;
+}
+.board-progress span {
+  display: block;
+  height: 100%;
+  background: var(--ok);
+}
+.board-row-text {
+  margin: 0 0 var(--space-2) calc(1em + var(--space-2));
+  font-size: var(--text-s);
+}
+.board-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-3);
+}
+.board-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: 0 0 var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  color: var(--text);
+  text-align: left;
+  overflow: hidden;
+  cursor: pointer;
+}
+.board-card:hover {
+  border-color: var(--muted);
+}
+.board-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.board-card.marked {
+  background: var(--accent-soft);
+}
+.board-picture {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+.board-picture img,
+.board-picture video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* not rendered: what happens, over the place dimmed */
+.board-card .board-picture:has(.board-intent) img {
+  filter: blur(3px) brightness(0.45);
+}
+.board-intent {
+  position: absolute;
+  inset: auto var(--space-2) var(--space-5);
+  color: #fff;
+  font-size: var(--text-s);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.board-number,
+.board-length {
+  position: absolute;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-s);
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  font-size: var(--text-xs);
+}
+.board-number {
+  top: var(--space-1);
+  left: var(--space-1);
+}
+.board-length {
+  bottom: var(--space-1);
+  right: var(--space-1);
+}
+.board-state.chip {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  font-size: var(--text-xxs);
+}
+.board-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-s);
+}
+.board-line,
+.board-camera {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.board-cast {
+  display: flex;
+  gap: 2px;
+  padding: 0 var(--space-2);
+}
+.board-cast img {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-round);
+  object-fit: cover;
+  border: 1px solid var(--line);
+}
+.board-row-head strong {
+  white-space: nowrap;
+}
+.board-row-head .muted {
+  white-space: nowrap;
+}
+.board-progress {
+  flex: none;
+}
+.board-row-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

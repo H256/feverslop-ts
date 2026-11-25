@@ -150,6 +150,7 @@ const shownLanes = computed(
   () =>
     [
       {key: 'player', label: 'Player', title: 'The picture and the clip panel above the timeline'},
+      {key: 'board', label: 'Storyboard', title: 'Large cards of the clips under their beats, in the place of the picture'},
       {key: 'groups', label: film.value ? 'Scenes' : 'Sections', title: film.value ? 'The scenes' : 'The parts of the song'},
       ...(beats.value.length ? [{key: 'beats', label: 'Beats', title: 'Which beat of the story a clip belongs to'}] : []),
       {key: 'wave', label: project.value.song ? 'Song' : 'Sound', title: 'The waveform'},
