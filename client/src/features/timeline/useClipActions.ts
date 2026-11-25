@@ -133,6 +133,12 @@ export function useClipActions(timeline: Timeline) {
     await session.reload()
     toasts.show('Kept for this clip. It takes effect with the next plan run, and the clip then goes stale.')
   }
+  /** How the clip comes in at the export (#1195): only the next final video changes, the clips stay. */
+  async function saveTransition(clip: EditorClip, transition: EditorClip['transition'] | null) {
+    await api.transition(clip.id, transition)
+    await session.reload()
+    toasts.show(transition ? `${clip.id} comes in with a ${transition.type}. The next final video has it.` : `${clip.id} comes in on a cut again.`)
+  }
   async function addView(clip: EditorClip) {
     if (!clip.views) return
     const view = reactive<NewView>({name: '', shows: ''})
@@ -261,6 +267,7 @@ export function useClipActions(timeline: Timeline) {
     refinish: guarded(refinish),
     pickVersion: guarded(pickVersion),
     saveOverride: guarded(saveOverride),
+    saveTransition: guarded(saveTransition),
     addView: guarded(addView),
     repeatLast: guarded(repeatLast),
     plain: guarded(plain),

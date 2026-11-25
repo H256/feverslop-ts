@@ -2,6 +2,7 @@
 import {computed, ref, watch} from 'vue'
 import CalloutBox from '../../../components/CalloutBox.vue'
 import TabBar from '../../../components/TabBar.vue'
+import {thumbUrl} from '../../../api/urls'
 import {clock} from '../../../lib/format'
 import {STATE_CHIPS, stateOf} from '../clips'
 import {useTimeline, type TimelineContext} from '../context'
@@ -13,8 +14,17 @@ import ShotsPanel from './ShotsPanel.vue'
 import VersionsPanel from './VersionsPanel.vue'
 
 /** The clip at the playhead: what it is now, and its prompt, shots, references, rendering and versions - one tab at a time. */
-const {project, fresh, playback, tab, versions} = useTimeline()
+const {project, fresh, playback, tab, versions, session} = useTimeline()
 const clip = computed(() => playback.clip.value)
+// the people of the clip, once each, with a picture that is there: the place, props and the frame it goes on from are not cast
+const cast = computed(() => {
+  const seen = new Set<string>()
+  return (clip.value?.pictures ?? []).filter(p => {
+    if (!p.exists || ['location', 'frame', 'prop'].includes(p.kind) || seen.has(p.name)) return false
+    seen.add(p.name)
+    return true
+  })
+})
 const state = computed(() => clip.value && STATE_CHIPS[stateOf(clip.value, fresh.value)])
 const group = computed(() => clip.value && (project.value.groups.find(g => g.id === clip.value!.group)?.label ?? clip.value.group))
 const TABS: {id: Tab; name: string; count: (ctx: TimelineContext['playback']['clip']['value']) => number | undefined}[] = [
@@ -43,6 +53,12 @@ watch(clip, () => panel.value?.scrollTo({top: 0}))
           {{ clip.id }}<span :class="state.cls" :title="state.title" class="u-sans">{{ state.label }}</span>
         </h2>
         <p class="num">{{ clock(clip.start) }} – {{ clock(clip.end) }} · {{ (clip.end - clip.start).toFixed(1) }}s · {{ group }}</p>
+        <!-- who is in the clip at a glance (#1195): a round picture per person; References has the whole list -->
+        <div v-if="cast.length" class="icast" aria-label="Cast in this clip">
+          <span v-for="person in cast" :key="person.id" class="icast-chip" :title="person.description || person.name">
+            <img :src="thumbUrl(person, session.roots)" alt="" decoding="async" draggable="false" />{{ person.name }}
+          </span>
+        </div>
         <CalloutBox v-for="mark in clip.marks" :key="mark.text" :kind="mark.kind === 'failed' || mark.kind === 'backdrop' ? 'error' : 'warn'" as="div">{{
           mark.text
         }}</CalloutBox>

@@ -17,7 +17,8 @@ import {readFineWaveform} from '../waveform.ts'
 import {assetSources} from './asset-sources.ts'
 import {askLayers} from '../cast-stems.ts'
 import {writeBeatCast} from './beat-cast.ts'
-import {pickVersion, writeOverride} from './choices.ts'
+import {pickVersion, writeClipTransition, writeOverride} from './choices.ts'
+import type {Transition} from '../transitions.ts'
 import {dryRun, replaceDryRun} from './dry-run.ts'
 import {json, mediaFile, readWaveform, runEvents, stripColors} from './http.ts'
 import {kindOf} from './kinds.ts'
@@ -536,6 +537,16 @@ export const PROJECT_ROUTES: readonly Route[] = [
         changes: [writeOverride],
         handle: async c => {
             await writeOverride(c.target, c.id, await c.body<EditorOverride | null>())
+            return json({written: true})
+        },
+    },
+    // how a clip comes in at the export (#1195): bun run transition's file, null a cut again
+    {
+        method: 'POST',
+        path: 'transition/:id',
+        changes: [writeClipTransition],
+        handle: async c => {
+            await writeClipTransition(c.target, c.id, await c.body<Transition | null>())
             return json({written: true})
         },
     },

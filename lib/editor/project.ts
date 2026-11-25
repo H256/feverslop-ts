@@ -2,6 +2,7 @@ import {boundedMemo} from './memo.ts'
 import {existsSync, readdirSync, readFileSync, statSync} from 'node:fs'
 import {isAbsolute, join, relative} from 'node:path'
 import {probeVideo} from '../assemble.ts'
+import {readTransitions} from '../transitions.ts'
 import {boundaryFrameAsset, type ClipRequest} from '../compose.ts'
 import {loadProjectConfig, type ProjectConfig} from '../config.ts'
 import {FPS, secondsAt, round} from '../frames.ts'
@@ -338,7 +339,8 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
     const run = lastRunOf(dir)
     const scan = readScan(dir)
     const variants = refinedVariantsOf(dir)
-    const clips = requests.map((clip): EditorClip => {
+    const {transitions} = readTransitions(dir)
+    const clips = requests.map((clip, i): EditorClip => {
         const beat = data.beats?.find(b => b.id === clip.beatId)
         const plan = data.shotMoments?.[clip.beatId] && asBeatShots(data.shotMoments[clip.beatId]!)
         const offset = shotsDone.get(clip.beatId) ?? 0
@@ -392,6 +394,8 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
             marks: marksOf(dir, clip, run, scan),
             preview: previewOf(dir, clip.id),
             refined: refinedOf(dir, clip.id, variants),
+            // how it comes in at the export (#1195): the first clip has nothing to come from
+            ...(i > 0 && transitions[clip.id] ? {transition: transitions[clip.id]} : {}),
         }
     })
     const end = clips.at(-1)?.end ?? 0
