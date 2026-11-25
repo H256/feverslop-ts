@@ -21,6 +21,7 @@ import {runEvent} from '../run-events.ts'
 import type {Settings} from '../settings.ts'
 import {type ExportFormat, exportTimelines} from '../timeline-export.ts'
 import {readTimings, recordTiming} from '../timings.ts'
+import {readTransitions} from '../transitions.ts'
 
 // The end of a music video's run (index.ts, #841): its pictures and clips rendered as asked, the final video assembled - with the
 // finish and another frame rate when the config asks - and the timeline exported for a video editor. What it renders is planned
@@ -112,6 +113,9 @@ export async function renderAndAssemble(run: MusicRenderRun) {
     }
 
     ////////// ASSEMBLING THE FINAL VIDEO
+    // how clips come in (#1195, transitions.json): read once for every video this run assembles
+    const {transitions, problems: transitionProblems} = render.has('final') ? readTransitions(project.dir) : {transitions: {}, problems: []}
+    for (const problem of transitionProblems) log.warn(`transitions.json: ${problem}`)
     if (render.has('final') && args.preview) {
         // a quick look at cut, timing and continuity: from the previews, without the finish or another frame rate, and never the final video
         log.section('14 · THE PREVIEW VIDEO')
@@ -123,6 +127,7 @@ export async function renderAndAssemble(run: MusicRenderRun) {
             songAudio: config.songAudio,
             target,
             sources: await previewSources(project.dir, clips),
+            transitions,
         })
         log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.seconds.toFixed(3)}s`)}`)
     } else if (render.has('final')) {
@@ -136,7 +141,7 @@ export async function renderAndAssemble(run: MusicRenderRun) {
             ),
             args.strict,
         )
-        const result = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target})
+        const result = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target, transitions})
         log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.seconds.toFixed(3)}s`)}`)
         // the light grade and sharpen ("finish"): a copy next to each final video, which itself stays as it is
         const finishing = finishOf(config.finish)
@@ -156,6 +161,7 @@ export async function renderAndAssemble(run: MusicRenderRun) {
                 songAudio: config.songAudio,
                 target: smooth,
                 interpolated: {files, multiplier, fps: config.finalFps},
+                transitions,
             })
             log.step(
                 'Saved',

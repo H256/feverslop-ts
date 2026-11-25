@@ -111,3 +111,39 @@ describe('trimHead', () => {
         expect(info.hasAudio).toBe(true)
     })
 })
+
+describe('assembleFinal with transitions (#1195)', () => {
+    test('a crossfade plays over the frames the clip before has past its end: every clip stays on its song frame, the length is the same', async () => {
+        const {mkdtempSync} = await import('node:fs')
+        const {tmpdir} = await import('node:os')
+        const {join} = await import('node:path')
+        const {assembleFinal, probeVideo} = await import('./assemble.ts')
+        const dir = mkdtempSync(join(tmpdir(), 'fade-'))
+        const {ffmpegMake: make, testVideo} = await import('./test-media.ts')
+        const {mkdirSync} = await import('node:fs')
+        mkdirSync(join(dir, 'videos'))
+        // a: 24 frames planned, 36 rendered - 12 to fade over; b and c: as planned, c has nothing past its end
+        await testVideo(join(dir, 'videos', 'a.mp4'), {frames: 36})
+        await testVideo(join(dir, 'videos', 'b.mp4'), {frames: 30})
+        await testVideo(join(dir, 'videos', 'c.mp4'), {frames: 24})
+        await make(['-f', 'lavfi', '-i', 'sine=frequency=440:duration=3', join(dir, 'song.wav')])
+        const clips = [
+            {id: 'a', frames: 24, frameStart: 0},
+            {id: 'b', frames: 24, frameStart: 24},
+            {id: 'c', frames: 24, frameStart: 48},
+        ] as never
+        const target = join(dir, 'out.mp4')
+        const result = await assembleFinal({
+            clips,
+            projectDir: dir,
+            songFile: join(dir, 'song.wav'),
+            songAudio: true,
+            target,
+            // b: 0.5 s of the 12 frames a has; c: a fade through black over the 6 frames b has, not the second asked for
+            transitions: {b: {type: 'crossfade', seconds: 0.5}, c: {type: 'fade-black', seconds: 1}},
+        })
+        const info = await probeVideo(target)
+        expect(info.frames).toBe(72)
+        expect(result.seconds).toBe(3)
+    })
+})

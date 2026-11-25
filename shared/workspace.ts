@@ -178,6 +178,8 @@ export type EditorClip = {
     override?: EditorOverride
     preview?: {file: string; v: number; approximate?: boolean}
     refined: {variant: string; file: string; v: number; size?: string; seed?: number; denoise?: number}[] // larger versions of it (bun run refinish)
+    // how it comes in at the export (#1195, bun run transition): a crossfade or a fade from the clip before; none: a cut
+    transition?: {type: 'crossfade' | 'fade-black' | 'fade-white'; seconds: number}
 }
 export type EditorGroup = {id: string; label: string; start: number; end: number}
 // who is in which beats or shots of a planned music video (#765, #767): characters of the cast and new ones joining it come in,
