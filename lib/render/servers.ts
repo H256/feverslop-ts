@@ -60,7 +60,7 @@ export function connect(r: Renderer) {
         }
         if (!r.connected.length && !r.bridges.length) {
             throw new Error(
-                `No ComfyUI server reachable (${r.servers.map(s => s.url).join(', ')}) - start ComfyUI, or check the servers with: bun run setup comfy`,
+                `No ComfyUI server reachable (${r.servers.map(s => s.url).join(', ')}) - start ComfyUI, or check the servers with: bun run setup render`,
             )
         }
         r.stopQueueNote = startSpinner(() => (r.waiting.length ? `${r.waiting.length} queued` : ''), {note: true})
@@ -144,7 +144,7 @@ export function acquire(r: Renderer, pin?: string, wan2gp = false) {
 /** Only wan2gp servers answer, and the job has no wan2gp form (a picture, a song, a clip it cannot take - #1204). */
 function noServerFor() {
     return new Error(
-        'no ComfyUI server answers, and this job has no wan2gp form (so far only music-video clips with videoWorkflowWan2gp in config.json have one) - add a ComfyUI server, or check the wan2gp ones with: bun run setup comfy',
+        'no ComfyUI server answers, and this job has no wan2gp form (so far only music-video clips with videoWorkflowWan2gp in config.json have one) - add a ComfyUI server, or check the wan2gp ones with: bun run setup render',
     )
 }
 

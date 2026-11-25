@@ -10,12 +10,13 @@ export type SetupOptions = {
     model?: string // "-" takes it out: the server's only model
     parallel?: string
     off?: boolean // vision: the text model describes pictures again
-    add?: string // comfy: a server's URL
+    add?: string // render (comfy): a server's URL
     name?: string
     token?: string
-    remove?: string // comfy: a server by its name or URL
+    engine?: string // render: what renders there, "comfy" (the default) or "wan2gp" (#1204)
+    remove?: string // render (comfy): a server by its name or URL
 }
-export const SETUP_OPTIONS = ['url', 'key', 'model', 'parallel', 'add', 'name', 'token', 'remove'] as const
+export const SETUP_OPTIONS = ['url', 'key', 'model', 'parallel', 'add', 'name', 'token', 'engine', 'remove'] as const
 
 /** Whether the command line changes anything - else the wizard asks. */
 export const givesSetup = (options: SetupOptions) => SETUP_OPTIONS.some(name => options[name] !== undefined) || !!options.off
@@ -64,7 +65,8 @@ export function changeSettings(file: SettingsFile, command: string, options: Set
         said.push(`Pictures described by ${model ?? "the server's only model"} on ${url ?? 'the text server'}`)
         return {file: next, said}
     }
-    if (command === 'comfy') {
+    // the render servers - ComfyUI and wan2gp (#1204); "comfy" is the name they had before
+    if (command === 'render' || command === 'comfy') {
         const entries: ComfyEntry[] = [...(next.comfy ?? [])]
         const urlOf = (entry: ComfyEntry) => (typeof entry === 'string' ? entry : entry.url)
         if (options.remove !== undefined) {
@@ -77,19 +79,29 @@ export function changeSettings(file: SettingsFile, command: string, options: Set
         if (options.add !== undefined) {
             const url = normalizeUrl(options.add, '--add')
             if (entries.some(entry => normalizeUrl(urlOf(entry), 'comfy') === url)) throw new Error(`--add: ${url} is there already`)
+            if (options.engine !== undefined && options.engine !== 'comfy' && options.engine !== 'wan2gp')
+                throw new Error(`--engine: "comfy" or "wan2gp", not "${options.engine}"`)
+            const wan2gp = options.engine === 'wan2gp'
             entries.push(
-                options.name || options.token ? {url, ...(options.name ? {name: options.name} : {}), ...(options.token ? {token: options.token} : {})} : url,
+                options.name || options.token || wan2gp
+                    ? {
+                          url,
+                          ...(options.name ? {name: options.name} : {}),
+                          ...(options.token ? {token: options.token} : {}),
+                          ...(wan2gp ? {engine: 'wan2gp' as const} : {}),
+                      }
+                    : url,
             )
             said.push(`Added ${options.name ?? url}`)
         }
-        if (!said.length) throw new Error('--add=<url> [--name=] [--token=] or --remove=<name or url>')
+        if (!said.length) throw new Error('--add=<url> [--name=] [--token=] [--engine=wan2gp] or --remove=<name or url>')
         if (entries.length) {
             parseComfyEntries(entries, 'comfy')
             next.comfy = entries
         } else delete next.comfy
         return {file: next, said}
     }
-    throw new Error(`setup ${command} takes no options - llm, vision and comfy do`)
+    throw new Error(`setup ${command} takes no options - llm, vision and render do`)
 }
 
 /** The effective settings as data, every key masked: `bun run setup show --json`, and the workspace's Machine panel. */
@@ -105,7 +117,7 @@ export async function settingsView(): Promise<SetupView> {
             parallel: llm.parallel,
             vision: llm.vision && {url: llm.vision.url, apiKey: masked(llm.vision.apiKey), model: llm.vision.model},
         },
-        comfy: comfy.map(server => ({name: server.name, url: server.url, auth: server.credentials?.type})),
+        comfy: comfy.map(server => ({name: server.name, url: server.url, auth: server.credentials?.type, ...(server.engine ? {engine: server.engine} : {})})),
         sources: sources as Record<string, string>,
     }
 }

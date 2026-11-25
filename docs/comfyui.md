@@ -26,7 +26,7 @@ To write your own workflows, see [custom-workflows.md](custom-workflows.md).
    Other servers - or several of them - are set up with:
 
    ```bash
-   bun run setup comfy     # shows each server's GPU and free VRAM; add, remove, test
+   bun run setup render     # shows each server's GPU and free VRAM; add, remove, test
    ```
 
    A server behind a reverse proxy with authentication gets a bearer token or a username and password. For one run,
@@ -645,7 +645,7 @@ under the same URL or name. Changing both its URL and its name makes its pending
 
 | Problem                                                    | Cause and fix                                                                                                                          |
 |------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| `No ComfyUI server reachable (…)`                          | None of the servers answered - start ComfyUI, or check the list and each server's status with `bun run setup comfy`.                   |
+| `No ComfyUI server reachable (…)`                          | None of the servers answered - start ComfyUI, or check the list and each server's status with `bun run setup render`.                   |
 | `ComfyUI <name> (<url>) is unreachable - …`                | That server is left out of this run, the others render. `401`/`403`: a wrong or missing token or password.                             |
 | `…: its job was queued on <name> (<url>), which is unreachable` / `is no longer configured` | The job's server is down or gone from the settings - the file is rendered again on another server. |
 | `No LLM server configured`                                 | Run `bun run setup llm`, or set `FEVERSLOP_LLM_URL` / `--llm-url=`.                                                                   |

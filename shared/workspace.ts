@@ -101,11 +101,12 @@ export type AssetSource = {project: string; assets: {id: string; name: string; d
 export type SetupView = {
     file: string
     llm: {url?: string; apiKey?: string; model?: string; parallel: number; vision?: {url?: string; apiKey?: string; model?: string}}
-    comfy: {name: string; url: string; auth?: string}[]
+    comfy: {name: string; url: string; auth?: string; engine?: 'wan2gp'}[] // the render servers, ComfyUI and wan2gp (#1204)
     sources: Record<string, string>
 }
 /** A change of the servers, as the Machine panel asks it: `bun run setup <command> --<option>=…`. */
-export type SetupChange = {command: 'llm' | 'vision' | 'comfy'; options: Record<string, string | boolean>}
+// render: the render servers, ComfyUI and wan2gp (#1204) - "comfy" was its name before, still taken
+export type SetupChange = {command: 'llm' | 'vision' | 'render' | 'comfy'; options: Record<string, string | boolean>}
 /** One line of `bun run doctor`: what the machine has, and what to do about what it lacks. */
 export type MachineCheck = {what: string; state: 'ready' | 'missing' | 'note'; found: string; fix?: string}
 // unset: no server is set up - this is the default address, tried on the chance that one runs there (#831)

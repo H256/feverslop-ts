@@ -29,7 +29,8 @@ describe('the arguments of init from the form', () => {
         expect(setupArgs({command: 'vision', options: {off: true}})).toEqual(['vision', '--off'])
         expect(() => setupArgs({command: 'llm', options: {add: 'x'}})).toThrow('has no option --add')
         expect(() => setupArgs({command: 'comfy', options: {add: 'a\nb'}})).toThrow('a line of text')
-        expect(() => setupArgs({command: 'whisper' as 'llm', options: {}})).toThrow('llm, vision or comfy')
+        expect(() => setupArgs({command: 'whisper' as 'llm', options: {}})).toThrow('llm, vision or render')
+        expect(setupArgs({command: 'render', options: {add: 'radeon:7860', engine: 'wan2gp'}})).toEqual(['render', '--add=radeon:7860', '--engine=wan2gp'])
     })
     test('a film: its idea or screenplay, the length and language as given', () => {
         expect(filmInitArgs({id: 'night', idea: 'A keeper', length: '90', language: 'de', style: ''})).toEqual([

@@ -160,8 +160,8 @@ async function comfyChecks(settings: Settings, probes: Probes): Promise<Check[]>
                   state: anyReady ? 'note' : 'missing',
                   fix:
                       settings.sources.comfy === 'default'
-                          ? 'bun run setup comfy (no server is set: this is the default address)'
-                          : 'start ComfyUI there, or: bun run setup comfy',
+                          ? 'bun run setup render (no server is set: this is the default address)'
+                          : 'start ComfyUI there, or: bun run setup render',
               },
     )
 }

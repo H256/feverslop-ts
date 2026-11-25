@@ -98,7 +98,7 @@ the arrow keys. Each part also works on its own:
 | `bun run setup llm`       | the LLM server: URL → API key (optional) → connects, lists the models → pick one            |
 | `bun run setup llm-model` | only the model: lists the models of the configured server → pick one                       |
 | `bun run setup vision`    | the model that describes pictures: the text model, another model on the text server, or one on another server - says whether it takes pictures |
-| `bun run setup comfy`     | the ComfyUI servers with their status (GPU, free VRAM) - add, remove, test again           |
+| `bun run setup render`    | the render servers, ComfyUI and wan2gp (`comfy` still works), with their status - add, remove, test again |
 | `bun run setup whisper`   | the transcription of the vocals stem: model, beams, temperatures (see below)                |
 | `bun run setup show`      | the effective settings and where each value comes from, API keys masked                    |
 
@@ -215,7 +215,7 @@ Each command ends with a `Next` line: following only those lines leads from an e
 video. In order:
 
 1. `bun run doctor` - what this machine has: the language model, ComfyUI, ffmpeg, uv. Each missing part with its fix.
-2. `bun run setup` - the servers: asked, or by options (`bun run setup llm --url=http://localhost:8080/v1`, `bun run setup comfy --add=http://gpu:8188`). A key or token that should stay out of the shell history: `--key-file=PATH` or `--key-env=NAME` (and `--token-file=`, `--token-env=`) instead of `--key=`.
+2. `bun run setup` - the servers: asked, or by options (`bun run setup llm --url=http://localhost:8080/v1`, `bun run setup render --add=http://gpu:8188`). A key or token that should stay out of the shell history: `--key-file=PATH` or `--key-env=NAME` (and `--token-file=`, `--token-env=`) instead of `--key=`.
 3. `bun run init my-song --song=song.mp3 --lyrics=lyrics.txt` - the project (asked, without the options).
 4. `bun run plan my-song` - the plan: the language model only, nothing is rendered (`bun run plan` is `bun index.ts`).
 5. `bun run plan my-song --render=images` - the pictures of the cast and the places.

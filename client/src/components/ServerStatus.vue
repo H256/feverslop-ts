@@ -10,7 +10,7 @@ const unset = computed(() => servers.list.value.length > 0 && servers.list.value
 
 <template>
   <div class="servers" aria-label="Render servers">
-    <RouterLink v-if="unset" to="/" class="server ss-unset" title="Set up a ComfyUI server on the start page: Machine - or bun run setup comfy --add=URL"
+    <RouterLink v-if="unset" to="/" class="server ss-unset" title="Set up a ComfyUI server on the start page: Machine - or bun run setup render --add=URL"
       >No render server set up</RouterLink
     >
     <span

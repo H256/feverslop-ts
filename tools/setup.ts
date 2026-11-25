@@ -36,7 +36,8 @@ const commands = {
     llm: 'the LLM server: URL, API key and model',
     'llm-model': 'only the model of the configured LLM server',
     vision: 'the model that describes pictures: another model or server, or the text model',
-    comfy: 'the ComfyUI servers: add, remove, test',
+    render: 'the render servers, ComfyUI and wan2gp: add, remove, test',
+    comfy: 'the same as render (its name before wan2gp servers, #1204)',
     whisper: 'the transcription of the vocals stem: model, beams, temperatures',
     show: 'the effective settings and where each comes from',
 }
@@ -107,7 +108,7 @@ if (command === 'show') {
         } catch (e) {
             log.usageError(
                 (e as Error).message,
-                'usage: bun run setup llm --url= [--key=] [--model=] [--parallel=] | vision --url= [--model=] | --off | comfy --add=URL [--name=] [--token=] | --remove=NAME',
+                'usage: bun run setup llm --url= [--key=] [--model=] [--parallel=] | vision --url= [--model=] | --off | render --add=URL [--name=] [--token=] [--engine=wan2gp] | --remove=NAME',
             )
         }
     }
@@ -122,7 +123,7 @@ log.section(`feverslop-ts setup ${styles.muted(settingsPath())}`)
 if (command === 'all' || command === 'llm') await setupLlm()
 if (command === 'llm-model') await setupModel()
 if (command === 'all' || command === 'vision') await setupVision()
-if (command === 'all' || command === 'comfy') await setupComfy()
+if (command === 'all' || command === 'render' || command === 'comfy') await setupComfy()
 if (command === 'whisper') await setupWhisper()
 log.success('Done - see the result with: bun run setup show')
 

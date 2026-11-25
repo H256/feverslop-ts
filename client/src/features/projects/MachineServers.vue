@@ -18,7 +18,7 @@ const failed = shallowRef('')
 const pending = shallowRef(false)
 const llm = reactive({url: '', model: '', key: ''})
 const vision = reactive({url: '', model: ''})
-const comfy = reactive({add: '', name: ''})
+const comfy = reactive({add: '', name: '', engine: 'comfy'})
 
 const load = async () => {
   const found = await workspace.setup()
@@ -69,24 +69,34 @@ const fromEnv = (source?: string) => source && source !== 'file' && source !== '
         </button>
       </div>
       <div class="ms-comfy">
-        <b>ComfyUI</b>
+        <b>Render servers</b>
         <CalloutBox v-if="fromEnv(view.sources.comfy)" kind="warn" as="span">Set by {{ view.sources.comfy }} - it beats what is saved here.</CalloutBox>
         <ul>
           <li v-for="server in view.comfy" :key="server.url">
-            <span>{{ server.name }}</span> <code class="muted">{{ server.url }}</code>
-            <button type="button" class="btn mini" :disabled="pending" @click="change({command: 'comfy', options: {remove: server.name}})"><AppIcon name="remove" />Remove</button>
+            <span>{{ server.name }}</span> <code class="muted">{{ server.url }}</code> <span class="muted">{{ server.engine === 'wan2gp' ? 'wan2gp' : 'ComfyUI' }}</span>
+            <button type="button" class="btn mini" :disabled="pending" @click="change({command: 'render', options: {remove: server.name}})"><AppIcon name="remove" />Remove</button>
           </li>
         </ul>
         <div class="ms-row">
           <FormField label="Add a server"><input v-model="comfy.add" type="text" placeholder="http://gpu1.lan:8188" /></FormField>
           <FormField label="Name (optional)"><input v-model="comfy.name" type="text" /></FormField>
-          <button type="button" class="btn" :disabled="pending || !comfy.add.trim()" @click="change({command: 'comfy', options: {add: comfy.add, name: comfy.name}})">Add</button>
+          <FormField label="Engine"
+            ><select v-model="comfy.engine"><option value="comfy">ComfyUI</option><option value="wan2gp">wan2gp (bridge plugin)</option></select></FormField
+          >
+          <button
+            type="button"
+            class="btn"
+            :disabled="pending || !comfy.add.trim()"
+            @click="change({command: 'render', options: {add: comfy.add, name: comfy.name, ...(comfy.engine === 'wan2gp' ? {engine: 'wan2gp'} : {})}})"
+          >
+            Add
+          </button>
         </div>
       </div>
     </template>
     <p v-for="line in said" :key="line" class="muted ms-said">{{ line }}</p>
     <CalloutBox v-if="failed" kind="warn">{{ failed }}</CalloutBox>
-    <p class="muted ms-said">The same as <code>bun run setup llm|vision|comfy --…</code>; saved in <code>{{ view?.file }}</code>.</p>
+    <p class="muted ms-said">The same as <code>bun run setup llm|vision|render --…</code>; saved in <code>{{ view?.file }}</code>.</p>
   </section>
 </template>
 

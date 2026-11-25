@@ -1,4 +1,4 @@
-import {type ComfyServer, loadSettings} from '../settings.ts'
+import {type ComfyServer, isWan2gp, loadSettings} from '../settings.ts'
 import {authOf} from '../comfy-cancel.ts'
 import type {EditorServer} from '../../shared/workspace.ts'
 export type {EditorServer} from '../../shared/workspace.ts'
@@ -16,10 +16,28 @@ const ask = async <T>(server: ComfyServer, path: string, fetcher: typeof fetch):
 }
 
 type Queue = {queue_running?: unknown[]; queue_pending?: unknown[]}
+type BridgeJob = {status: string}
 type Stats = {devices?: {name?: string; vram_free?: number; vram_total?: number}[]}
 
 /** One server as the page shows it. Whatever does not answer counts as not reachable. */
 export async function readServer(server: ComfyServer, fetcher: typeof fetch = fetch): Promise<EditorServer> {
+    // a wan2gp server (#1204) answers through its bridge plugin: its health, and its jobs as the queue; it names no device
+    if (isWan2gp(server))
+        try {
+            const [health, jobs] = await Promise.all([
+                ask<{wangp: string}>(server, '/feverslop/api/health', fetcher),
+                ask<BridgeJob[]>(server, '/feverslop/api/jobs', fetcher),
+            ])
+            return {
+                name: server.name,
+                reachable: true,
+                running: jobs.filter(job => job.status === 'running').length,
+                pending: jobs.filter(job => job.status === 'queued').length,
+                device: `wan2gp ${health.wangp}`,
+            }
+        } catch {
+            return {name: server.name, reachable: false, running: 0, pending: 0}
+        }
     try {
         const [queue, stats] = await Promise.all([ask<Queue>(server, '/queue', fetcher), ask<Stats>(server, '/system_stats', fetcher)])
         const device = stats.devices?.[0]
