@@ -27,12 +27,13 @@ describe('the storyboard', () => {
   test('rows follow the beats, a clip no beat holds gets a row of its own, and a row counts its current clips', () => {
     const project = {
       clips: [clip('c1', 0, 4, {video: {file: 'c1.mp4', v: 1}}), clip('c2', 4, 9), clip('c3', 9, 12)],
-      beats: [{id: 'b1', label: 'Beat 1', start: 0, end: 9, planned: true, clips: ['c1', 'c2'], characters: []}],
+      beats: [{id: 'beat-07', label: 'Lyra screams the final chorus', start: 0, end: 9, planned: true, clips: ['c1', 'c2'], characters: []}],
       groups: [],
     } as unknown as EditorProject
     const rows = boardRows(project, {clips: {c1: 'current'}, pictures: {}})
+    expect(rows[0]!.title).toBe('Lyra screams the final chorus') // the head says it in one line, as the Beats lane does
     expect(rows.map(r => [r.label, r.clips.map(c => c.id), r.seconds, r.done])).toEqual([
-      ['Beat 1', ['c1', 'c2'], 9, 1],
+      ['Beat 7', ['c1', 'c2'], 9, 1],
       ['Other clips', ['c3'], 3, 0],
     ])
   })

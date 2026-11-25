@@ -863,6 +863,14 @@
 .board-row-head .muted {
   white-space: nowrap;
 }
+/* the beat's sentence in the head, as on the Beats lane: one line, cut off with an ellipsis */
+.board-row-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .board-progress {
   flex: none;
 }

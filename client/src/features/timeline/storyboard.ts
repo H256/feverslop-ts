@@ -5,17 +5,21 @@ import {stateOf} from './clips'
  * The storyboard (#1194): the clips as large cards, in rows under their beat - or under their section or scene where the project has
  * no beats. A row says how many of its clips are rendered and current, and how long it is.
  */
-export type BoardRow = {id: string; label: string; text?: string; clips: EditorClip[]; seconds: number; done: number}
+export type BoardRow = {id: string; label: string; title?: string; text?: string; clips: EditorClip[]; seconds: number; done: number}
+
+/** A beat's number as the timeline's Beats lane shows it: beat-07 is 7. */
+export const beatNumber = (id: string) => id.replace(/^beat-0*/, '')
 
 const middle = (clip: EditorClip) => (clip.start + clip.end) / 2
 
 export function boardRows(project: EditorProject, fresh: EditorFreshness): BoardRow[] {
   const byId = new Map(project.clips.map(c => [c.id, c]))
-  // a beat's label is what happens in it, a sentence: the row is named by its number, the sentence goes under it
-  const spans: {id: string; label: string; text?: string; clips: EditorClip[]}[] = project.beats?.length
-    ? project.beats.map((b, i) => ({
+  // a beat is named as on the timeline's Beats lane: its number and what happens in it - in one line in the head, in full under it
+  const spans: {id: string; label: string; title?: string; text?: string; clips: EditorClip[]}[] = project.beats?.length
+    ? project.beats.map(b => ({
         id: b.id,
-        label: `Beat ${i + 1}`,
+        label: `Beat ${beatNumber(b.id)}`,
+        title: b.label,
         text: b.label,
         clips: b.clips.map(id => byId.get(id)).filter((c): c is EditorClip => !!c),
       }))

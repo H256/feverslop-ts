@@ -12,6 +12,7 @@ import {stateOf} from './clips'
 import {useTimeline} from './context'
 import TimelineLegend from './TimelineLegend.vue'
 import {lanesService, type LaneKey} from './lanes'
+import {beatNumber} from './storyboard'
 
 /** The timeline: a ruler, the sections or scenes, the sound, the clips and what is sung or said - zoomed, scrolled and scrubbed. */
 const {project, fresh, peaks, progress, playback, marked, onlyFlagged, clickClip, isFlagged, peek, session, direct, review} = useTimeline()
@@ -311,7 +312,7 @@ const hidePeek = () => {
               @pointerdown.stop
               @click="pickBeat($event, beat.clips)"
             >
-              <b>{{ beat.id.replace(/^beat-0*/, '') }}</b> {{ beat.label }}
+              <b>{{ beatNumber(beat.id) }}</b> {{ beat.label }}
             </button>
           </div>
           <div v-if="lanes.wave" class="lane lane-wave" @pointerdown="scrub"><canvas ref="wave" /></div>

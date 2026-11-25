@@ -61,6 +61,7 @@ const videoOf = (clip: EditorClip) => {
       <button class="board-row-head" :aria-expanded="!folded.has(row.id)" @click="fold(row.id)">
         <span class="board-caret">{{ folded.has(row.id) ? '▸' : '▾' }}</span>
         <strong>{{ row.label }}</strong>
+        <span v-if="row.title" class="board-row-title" :title="row.title">{{ row.title }}</span>
         <span class="muted">{{ row.clips.length }} clips · {{ row.seconds.toFixed(1) }} s</span>
         <span class="board-progress" :title="`${row.done} of ${row.clips.length} rendered and current`">
           <span :style="{width: `${(row.done / row.clips.length) * 100}%`}" />
