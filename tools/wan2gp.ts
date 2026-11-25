@@ -61,6 +61,24 @@ if (action === 'install') {
         git(['clone', repo!, target])
         log.step('Cloned', target)
     }
+    // wan2gp loads a plugin of its plugins/ folder only when wgp_config.json lists it under enabled_plugins: a clone alone stays off
+    const configFile = join(root, 'wgp_config.json')
+    if (!existsSync(configFile)) {
+        log.warn(`no ${configFile} yet (wan2gp has not run here): enable "FeverSlop Bridge" in its Apps & PlugIn Manager after the first start`)
+    } else {
+        const config = JSON.parse(readFileSync(configFile, 'utf8')) as {enabled_plugins?: unknown}
+        const enabled = Array.isArray(config.enabled_plugins) ? (config.enabled_plugins as string[]) : []
+        if (enabled.includes(PLUGIN_FOLDER)) log.step('Enabled', styles.muted('already in enabled_plugins'))
+        else {
+            config.enabled_plugins = [...enabled, PLUGIN_FOLDER]
+            // written the way wan2gp writes it: four spaces
+            writeFileSync(configFile, JSON.stringify(config, null, 4))
+            log.step(
+                'Enabled',
+                `${PLUGIN_FOLDER} ${styles.muted(`in ${configFile} - a wan2gp that is running can write its old list over it: stop it first, or enable the plugin in its Apps & PlugIn Manager`)}`,
+            )
+        }
+    }
     log.next(`restart wan2gp   ${styles.muted('- then: bun run wan2gp health <its address>')}`)
     log.success('The bridge is in wan2gp')
 } else if (action === 'health') {

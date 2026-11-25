@@ -7,10 +7,14 @@ The connection is a small wan2gp plugin in its own repository,
 `wangp-feverslop` (on the same git server as this repository): a REST API at `/feverslop` on the wan2gp address. Its jobs join the wan2gp queue, so they share its loaded models and show in its web UI.
 
 ```powershell
-bun run wan2gp install <wan2gp folder>                 # clones the plugin into plugins/, or pulls it; restart wan2gp afterwards
+bun run wan2gp install <wan2gp folder>                 # clones or pulls the plugin and enables it in wgp_config.json; stop wan2gp first, start it after
 bun run wan2gp health http://127.0.0.1:7860            # does the bridge answer?
 bun run wan2gp render http://127.0.0.1:7860 --settings=job.json --out=renders
 ```
+
+wan2gp loads a plugin of its `plugins/` folder only when `wgp_config.json` lists it under `enabled_plugins`: a clone alone stays off
+(the bridge then answers 404). `install` adds it there; a wan2gp that is running can write its old list back, so stop it first - or
+enable **FeverSlop Bridge** in its Apps & PlugIn Manager instead.
 
 `job.json` is wan2gp settings: a `model_type`, or a Deepy template such as
 `"template": "gen_video_with_refs/MiniMax H3 Ref2VA Pruned PDD 8 Steps"`, plus `prompt`, `image_refs`, `audio_guide`,
