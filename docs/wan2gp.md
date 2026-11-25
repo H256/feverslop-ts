@@ -3,11 +3,11 @@
 wan2gp can render beside ComfyUI (#1191): it downloads missing models by itself and manages VRAM and RAM well, also on Radeon cards
 and small GPUs. FeverSlop still plans, writes the prompts and checks the takes; wan2gp only renders.
 
-The connection is a small wan2gp plugin in [`wan2gp/plugin`](../wan2gp/plugin/README.md): a REST API at `/feverslop` on the wan2gp
-address. Its jobs join the wan2gp queue, so they share its loaded models and show in its web UI.
+The connection is a small wan2gp plugin in its own repository,
+[H256/wangp-feverslop](https://forgejo.elysium.lan/H256/wangp-feverslop): a REST API at `/feverslop` on the wan2gp address. Its jobs join the wan2gp queue, so they share its loaded models and show in its web UI.
 
 ```powershell
-bun run wan2gp install H:\wan2gp                       # the plugin into a wan2gp folder; restart wan2gp afterwards
+bun run wan2gp install H:\wan2gp                       # clones the plugin into plugins/, or pulls it; restart wan2gp afterwards
 bun run wan2gp health http://127.0.0.1:7860            # does the bridge answer?
 bun run wan2gp render http://127.0.0.1:7860 --settings=job.json --out=renders
 ```

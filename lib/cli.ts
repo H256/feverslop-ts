@@ -106,9 +106,9 @@ const commands: Record<string, CommandSpec> = {
         description: 'The own view of its place and choice of references of a film clip, from the next plan run on.',
     },
     wan2gp: {
-        args: 'install <wangp-folder> | health <wangp-url> | render <wangp-url> --settings=<file.json> [--out=<folder>]',
+        args: 'install <wangp-folder> [--repo=<git-url>] | health <wangp-url> | render <wangp-url> --settings=<file.json> [--out=<folder>]',
         description:
-            'wan2gp as a render engine: put the bridge plugin into a wan2gp folder, check that a server answers, or render one job of wan2gp settings through it (local inputs uploaded, outputs downloaded).',
+            'wan2gp as a render engine: clone or update the bridge plugin (its own repository) in a wan2gp folder, check that a server answers, or render one job of wan2gp settings through it (local inputs uploaded, outputs downloaded).',
     },
     direction: {
         args: '<project-id> [--film] [--json | --set=FILE | --add=TEXT --scope=SCOPE [--character=ID] | --edit=ID --text=TEXT | --remove=ID | --without=CHARACTER --scope=SCOPE | --size=wide|medium|close|extreme --scope=SCOPE | --unedit=ID] [--preview] [--take] [--no-rebuild] [--drop | --restore=VERSION] [--show=SHOT]',
