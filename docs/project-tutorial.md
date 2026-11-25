@@ -86,7 +86,7 @@ Writes `input/lyrics.txt` + `input/song.wav`. Listen to it under `projects/<id>/
 bun index.ts <id> --render=all
 ```
 
-= reference pictures (`kroma-image`) + clips (MiniMax H3) + `<project-id>.mp4`. Needs a reachable ComfyUI server (`bun run setup comfy`).
+= reference pictures (`kroma-image`) + clips (MiniMax H3) + `<project-id>.mp4`. Needs a reachable ComfyUI server (`bun run setup render`).
 
 ## 5. Listen to the result
 

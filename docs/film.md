@@ -13,7 +13,7 @@ decisions](#design-decisions)).
 ## Quick start
 
 Needs [Bun](https://bun.com) and an LLM server - the same one as the music-video pipeline (`bun run setup llm`, see the
-[README](../README.md#setup)). Rendering the pictures also needs a ComfyUI server (`bun run setup comfy`).
+[README](../README.md#setup)). Rendering the pictures also needs a ComfyUI server (`bun run setup render`).
 
 | Command | What it does |
 |---------|--------------|

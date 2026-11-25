@@ -34,3 +34,15 @@ test('ComfyUI servers added and removed, by name or URL', () => {
     expect(() => changeSettings(two, 'comfy', {remove: 'gpu9'})).toThrow('--remove: no server "gpu9"')
     expect(() => changeSettings({}, 'whisper', {url: 'x'})).toThrow('takes no options')
 })
+
+test('render servers (#1204): render and its old name comfy are the same; --engine=wan2gp marks a wan2gp server', () => {
+    const one = changeSettings({}, 'render', {add: 'radeon:7860', name: 'radeon', engine: 'wan2gp'}).file
+    expect(one).toEqual({comfy: [{url: 'http://radeon:7860', name: 'radeon', engine: 'wan2gp'}]})
+    // a plain ComfyUI server stays a plain URL, as before
+    expect(changeSettings(one, 'comfy', {add: 'gpu:8188', engine: 'comfy'}).file.comfy).toEqual([
+        {url: 'http://radeon:7860', name: 'radeon', engine: 'wan2gp'},
+        'http://gpu:8188',
+    ])
+    expect(changeSettings(one, 'render', {remove: 'radeon'}).file).toEqual({})
+    expect(() => changeSettings({}, 'render', {add: 'x:1', engine: 'forge'})).toThrow('--engine: "comfy" or "wan2gp"')
+})

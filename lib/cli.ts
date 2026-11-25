@@ -35,7 +35,7 @@ const commands: Record<string, CommandSpec> = {
         resumable: true,
     },
     setup: {
-        args: '[llm|llm-model|vision|comfy|show] [llm --url= [--key=] [--model=] [--parallel=] | vision --url= [--model=] | --off | comfy --add=URL [--name=] [--token=] | --remove=NAME | show --json]',
+        args: '[llm|llm-model|vision|render|show] [llm --url= [--key=] [--model=] [--parallel=] | vision --url= [--model=] | --off | render --add=URL [--name=] [--token=] [--engine=wan2gp] | --remove=NAME | show --json]',
         description: 'Configure servers - asked, or by options - or show the effective settings.',
         banner: true,
         json: true,

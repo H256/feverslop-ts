@@ -18,7 +18,7 @@ test('serversFirst fails when no ComfyUI server answers', async () => {
         const error = await renderer.serversFirst().catch((e: unknown) => e)
         expect(error).toBeInstanceOf(Error)
         expect((error as Error).message).toContain('No ComfyUI server reachable')
-        expect((error as Error).message).toContain('bun run setup comfy')
+        expect((error as Error).message).toContain('bun run setup render')
     } finally {
         rmSync(dir, {recursive: true, force: true})
     }

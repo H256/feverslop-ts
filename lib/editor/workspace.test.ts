@@ -535,6 +535,23 @@ describe('the render servers', () => {
             totalGb: 32,
         })
     })
+    test('a wan2gp server (#1204) is asked through its bridge: its jobs are its queue, its version stands for the device', async () => {
+        const asked: string[] = []
+        const fetcher = (async (url: string) => {
+            asked.push(url)
+            return Response.json(
+                url.endsWith('/health') ? {bridge: 1, wangp: '20.20'} : [{status: 'running'}, {status: 'queued'}, {status: 'queued'}, {status: 'done'}],
+            )
+        }) as unknown as typeof fetch
+        expect(await readServer({name: 'radeon', url: 'http://w:7860', engine: 'wan2gp'}, fetcher)).toEqual({
+            name: 'radeon',
+            reachable: true,
+            running: 1,
+            pending: 2,
+            device: 'wan2gp 20.20',
+        })
+        expect(asked.sort()).toEqual(['http://w:7860/feverslop/api/health', 'http://w:7860/feverslop/api/jobs'])
+    })
     test('one that does not answer or answers an error is not reachable, and does not fail the page', async () => {
         const down = (async () => {
             throw new Error('refused')

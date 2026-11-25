@@ -346,7 +346,7 @@ export class Renderer implements Disposable {
         readonly config: RenderConfig,
         readonly servers: ComfyServer[],
     ) {
-        if (!servers.length) throw new Error('No ComfyUI server configured - run: bun run setup comfy')
+        if (!servers.length) throw new Error('No ComfyUI server configured - run: bun run setup render')
         this.remoteDir = `feverslop-ts/${projectId}`
     }
 

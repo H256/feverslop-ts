@@ -22,7 +22,7 @@ describe('what to do about a failure', () => {
 
     test('a message of this program that says what to do itself gets nothing under it in the terminal', () => {
         for (const failure of [
-            'No ComfyUI server reachable (http://x:8188) - start ComfyUI, or check the servers with: bun run setup comfy',
+            'No ComfyUI server reachable (http://x:8188) - start ComfyUI, or check the servers with: bun run setup render',
             'The LLM server http://x/v1 does not answer (ECONNREFUSED) - start it …',
             'Direction needs review: bun run direction x --preview, then --take',
             'casting.json: character "a" is "library:b", but the library has no character "b"',

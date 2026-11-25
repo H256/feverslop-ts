@@ -18,7 +18,7 @@ bun run wan2gp render http://127.0.0.1:7860 --settings=job.json --out=renders
 
 ## wan2gp servers in a project's runs (#1204)
 
-A render server says its engine in the settings file (`bun run setup comfy` asks for it); a plain URL stays ComfyUI:
+A render server says its engine in the settings file (`bun run setup render` asks for it); a plain URL stays ComfyUI:
 
 ```json
 {"comfy": ["http://127.0.0.1:8188", {"url": "http://radeon-box:7860", "name": "radeon", "engine": "wan2gp"}]}

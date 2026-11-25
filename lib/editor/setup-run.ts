@@ -9,13 +9,14 @@ const ROOT = join(import.meta.dir, '..', '..')
 const OPTIONS: Record<SetupChange['command'], string[]> = {
     llm: ['url', 'key', 'model', 'parallel'],
     vision: ['url', 'key', 'model', 'off'],
-    comfy: ['add', 'name', 'token', 'remove'],
+    render: ['add', 'name', 'token', 'engine', 'remove'],
+    comfy: ['add', 'name', 'token', 'engine', 'remove'],
 }
 
 /** The arguments of `bun run setup` a change of the page comes to. Throws on what is no usable value. */
 export function setupArgs(change: SetupChange): string[] {
     const allowed = OPTIONS[change?.command]
-    if (!allowed) throw new Error('setup: llm, vision or comfy')
+    if (!allowed) throw new Error('setup: llm, vision or render')
     const args: string[] = [change.command]
     for (const [name, value] of Object.entries(change.options ?? {})) {
         if (!allowed.includes(name)) throw new Error(`setup ${change.command} has no option --${name}`)
