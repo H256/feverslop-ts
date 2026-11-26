@@ -39,3 +39,10 @@ describe("a music-video clip's wan2gp form (#1204)", () => {
         expect(wan2gpClipSettings(clip({contextFrames: true}))).toContain('context frames')
     })
 })
+
+test('a seed of ours (up to 2^48) becomes one wan2gp takes (up to 2^32 - 1), the same one every time', () => {
+    const big = 2 ** 47 + 12345
+    const sent = wan2gpClipSettings(clip({seed: big})) as unknown as {seed: number}
+    expect(sent.seed).toBe(big % 2 ** 32)
+    expect(sent.seed).toBeLessThan(2 ** 32)
+})

@@ -7,6 +7,8 @@ import type {PixelSize} from '../comfy/helpers.ts'
 import type {BridgeSettings} from './wan2gp.ts'
 
 export const WAN2GP_MAX_PICTURES = 9
+/** wan2gp takes a seed from 0 to 2^32 - 1. */
+export const WAN2GP_SEEDS = 2 ** 32
 export const WAN2GP_MAX_AUDIOS = 3
 export const WAN2GP_MIN_AUDIO_SECONDS = 2
 const AUDIO_LETTERS = ['A', 'AB', 'ABD'] as const
@@ -40,10 +42,8 @@ export function wan2gpClipSettings(clip: Wan2gpClipInput): BridgeSettings | stri
         video_prompt_type: 'I',
         resolution: `${clip.size.width}x${clip.size.height}`,
         video_length: clip.frames,
-        seed: clip.seed,
-        ...(clip.audios.length
-            ? {audio_prompt_type: AUDIO_LETTERS[clip.audios.length - 1]!, ...audios}
-            : {audio_prompt_type: ''}),
+        seed: clip.seed % WAN2GP_SEEDS,
+        ...(clip.audios.length ? {audio_prompt_type: AUDIO_LETTERS[clip.audios.length - 1]!, ...audios} : {audio_prompt_type: ''}),
         ...(clip.startFrame ? {image_start: clip.startFrame, image_prompt_type: 'S'} : {}),
     }
 }
