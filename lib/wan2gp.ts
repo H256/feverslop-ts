@@ -106,6 +106,7 @@ export async function withUploads(client: BridgeClient, settings: BridgeSettings
         'image_mask',
         'audio_guide',
         'audio_guide2',
+        'audio_guide3',
         'audio_source',
     ]
     const one = async (value: unknown) => {
