@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {afterAll, beforeAll, describe, expect, spyOn, test} from 'bun:test'
-import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {dirname, join} from 'node:path'
 import type {WorkflowResult} from '../comfy/helpers.ts'
@@ -131,7 +132,7 @@ let dir: string
 beforeAll(() => {
     dir = mkdtempSync(join(tmpdir(), 'golden-'))
 })
-afterAll(() => rmSync(dir, {recursive: true, force: true}))
+afterAll(() => removeHeld(dir))
 
 /** A new folder in the test's temp folder, with these files (path -> content). */
 function folder(name: string, files: Record<string, string> = {}) {

@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {afterEach, beforeEach, describe, expect, test} from 'bun:test'
-import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {writeLibraryAsset} from './library.ts'
@@ -32,8 +33,8 @@ describe('import-asset prop', () => {
         writeFileSync(join(library, 'props', 'sunburst-strat', 'picture.png'), 'png')
     })
     afterEach(() => {
-        rmSync(dir, {recursive: true, force: true})
-        rmSync(library, {recursive: true, force: true})
+        removeHeld(dir)
+        removeHeld(library)
     })
 
     test('refused: no such character, one without a prop, a project without prop pictures', () => {

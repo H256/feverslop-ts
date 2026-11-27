@@ -1,5 +1,6 @@
+import {renameHeld, removeHeld} from './previous-output.ts'
 import {commandStart} from './run-record.ts'
-import {existsSync, mkdirSync, renameSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdirSync, writeFileSync} from 'node:fs'
 import {join} from 'node:path'
 import {log, startSpinner, styles} from './log.ts'
 import {FPS, formatTime, frameAt, secondsAt} from './frames.ts'
@@ -96,7 +97,7 @@ export async function trimHead(video: string, frames: number) {
         ],
         {errorMessage: err => `ffmpeg could not cut the first ${frames} frames off ${video}:\n${err}`},
     )
-    renameSync(partial, video)
+    renameHeld(partial, video)
 }
 
 /** Saves frame `index` (0-based) of a video as a PNG - written next to the target first, like the downloads. */
@@ -107,7 +108,7 @@ export async function extractFrame(video: string, index: number, target: string)
         timeoutMs: SHORT_PROCESS_TIMEOUT_MS,
     })
     if (code !== 0 || !existsSync(partial)) throw new Error(`ffmpeg could not extract frame ${index} of ${video}:\n${stderr}`)
-    renameSync(partial, target)
+    renameHeld(partial, target)
 }
 
 /**
@@ -348,9 +349,9 @@ export async function assembleFinal({
         if ((await proc.exited) !== 0) throw new Error(`ffmpeg failed:\n${await stderr}`)
     } finally {
         stopSpinner()
-        rmSync(filterFile, {force: true})
+        removeHeld(filterFile)
     }
-    renameSync(partial, target)
+    renameHeld(partial, target)
 
     const result = await probeVideo(target)
     if (Math.abs(result.frames - outFrames) > 1) log.warn(`final video has ${result.frames} frames, expected ${outFrames}`)

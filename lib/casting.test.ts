@@ -1,3 +1,4 @@
+import {removeHeld} from './previous-output.ts'
 import {afterEach, describe, expect, test} from 'bun:test'
 import {existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
@@ -25,7 +26,7 @@ const folder = (files: Record<string, string> = {}) => {
     return dir
 }
 afterEach(() => {
-    for (const dir of dirs.splice(0)) rmSync(dir, {recursive: true, force: true})
+    for (const dir of dirs.splice(0)) removeHeld(dir)
 })
 
 const cast = {

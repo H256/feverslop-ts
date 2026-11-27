@@ -1,5 +1,6 @@
+import {removeHeld} from '../previous-output.ts'
 import {afterAll, beforeAll, expect, test} from 'bun:test'
-import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {editorHandler} from './server.ts'
@@ -47,7 +48,7 @@ beforeAll(() => {
 })
 afterAll(() => {
     process.chdir(here)
-    rmSync(root, {recursive: true, force: true})
+    removeHeld(root)
 })
 
 const request = (kind: string, path = '', body?: unknown) =>

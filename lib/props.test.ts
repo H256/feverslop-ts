@@ -1,10 +1,11 @@
+import {removeHeld} from './previous-output.ts'
 import {describe, expect, test} from 'bun:test'
 import {defaults, type ProjectConfig} from './config.ts'
 import {projectInputs, stepUsed} from './inputs.ts'
 import {builtOn} from './project.ts'
 import {asDrawn, castProps, propName, propPictureJob, propsOfPlace, withArticle} from './props.ts'
 import {characterLookPrompt} from './prompts.ts'
-import {mkdtempSync, rmSync} from 'node:fs'
+import {mkdtempSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 
@@ -48,7 +49,7 @@ describe('the propPictures setting (#944)', () => {
             expect(input).toMatchObject({value: 'true', steps: ['props', 'characterLooks', 'locationLooks'], assumed: 'false'})
             expect((await projectInputs(dir, config(false))).propPictures!.value).toBe(input.assumed!)
         } finally {
-            rmSync(dir, {recursive: true, force: true})
+            removeHeld(dir)
         }
     })
 

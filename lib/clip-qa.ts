@@ -1,10 +1,11 @@
+import {renameHeld} from './previous-output.ts'
 // What else a rendered clip can come out with, by the seed: black frames, a picture that stands still for seconds, a hard jump the
 // plan has no cut for (#405). Measured on the pixels alone, with ffmpeg, as lib/leak.ts does the grey backdrop: no model, no word
 // list. A finding says where it is. Only black and frozen are a reason to render again: on our own clips (#405) every jump the
 // plan has no cut for was a planned cut a little early or late, or one more cut in the same place - said, not rendered again.
 // A picture that stands still is counted only where there is light enough to see a move.
 
-import {existsSync, mkdirSync, renameSync} from 'node:fs'
+import {existsSync, mkdirSync} from 'node:fs'
 import {basename, join} from 'node:path'
 
 // small and grey: the brightness and how much moves is all that is measured
@@ -159,7 +160,7 @@ export async function bestTake(o: {
     said?: (event: TakeEvent) => void
 }): Promise<{seed: number; findings: Finding[]}> {
     const move = (from: string, to: string) => {
-        for (const suffix of ['', '.json']) if (existsSync(from + suffix)) renameSync(from + suffix, to + suffix)
+        for (const suffix of ['', '.json']) if (existsSync(from + suffix)) renameHeld(from + suffix, to + suffix)
     }
     let seed = o.seed
     let findings = await o.check()

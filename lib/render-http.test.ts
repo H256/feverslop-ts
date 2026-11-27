@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {expect, test} from 'bun:test'
-import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs'
 import {join} from 'node:path'
 import {tmpdir} from 'node:os'
 import {ComfyApi} from '@saintno/comfyui-sdk'
@@ -67,7 +68,7 @@ test('HTTP submit/download is atomic; a failed download resumes without resubmis
         expect(runTimings().at(-1)?.outcome).toBe('resumed')
     } finally {
         void server.stop(true)
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })
 
@@ -103,7 +104,7 @@ test('a resume-probe connection blip falls through to protected recovery (#666)'
         expect(runTimings().at(-1)?.outcome).toBe('resumed')
     } finally {
         void server.stop(true)
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })
 
@@ -133,6 +134,6 @@ test('a job its server says failed leaves no record to take up again - the fallb
         expect(existsSync(`${target}.pending.json`)).toBe(false)
     } finally {
         void server.stop(true)
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })

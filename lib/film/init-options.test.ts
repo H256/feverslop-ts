@@ -1,12 +1,13 @@
+import {removeHeld} from '../previous-output.ts'
 import {afterAll, expect, test} from 'bun:test'
-import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {filmInitOptions} from './init-options.ts'
 
 // #827: a film made by options, nothing asked - for a script and for the workspace
 const root = mkdtempSync(join(tmpdir(), 'film-init-'))
-afterAll(() => rmSync(root, {recursive: true, force: true}))
+afterAll(() => removeHeld(root))
 const wrong = (argv: string[]) =>
     filmInitOptions(argv).then(
         () => 'no error',

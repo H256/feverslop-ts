@@ -1,5 +1,6 @@
+import {removeHeld} from '../previous-output.ts'
 import {afterAll, describe, expect, test} from 'bun:test'
-import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {defaults} from '../config.ts'
@@ -7,7 +8,7 @@ import {Renderer, type RenderWhat, type Server, type Wan2gpServer} from '../rend
 import type {BridgeClient, BridgeJob} from '../wan2gp.ts'
 
 const dir = mkdtempSync(join(tmpdir(), 'engines-'))
-afterAll(() => rmSync(dir, {recursive: true, force: true}))
+afterAll(() => removeHeld(dir))
 
 /** A bridge that renders at once: it keeps what it was sent, and its video is the job's settings. */
 function fakeBridge(fail?: string) {

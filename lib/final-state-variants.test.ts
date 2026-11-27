@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {afterAll, describe, expect, test} from 'bun:test'
-import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {mkdirSync, mkdtempSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {projectFinalState, variantFinals} from './render-state.ts'
@@ -7,7 +8,7 @@ import {projectFinalState, variantFinals} from './render-state.ts'
 // #832: a project that was made over (bun run refinish) and went through the post-work steps has finished videos - but none
 // called <id>.mp4. It showed "No final video" and was told to assemble one.
 const root = mkdtempSync(join(tmpdir(), 'final-variants-'))
-afterAll(() => rmSync(root, {recursive: true, force: true}))
+afterAll(() => removeHeld(root))
 const project = (name: string, files: string[]) => {
     const dir = join(root, name)
     mkdirSync(join(dir, 'videos'), {recursive: true})

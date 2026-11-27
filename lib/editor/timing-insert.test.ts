@@ -1,8 +1,9 @@
+import {removeHeld} from '../previous-output.ts'
 import {expect, test} from 'bun:test'
 import type {Project} from '../project.ts'
 import {applyTiming, writeTiming} from './timing.ts'
 import {updateInsertedLyrics} from './timing-lyrics.ts'
-import {mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync} from 'node:fs'
+import {mkdirSync, mkdtempSync, writeFileSync, readFileSync} from 'node:fs'
 import {join} from 'node:path'
 import {tmpdir} from 'node:os'
 import {exportSong} from '../song-library.ts'
@@ -118,7 +119,7 @@ test('inserted lyrics and timing survive the real save and library export', asyn
         expect(song.lyricsTiming.lines[1]).toMatchObject({text: 'oh', start: 7, end: 8})
         expect(readFileSync(join(dir, 'library', 'songs', 'test', 'lyrics.txt'), 'utf8')).toBe('[Outro]\nund sein Herz!\noh\n')
     } finally {
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })
 test('enabling an ad-lib and saving pending timing edits is one change', () => {

@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {afterEach, describe, expect, test} from 'bun:test'
-import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {dirname, join} from 'node:path'
 import {assetPaths, copyAsset} from './asset-import.ts'
@@ -16,7 +17,7 @@ const folder = (files: Record<string, string> = {}) => {
     return dir
 }
 afterEach(() => {
-    for (const dir of dirs.splice(0)) rmSync(dir, {recursive: true, force: true})
+    for (const dir of dirs.splice(0)) removeHeld(dir)
 })
 
 describe('the library', () => {

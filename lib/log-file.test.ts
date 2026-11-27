@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {describe, expect, test} from 'bun:test'
-import {mkdtempSync, readFileSync, rmSync} from 'node:fs'
+import {mkdtempSync, readFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 
@@ -30,7 +31,7 @@ describe('the log of a run', () => {
             expect(text).not.toContain('\x1b')
             expect(text).not.toContain('status line')
         } finally {
-            rmSync(dir, {recursive: true, force: true})
+            removeHeld(dir)
         }
     })
 
@@ -57,7 +58,7 @@ describe('the log of a run', () => {
             const shown = Bun.spawnSync(['bun', '-e', script("'story'")], {stdout: 'pipe', stderr: 'pipe'}).stdout.toString()
             expect(shown).toContain('Once upon a time')
         } finally {
-            rmSync(dir, {recursive: true, force: true})
+            removeHeld(dir)
         }
     })
 })
@@ -91,6 +92,6 @@ test('concurrent TTY board stays out of the persisted log', () => {
         const saved = readFileSync(file, 'utf8')
         expect(saved).toBe('persistent event\n')
     } finally {
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })

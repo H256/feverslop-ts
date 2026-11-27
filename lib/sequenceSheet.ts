@@ -1,10 +1,11 @@
+import {renameHeld} from './previous-output.ts'
 // The reference-sheet feature: instead of one flat, static hero image as a character's or location's only visual
 // anchor for the whole song, generate a short silent turnaround video from that hero image (see
 // comfy/workflows/h3-sequence-to-sheet.ts), sample a few of its hard-cut "beats" as frames, and composite them
 // into one multi-angle reference sheet - the file every clip actually references (see lib/render.ts
 // renderSequenceSheet). Ported from the predecessor project's fever-slop sequence-to-sheet pipeline, rebuilt on
 // ffmpeg instead of OpenCV/Pillow to stay within this project's stack.
-import {mkdirSync, renameSync} from 'node:fs'
+import {mkdirSync} from 'node:fs'
 import {dirname} from 'node:path'
 import {formatTimestamp, FPS} from './frames.ts'
 import {captureProcess, SHORT_PROCESS_TIMEOUT_MS} from './process.ts'
@@ -203,5 +204,5 @@ export async function composeSheet(framePaths: string[], target: string, panel: 
         {stdout: 'ignore', timeoutMs: SHORT_PROCESS_TIMEOUT_MS},
     )
     if (code !== 0) throw new Error(`ffmpeg failed to compose the reference sheet:\n${stderr}`)
-    renameSync(partial, target)
+    renameHeld(partial, target)
 }

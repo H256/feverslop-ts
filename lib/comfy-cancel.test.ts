@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {afterEach, describe, expect, test} from 'bun:test'
-import {existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdirSync, mkdtempSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {activeJobs, cancelJob, cancelJobs, jobsQueuedSince, trackJob, untrackJob} from './comfy-cancel.ts'
@@ -46,7 +47,7 @@ describe('cancelling our own job on its server', () => {
 describe('the jobs of a run', () => {
     let dir = ''
     afterEach(() => {
-        if (dir) rmSync(dir, {recursive: true, force: true})
+        if (dir) removeHeld(dir)
     })
     const pending = (file: string, job: object) => {
         mkdirSync(join(dir, file, '..'), {recursive: true})

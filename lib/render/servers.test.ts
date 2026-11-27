@@ -1,11 +1,12 @@
+import {removeHeld} from '../previous-output.ts'
 import {afterAll, expect, test} from 'bun:test'
-import {mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {mkdtempSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {resumeOrQueue} from './servers.ts'
 
 const dir = mkdtempSync(join(tmpdir(), 'uploads-'))
-afterAll(() => rmSync(dir, {recursive: true, force: true}))
+afterAll(() => removeHeld(dir))
 
 /** A server that only counts what it is sent, and a renderer with the one field the upload reads. */
 function fixture() {
@@ -27,7 +28,8 @@ function fixture() {
         uploads,
         meta: {},
     })
-    const run = (uploads: {from: string; to: string}[]) => resumeOrQueue(r as never, 'clip', server as never, join(dir, 'pending.json'), undefined, prepare(uploads) as never)
+    const run = (uploads: {from: string; to: string}[]) =>
+        resumeOrQueue(r as never, 'clip', server as never, join(dir, 'pending.json'), undefined, prepare(uploads) as never)
     return {sent, run}
 }
 

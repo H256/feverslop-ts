@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {afterAll, describe, expect, test} from 'bun:test'
-import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {mkdirSync, mkdtempSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {unknownIds} from './batch.ts'
@@ -10,7 +11,7 @@ const pictures = join(dir, 'output', 'assets.json')
 mkdirSync(join(dir, 'output', 'clips'), {recursive: true})
 for (const n of [1, 2, 3]) writeFileSync(join(dir, 'output', 'clips', `slot-00${n}.json`), JSON.stringify({id: `slot-00${n}`}))
 writeFileSync(pictures, JSON.stringify([{id: 'elias'}, {id: 'the-corridor'}]))
-afterAll(() => rmSync(dir, {recursive: true, force: true}))
+afterAll(() => removeHeld(dir))
 
 const ask = (only: string[], what: {pictures?: boolean; clips?: boolean; retake?: string} = {clips: true}) =>
     unknownIds(dir, pictures, {only, pictures: !!what.pictures, clips: !!what.clips, retake: what.retake})
@@ -41,7 +42,7 @@ describe('ids checked before the first step', () => {
         try {
             expect(await unknownIds(empty, join(empty, 'output', 'assets.json'), {only: ['slot-001'], pictures: false, clips: true})).toBeUndefined()
         } finally {
-            rmSync(empty, {recursive: true, force: true})
+            removeHeld(empty)
         }
     })
 })

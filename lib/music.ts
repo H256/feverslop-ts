@@ -1,4 +1,5 @@
-import {existsSync, rmSync, statSync} from 'node:fs'
+import {removeHeld} from './previous-output.ts'
+import {existsSync, statSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {basename, join} from 'node:path'
 import type {
@@ -195,7 +196,7 @@ async function decodeFramePower(stemFile: string): Promise<number[]> {
     try {
         return framePower(new Float32Array(await Bun.file(raw).arrayBuffer()), ACTIVITY_SAMPLE_RATE, ACTIVITY_HOP_SEC)
     } finally {
-        rmSync(raw, {force: true})
+        removeHeld(raw)
     }
 }
 

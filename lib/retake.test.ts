@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {afterAll, beforeAll, describe, expect, test} from 'bun:test'
-import {existsSync, mkdirSync, mkdtempSync, rmSync} from 'node:fs'
+import {existsSync, mkdirSync, mkdtempSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import h3Ref2Video from '../comfy/workflows/h3-ref2video.ts'
@@ -180,7 +181,7 @@ describe('joining the part in', () => {
     beforeAll(() => {
         dir = mkdtempSync(join(tmpdir(), 'retake-'))
     })
-    afterAll(() => rmSync(dir, {recursive: true, force: true}))
+    afterAll(() => removeHeld(dir))
 
     test('the head and tail of the old clip, the new frames between them, as many frames as before, with sound', async () => {
         const original = await make('original.mp4', 'black', 48)

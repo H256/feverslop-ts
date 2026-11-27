@@ -1,4 +1,4 @@
-import {renameSync} from 'node:fs'
+import {renameHeld} from './previous-output.ts'
 import {FPS} from './frames.ts'
 import {runProcess} from './process.ts'
 
@@ -141,5 +141,5 @@ export async function spliceVideo({
         ],
         {errorMessage: err => `ffmpeg could not join the new part into ${original}:\n${err}`},
     )
-    renameSync(partial, target)
+    renameHeld(partial, target)
 }

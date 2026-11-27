@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {expect, test} from 'bun:test'
-import {existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdirSync, mkdtempSync, utimesSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {pruneRunLogs} from './log-retention.ts'
@@ -27,7 +28,7 @@ test('pruneRunLogs keeps the newest logs and ignores other files', () => {
         expect(existsSync(join(dir, 'notes.txt'))).toBe(true)
         expect(existsSync(join(dir, 'nested', 'nested.log'))).toBe(true)
     } finally {
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })
 
@@ -50,6 +51,6 @@ test('pruneRunLogs protects the log currently being opened, even if its timestam
         expect(existsSync(recent)).toBe(true)
         expect(existsSync(middle)).toBe(false)
     } finally {
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })

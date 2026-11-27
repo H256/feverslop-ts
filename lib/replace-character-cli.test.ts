@@ -1,11 +1,12 @@
+import {removeHeld} from './previous-output.ts'
 import {afterAll, expect, test} from 'bun:test'
-import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {mkdirSync, mkdtempSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 
 // #827: replace-character runs without a terminal when told everything, and says what is missing when not
 const root = mkdtempSync(join(tmpdir(), 'replace-character-'))
-afterAll(() => rmSync(root, {recursive: true, force: true}))
+afterAll(() => removeHeld(root))
 const tool = join(import.meta.dir, '..', 'tools', 'replace-character.ts')
 const run = (...args: string[]) => {
     const result = Bun.spawnSync([process.execPath, tool, ...args], {

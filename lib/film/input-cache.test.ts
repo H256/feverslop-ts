@@ -1,5 +1,6 @@
+import {removeHeld} from '../previous-output.ts'
 import {expect, test} from 'bun:test'
-import {mkdtempSync, rmSync} from 'node:fs'
+import {mkdtempSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {filmInputs} from './inputs.ts'
@@ -14,6 +15,6 @@ test('an explicit default duration changes the coverage fingerprint (#653)', asy
         expect(explicit.targetDuration!.value).not.toEqual(implicit.targetDuration!.value)
         expect(explicit.targetDuration!.steps).toContain('coverage')
     } finally {
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })

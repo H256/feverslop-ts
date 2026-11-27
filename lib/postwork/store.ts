@@ -1,4 +1,5 @@
-import {existsSync, readFileSync, renameSync, writeFileSync} from 'node:fs'
+import {renameHeld} from '../previous-output.ts'
+import {existsSync, readFileSync, writeFileSync} from 'node:fs'
 import {join} from 'node:path'
 import {readSettingsFile, saveSettings} from '../settings.ts'
 import {POSTWORK_DEFAULTS, POSTWORK_STEPS, postworkProblem, type PostworkSettings, type PostworkStep} from './config.ts'
@@ -70,6 +71,6 @@ export async function savePostwork<S extends PostworkStep>(
     // whole or not at all: a file a run is reading is never half written
     const file = projectConfigFile(dir)
     writeFileSync(`${file}.tmp`, `${JSON.stringify(next, null, 2)}\n`)
-    renameSync(`${file}.tmp`, file)
+    renameHeld(`${file}.tmp`, file)
     return 'config.json'
 }

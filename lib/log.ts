@@ -1,3 +1,4 @@
+import {whileHeld} from './previous-output.ts'
 import {failureAdvice} from './failure-help.ts'
 import {usageMessage} from './usage.ts'
 import {closeSync, mkdirSync, openSync, writeSync} from 'node:fs'
@@ -417,7 +418,8 @@ function toLog(text: string) {
 
 export function keepLogIn(path: string) {
     mkdirSync(dirname(path), {recursive: true})
-    logFile = {path, fd: openSync(path, 'a')}
+    // the run before may have just written it: a virus scanner holds it a moment (EBUSY)
+    logFile = {path, fd: whileHeld(path, () => openSync(path, 'a'))}
     try {
         pruneRunLogs(dirname(path), 20, path)
     } catch {

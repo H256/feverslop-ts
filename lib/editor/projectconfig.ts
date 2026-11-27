@@ -1,7 +1,8 @@
+import {renameHeld} from '../previous-output.ts'
 // The render settings of a project - config.json - as the workspace's Settings page and `bun run config` have them (#576): what can be
 // chosen and how, what the project has now, and what a change would do: whether the loader takes it, and which rendered clips and
 // pictures it makes stale. Nothing is rendered or planned by a change; the next run finds what is stale, as ever.
-import {existsSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {qaRetriesNote, workflowDir} from '../config.ts'
@@ -582,7 +583,7 @@ export async function writeConfig(target: EditorTarget, change: ConfigChange): P
         // whole or not at all: a file a run is reading is never half written
         const temporary = `${configFile(target)}.tmp`
         writeFileSync(temporary, text)
-        renameSync(temporary, configFile(target))
+        renameHeld(temporary, configFile(target))
         return {...impact, written: true}
     })
 }

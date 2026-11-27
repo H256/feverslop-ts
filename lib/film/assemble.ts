@@ -1,5 +1,6 @@
+import {renameHeld} from '../previous-output.ts'
 import {commandStart} from '../run-record.ts'
-import {existsSync, renameSync} from 'node:fs'
+import {existsSync} from 'node:fs'
 import {join} from 'node:path'
 import {formatSlotRanges, framesOnGrid, probeVideo} from '../assemble.ts'
 import {FPS, formatTime, secondsAt} from '../frames.ts'
@@ -147,7 +148,7 @@ export async function assembleFilm({
     } finally {
         stopSpinner()
     }
-    renameSync(partial, target)
+    renameHeld(partial, target)
 
     const result = await probeVideo(target)
     if (result.frames !== totalFrames) log.warn(`the film has ${result.frames} frames, expected ${totalFrames}`)
@@ -236,7 +237,7 @@ export async function assembleSmoothFilm({
         ],
         {errorMessage: err => `ffmpeg could not join the interpolated clips:\n${err}`},
     )
-    renameSync(partial, target)
+    renameHeld(partial, target)
     const result = await probeVideo(target)
     const expected = Math.round((clips.reduce((sum, c) => sum + c.used - c.skipped, 0) * fps) / FPS)
     if (Math.abs(result.frames - expected) > 1) log.warn(`${target} has ${result.frames} frames, ${expected} expected`)
@@ -290,5 +291,5 @@ export async function addScore(film: string, score: string, volumeDb: number) {
     )
     const stderr = new Response(proc.stderr).text()
     if ((await proc.exited) !== 0) throw new Error(`ffmpeg could not mix the score:\n${await stderr}`)
-    renameSync(partial, film)
+    renameHeld(partial, film)
 }

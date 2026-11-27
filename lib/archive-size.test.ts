@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {expect, test} from 'bun:test'
-import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {archiveFiles, archiveTrees, clipVersions, restoreClipVersion} from './archive.ts'
@@ -13,7 +14,7 @@ test('directory trees can be archived without flattening their paths', () => {
         expect(existsSync(join(dir, 'videos/nested/clip.mp4'))).toBe(false)
         expect(readFileSync(join(archived, 'videos/nested/clip.mp4'), 'utf8')).toBe('render')
     } finally {
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })
 
@@ -30,6 +31,6 @@ test('size-rejected takes can be listed and restored with their metadata (#661)'
         restoreClipVersion(dir, 'slot-001', versions[0]!.id)
         expect(readFileSync(join(dir, 'videos/slot-001.mp4'), 'utf8')).toBe('wrong-size')
     } finally {
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })

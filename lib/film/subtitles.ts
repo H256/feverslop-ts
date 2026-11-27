@@ -1,4 +1,5 @@
-import {existsSync, renameSync} from 'node:fs'
+import {renameHeld} from '../previous-output.ts'
+import {existsSync} from 'node:fs'
 import {basename, dirname, resolve} from 'node:path'
 import {languageName} from '../config.ts'
 import type {AskOptions} from '../llm.ts'
@@ -109,7 +110,7 @@ export async function muxSubtitles(film: string, srt: string, language?: string)
     )
     const stderr = new Response(proc.stderr).text()
     if ((await proc.exited) !== 0) throw new Error(`ffmpeg could not add the subtitles:\n${await stderr}`)
-    if (existsSync(partial)) renameSync(partial, film)
+    if (existsSync(partial)) renameHeld(partial, film)
 }
 
 /**
@@ -151,7 +152,7 @@ export async function burnSubtitles(film: string, srt: string) {
     if ((await proc.exited) !== 0)
         throw new Error(`ffmpeg could not burn the subtitles in:
 ${await stderr}`)
-    renameSync(partial, film)
+    renameHeld(partial, film)
 }
 
 /** The translation of every line that is not spoken in the subtitle language, one answer for the whole film. */

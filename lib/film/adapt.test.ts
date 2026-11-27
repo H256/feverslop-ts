@@ -1,5 +1,6 @@
+import {removeHeld} from '../previous-output.ts'
 import {describe, expect, test} from 'bun:test'
-import {mkdtempSync, rmSync} from 'node:fs'
+import {mkdtempSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import type {FilmProject, Screenplay} from './types.ts'
@@ -255,7 +256,7 @@ describe("a film's role added or taken out (#589)", () => {
             expect(readBook(target).proposal).toBeUndefined()
             expect(SCREENPLAY_PROPOSAL).toBe(join('output', 'screenplay-proposal.json'))
         } finally {
-            rmSync(dir, {recursive: true, force: true})
+            removeHeld(dir)
         }
     })
 

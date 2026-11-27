@@ -1,5 +1,6 @@
+import {removeHeld} from '../previous-output.ts'
 import {afterAll, beforeAll, describe, expect, test} from 'bun:test'
-import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {mkdirSync, mkdtempSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {lockProject} from '../lock.ts'
@@ -20,7 +21,7 @@ beforeAll(() => {
 })
 afterAll(() => {
     process.chdir(here)
-    rmSync(root, {recursive: true, force: true})
+    removeHeld(root)
 })
 
 const post = (path: string, body: unknown) =>
