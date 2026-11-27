@@ -54,7 +54,7 @@ settings file keeps working:
 {
     "comfy": [
         "http://127.0.0.1:8188",
-        {"url": "http://comfyui2.elysium.lan:7860", "name": "radeon", "engine": "wan2gp"}
+        {"url": "http://radeon-box:7860", "name": "radeon", "engine": "wan2gp"}
     ]
 }
 ```
