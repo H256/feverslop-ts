@@ -69,7 +69,7 @@ something resolved (see the ComfyUI model path convention). A project without it
 
 | Job (today's workflow) | wan2gp | Gap |
 | --- | --- | --- |
-| H3 clip (`h3-ref2video*`, music) | `gen_video_with_refs` H3 Ref2VA template; `image_refs` = pictures in `<Picture N>` order; the song or vocals slice as `audio_guide` with `audio_prompt_type: "AS"`; `video_length` from `frames` | **Multi-track audio:** our workflow gives every audible stem as its own `<Audio N>` plus the whole song as a guide. wan2gp's H3 path takes one driving audio (`audio_guide`, `audio_guide2` for a second voice). The band prompts that name `<Audio N>` need a one-audio form, or band clips stay on ComfyUI. |
+| H3 clip (`h3-ref2video*`, music) | `gen_video_with_refs` H3 Ref2VA template; `image_refs` = pictures in `<Picture N>` order; the song or vocals slice as `audio_guide` with `audio_prompt_type: "AS"`; `video_length` from `frames` | **Multi-track audio:** our workflow gives every audible stem as its own `<Audio N>` plus the whole song as a guide. The wan2gp form (#1214) has a short prompt per clip without `<Audio N>`, people before the place, and the clip's stems mixed into one soundtrack (`AS`). |
 | H3 clip with a pinned start frame (`startFrame`) | `image_start` + `image_prompt_type: "S"` | none known |
 | H3 clip going on from the clip before (`startClip`, context frames) | `video_source` = the last frames + `sliding_window_overlap` = their count; the output's first frames are the shared ones and are cut off | Our `CONTEXT_SETTLE` handling has to be checked against wan2gp's overlap |
 | H3 film clip (`h3-ref2video-film*`) | as the music clip, with the line as `audio_guide` | Films with several speakers in one clip: same multi-audio gap |
@@ -104,6 +104,7 @@ off by default.
    `bun index.ts <id> --render=videos --only=<clip>` on a wan2gp server.
 3. A/B: the same clips from ComfyUI and wan2gp (prompt, pictures, audio, seed), judged by eye and by the clip checks.
 4. Pictures, song, upscale and interpolation builders, each after its own check.
-5. Multi-audio H3 prompts in a one-audio form, if band clips should go to wan2gp too.
+5. Multi-audio H3 prompts in a one-audio form, if band clips should go to wan2gp too - done in #1214: a short prompt per clip without
+   `<Audio N>`, the clip's stems mixed into one soundtrack (`AS`).
 
 The CLI runs and the workspace only starts them, as everywhere else.

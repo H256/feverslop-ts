@@ -12,6 +12,7 @@ import {renderPictures} from './lib/pipeline/pictures.ts'
 import {serverNames, sourceNote, startRenderer} from './lib/pipeline/render-steps.ts'
 import {dryRun, redoReasons, sectionsChanged} from './lib/pipeline/dry-run.ts'
 import {buildRequests} from './lib/pipeline/requests.ts'
+import {planWan2gpPrompts} from './lib/pipeline/wan2gp-prompts.ts'
 import {hearSong} from './lib/pipeline/song.ts'
 import {planBeats} from './lib/pipeline/beats.ts'
 import {planLook} from './lib/pipeline/look.ts'
@@ -716,6 +717,9 @@ const {clips, outputDir, pictures} = await buildRequests({
     shotViews,
     pictures: pictureJobs(memberCounts, characterLookVariants, characterDescriptionVariants),
 })
+
+// a short prompt per clip for a wan2gp server, when the project names a wan2gp template (lib/pipeline/wan2gp-prompts.ts, #1214)
+await planWan2gpPrompts(project, config, clips, outputDir)
 
 // the pictures and clips asked for, the final video, the timeline for an editor (lib/pipeline/render-music.ts)
 await renderAndAssemble({

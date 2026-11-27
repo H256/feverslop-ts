@@ -247,6 +247,9 @@ export type Project = {
     shotViews?: Record<string, number[]> // beatId -> per shot of the beat the view of the place's sheet (0-4, LOCATION_VIEWS) the shot is in - only with config.locationView "auto"
     shotViewPlans?: Record<string, string> // effective direction plan used to choose each cached view
     shotMoments?: Record<string, BeatShots | string[]> // beatId -> the staged shots of the beat, replacing beat.moments when not --legacy-moments (string[]: a plan from before the staging)
+    // clipId -> the clip's short prompt for wan2gp (#1214) - only with videoWorkflowWan2gp; asked per clip and kept in `partials` with
+    // a fingerprint of the clip's prompt and pictures, so the step itself is never stored whole
+    wan2gpPrompts?: Record<string, string>
 }
 export type StepName = Exclude<keyof Project, 'formatVersion' | 'inputs' | 'partials' | 'castingCopies' | 'castLayersAsked' | 'shotViewPlans'>
 
@@ -299,6 +302,8 @@ const dependsOn: Record<StepName, StepName[]> = {
         'locationLayouts',
     ],
     shotViews: ['shotMoments'],
+    // kept per clip by the fingerprint of its prompt - a changed plan asks again for the clips it changed, without a dependency here
+    wan2gpPrompts: [],
 }
 
 export const STEP_NAMES = Object.keys(dependsOn) as StepName[]

@@ -44,6 +44,7 @@ export const commandHelp: Record<string, Help> = {
             ],
             ['Cut', 'timeline, mapping'],
             ['Shot planning', 'blocking (floor plan per beat), shotMoments (the shots, keeps the blocking), shotViews'],
+            ['wan2gp', 'wan2gpPrompts (a short prompt per clip, only with videoWorkflowWan2gp)'],
         ],
         notes: [
             'A run reuses finished steps and rendered files. After a stopped or failed run, repeat the command without --redo: it goes on where it stopped.',

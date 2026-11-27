@@ -96,6 +96,9 @@ export type ClipRequest = {
     // props (config.propPictures) of the clip's people that got no picture - drawn from their words, as without the setting
     droppedProps?: string[]
     shots: {label: string; at: number; framing: string; camera: string; subjects: string[]}[]
+    // the clip's short prompt for a wan2gp server (#1214, lib/wan2gp-prompt.ts): written after the requests when videoWorkflowWan2gp is
+    // set, its pictures in wan2gpPictureOrder; a clip without one renders on wan2gp from `prompt`
+    wan2gpPrompt?: string
     // performance mode: what is sung on screen and by whom, times relative to the clip start
     vocals?: {at: number; end: number; line: number; text: string; singers: {id: string; subject: string; speaker: string}[]}[]
     assets: {
