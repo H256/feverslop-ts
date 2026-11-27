@@ -48,13 +48,15 @@ describe('the wan2gp bridge client (#1192)', () => {
                 prompt: join(dir, 'singer.png'),
                 image_refs: [join(dir, 'singer.png'), 'visual:abc'],
                 audio_guide: `${join(dir, 'song.wav')}|start_s=9.1`,
+                audio_guide3: join(dir, 'song.wav'),
             },
             value => value.startsWith(dir),
         )
         expect(sent.image_refs).toEqual([`${'1'.repeat(32)}.x`, 'visual:abc'])
         expect(sent.audio_guide).toBe(`${'2'.repeat(32)}.x|start_s=9.1`)
         expect(sent.prompt).toBe(join(dir, 'singer.png')) // not an input key: never uploaded
-        expect(asked.length).toBe(2)
+        expect(sent.audio_guide3).toBe(`${'3'.repeat(32)}.x`) // the third audio reference too (#1204: band clips failed without it)
+        expect(asked.length).toBe(3)
     })
     test('waiting tells each change once and ends on done; a failed job is an error with its reasons', async () => {
         const states = [job('queued'), job('running', {progress: {step: 4, steps: 8}}), job('running', {progress: {step: 4, steps: 8}}), job('done')]

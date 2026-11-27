@@ -380,7 +380,7 @@ async function onWan2gpServer<M>(
     let failure: Error | undefined
     let id: string | undefined
     try {
-        log.step('Rendering', `${styles.name(label)} ${styles.muted(`@${server.name} (wan2gp: ${job.engine})`)}`)
+        log.step('Rendering', `${styles.name(label)} ${styles.muted(`@${server.name} (${job.engine})`)}`)
         runEvent({type: 'job', state: 'running', kind: what.kind, id: what.spec.id, server: server.name})
         const settings = await withUploads(server.bridge, job.settings, value => existsSync(value))
         const queued = await server.bridge.generate(settings)

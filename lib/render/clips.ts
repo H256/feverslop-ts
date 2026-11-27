@@ -26,7 +26,7 @@ import {
     type ClipContext,
     type Wan2gpPrepared,
 } from '../render.ts'
-import {wan2gpClipSettings} from '../wan2gp-clip.ts'
+import {WAN2GP_SEEDS, wan2gpClipSettings} from '../wan2gp-clip.ts'
 import {pixelSize, type PixelSize} from '../../comfy/helpers.ts'
 
 // The work of a Renderer (lib/render.ts, #841): the clips and the song: a clip, its preview, its takes and retries, the frames it goes on from. The renderer keeps the state; these take it as `r`.
@@ -600,7 +600,8 @@ async function wan2gpForm(
     const template = r.config.videoWorkflowWan2gp!
     const {renderFrames, recommendedResolution} = await loadWorkflow<VideoWorkflowModule>(r.config.videoWorkflow)
     const frames = renderFrames?.(clip.frames) ?? clip.frames
-    const seed = clipSeed(r.config.seed, clip.id)
+    // wan2gp takes seeds up to 2^32 - 1, ours go to 2^48: the same clip seed gives the same wan2gp seed, and that is the one recorded
+    const seed = clipSeed(r.config.seed, clip.id) % WAN2GP_SEEDS
     const pinned = r.config.pinStartFrame && clip.startsFrom ? join(r.projectDir, boundaryFrameAsset(clip.startsFrom, 'lf')) : undefined
     const input = {
         template,
