@@ -3,6 +3,7 @@
 import {existsSync, readdirSync, statSync} from 'node:fs'
 import {join} from 'node:path'
 import type {ProjectConfig} from './config.ts'
+import {readSettingsFile, type RenderEngine} from './settings.ts'
 
 export type ProjectSeed = {
     songFile?: string // path to an existing audio file, copied in as input/song.wav, input/song.mp3 or input/song.flac
@@ -64,6 +65,19 @@ export async function writeProject(id: string, seed: ProjectSeed) {
     if (seed.musicStyle) await Bun.write(input('music-style.txt'), seed.musicStyle)
     // a new project's clip prompts tell a movement once and name a person once (#824): written into its config, so that projects
     // made before keep "full", the default, and none of their clips turns stale
-    await Bun.write(join(dir, 'config.json'), JSON.stringify({clipPrompt: 'compact', ...seed.config}, null, 2))
+    // the render engine (#1213): asked or given on the command line, else the one kind of server that is set up - only wan2gp servers
+    // make a wan2gp project; with ComfyUI or both kinds the default (comfy) stands
+    const engine = seed.config?.renderEngine ?? (await onlyEngine())
+    await Bun.write(
+        join(dir, 'config.json'),
+        JSON.stringify({clipPrompt: 'compact', ...(engine === 'wan2gp' ? {renderEngine: engine} : {}), ...seed.config}, null, 2),
+    )
     return dir
+}
+
+/** The engine of the render servers in the settings when they are all of one kind, else undefined (none set up, or both kinds). */
+export async function onlyEngine(): Promise<RenderEngine | undefined> {
+    const entries = (await readSettingsFile()).comfy ?? []
+    const kinds = new Set(entries.map(entry => (typeof entry === 'object' && entry.engine === 'wan2gp' ? 'wan2gp' : 'comfy')))
+    return kinds.size === 1 ? [...kinds][0] : undefined
 }

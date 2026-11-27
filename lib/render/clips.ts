@@ -147,7 +147,7 @@ export async function renderClip(r: Renderer, clip: ClipRequest, stemFiles: Reco
     const context = clip.startsFrom && r.config.contextFrames > 0 ? await r.contextOf(clip.startsFrom, r.config.contextFrames) : undefined
     const what: RenderWhat = {label: `clip ${clip.id}`, spec, kind: 'clip', workflow: r.config.videoWorkflow, resolution: r.config.videoResolution}
     // its wan2gp form, for a wan2gp server (#1204): only when config.json names the template; the takes and retries after it stay as they were
-    const wan2gp = r.config.videoWorkflowWan2gp ? () => wan2gpForm(r, clip, stemFiles, !!context) : undefined
+    const wan2gp = r.config.renderEngine === 'wan2gp' ? () => wan2gpForm(r, clip, stemFiles, !!context) : undefined
     let {seed, size: expected} = await r.render(what, target, '.mp4', prepare, wan2gp)
     seed = await r.retryLeaks(what, clip.id, file, seed, prepare, `bun run leak-scan ${r.projectId} lists it again`)
     if (context) await r.joinContext(target, clip.id, clip.startsFrom!, context)

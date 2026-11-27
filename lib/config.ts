@@ -7,6 +7,7 @@ import {multiplierFor} from './interpolate.ts'
 import {type Finish, finishOf, finishProblem, MILD_FINISH} from './finish.ts'
 import {postworkProblem} from './postwork/config.ts'
 import {shownOf} from './text.ts'
+import type {RenderEngine} from './settings.ts'
 
 // projects/<id>/config.json - documented in docs/comfyui.md
 export type RenderConfig = {
@@ -20,8 +21,10 @@ export type RenderConfig = {
     videoRefineSteps: number
     imageWorkflow: string // file name in comfy/workflows/, without .ts
     videoWorkflow: string
-    // the clip's form on a wan2gp server (#1204): a Deepy template of that wan2gp, as it names it ("gen_video_with_refs/MiniMax H3 Ref2VA
-    // Pruned PDD 8 Steps"); '' or none = clips go to ComfyUI servers only. Taken literally, nothing resolves it
+    // the one engine a project renders on (#1213): only the servers of that engine get its jobs - clips of the two engines look too
+    // different to mix in one video. 'wan2gp': the clips go to wan2gp servers in their wan2gp form (#1214), with videoWorkflowWan2gp
+    renderEngine: RenderEngine
+    // the clip's form on a wan2gp server (#1204): a Deepy template of that wan2gp, as it names it. Taken literally, nothing resolves it
     videoWorkflowWan2gp?: string
     songAudio: boolean // final video: the original song replaces the clips' own audio
     songWorkflow: string // file name in comfy/workflows/, without .ts - used by --render=song
@@ -119,7 +122,8 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     videoRefineSteps: -1,
     imageWorkflow: 'kroma-image',
     videoWorkflow: 'h3-ref2video',
-    videoWorkflowWan2gp: '',
+    renderEngine: 'comfy',
+    videoWorkflowWan2gp: 'gen_video_with_refs/MiniMax H3 Ref2VA Pruned PDD 8 Steps',
     songAudio: true,
     songWorkflow: 'yue2-song',
     songDuration: -1,
@@ -303,9 +307,11 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     const qaNote = qaRetriesNote(config.qaRetries)
     if (qaNote) log.warn(`${file}: ${qaNote}`)
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
-    if (typeof config.videoWorkflowWan2gp !== 'string' || (config.videoWorkflowWan2gp && !/^[\w-]+\/\S/.test(config.videoWorkflowWan2gp)))
+    if (config.renderEngine !== 'comfy' && config.renderEngine !== 'wan2gp')
+        fail(`renderEngine must be "comfy" or "wan2gp", got ${JSON.stringify(config.renderEngine)}`)
+    if (typeof config.videoWorkflowWan2gp !== 'string' || (config.renderEngine === 'wan2gp' && !/^[\w-]+\/\S/.test(config.videoWorkflowWan2gp)))
         fail(
-            `videoWorkflowWan2gp must be a wan2gp template as "<task>/<name>" (e.g. "gen_video_with_refs/MiniMax H3 Ref2VA Pruned PDD 8 Steps") or "", got ${JSON.stringify(config.videoWorkflowWan2gp)}`,
+            `videoWorkflowWan2gp must be a wan2gp template as "<task>/<name>" (e.g. "gen_video_with_refs/MiniMax H3 Ref2VA Pruned PDD 8 Steps"), got ${JSON.stringify(config.videoWorkflowWan2gp)}`,
         )
     for (const key of ['imageWorkflow', 'videoWorkflow', 'songWorkflow', 'sequenceWorkflow'] as const) {
         const wrong = workflowProblem(key, config[key])

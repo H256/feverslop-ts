@@ -11,7 +11,7 @@ import type {ProjectStore} from '../project.ts'
 import {WAN2GP_PROMPT_RULES, writeWan2gpPrompt} from '../wan2gp-prompt.ts'
 
 export async function planWan2gpPrompts(project: ProjectStore, config: ProjectConfig, clips: ClipRequest[], outputDir: string) {
-    if (!config.videoWorkflowWan2gp) return
+    if (config.renderEngine !== 'wan2gp') return
     log.section('12b · SHORT PROMPTS FOR WAN2GP')
     let missing = 0
     for (const clip of clips) {
