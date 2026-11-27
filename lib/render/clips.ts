@@ -27,6 +27,8 @@ import {
     type Wan2gpPrepared,
 } from '../render.ts'
 import {WAN2GP_SEEDS, wan2gpClipSettings} from '../wan2gp-clip.ts'
+import {wan2gpPictureOrder} from '../wan2gp-prompt.ts'
+import {sequenceSheetDir, sheetAnchor} from '../sequenceSheet.ts'
 import {pixelSize, type PixelSize} from '../../comfy/helpers.ts'
 
 // The work of a Renderer (lib/render.ts, #841): the clips and the song: a clip, its preview, its takes and retries, the frames it goes on from. The renderer keeps the state; these take it as `r`.
@@ -603,11 +605,17 @@ async function wan2gpForm(
     // wan2gp takes seeds up to 2^32 - 1, ours go to 2^48: the same clip seed gives the same wan2gp seed, and that is the one recorded
     const seed = clipSeed(r.config.seed, clip.id) % WAN2GP_SEEDS
     const pinned = r.config.pinStartFrame && clip.startsFrom ? join(r.projectDir, boundaryFrameAsset(clip.startsFrom, 'lf')) : undefined
+    // the short prompt numbers the pictures in wan2gp's order (people first, the place last); the full prompt in the clip's own
+    const shown = clip.assets.pictures.filter(p => !(pinned && p.kind === 'frame'))
+    const pictures = clip.wan2gpPrompt
+        ? wan2gpPictureOrder(clip.assets.pictures)
+              .map(i => clip.assets.pictures[i]!)
+              .filter(p => shown.includes(p))
+        : shown
     const input = {
         template,
-        prompt: clip.prompt,
-        pictures: clip.assets.pictures.filter(p => !(pinned && p.kind === 'frame')).map(p => join(r.projectDir, p.file)),
-        audios: clip.assets.audio.map(a => stemFiles[a.stem!]!),
+        prompt: clip.wan2gpPrompt ?? clip.prompt,
+        pictures: pictures.map(p => wan2gpPicture(r.projectDir, p)),
         ...(pinned ? {startFrame: pinned} : {}),
         contextFrames: context,
         frames,
@@ -615,25 +623,34 @@ async function wan2gpForm(
         seed,
         size: pixelSize(r.config.videoResolution, r.config.videoAspect, recommendedResolution ?? '1344x768'),
     }
-    // asked first with the whole stems: a clip without a wan2gp form cuts nothing
+    // asked first without the sound: a clip without a wan2gp form cuts nothing
     const refused = wan2gpClipSettings(input)
     if (typeof refused === 'string') return refused
-    const dir = join(r.projectDir, 'output', 'wan2gp')
-    mkdirSync(dir, {recursive: true})
-    const cuts = await Promise.all(
-        clip.assets.audio.map(async (a, i) => {
-            const cut = join(dir, `${clip.id}-audio${i + 1}.wav`)
-            await runProcess(
-                ['ffmpeg', '-y', '-v', 'error', '-ss', String(secondsAt(clip.frameStart)), '-t', String(secondsAt(frames)), '-i', stemFiles[a.stem!]!, cut],
-                {
-                    errorMessage: stderr => `${clip.id}: cutting ${a.stem} for wan2gp failed: ${stderr}`,
-                },
-            )
-            return cut
-        }),
-    )
-    const settings = wan2gpClipSettings({...input, audios: cuts})
+    // the clip's stems mixed into one soundtrack over the clip's span (the render length, not only the frames used)
+    const stems = clip.assets.audio.map(a => stemFiles[a.stem!]!)
+    let soundtrack: string | undefined
+    if (stems.length) {
+        const dir = join(r.projectDir, 'output', 'wan2gp')
+        mkdirSync(dir, {recursive: true})
+        soundtrack = join(dir, `${clip.id}-sound.wav`)
+        const span = ['-ss', String(secondsAt(clip.frameStart)), '-t', String(secondsAt(frames))]
+        const mix = stems.length > 1 ? ['-filter_complex', `amix=inputs=${stems.length}:normalize=0`] : []
+        await runProcess(['ffmpeg', '-y', '-v', 'error', ...stems.flatMap(stem => [...span, '-i', stem]), ...mix, soundtrack], {
+            errorMessage: stderr => `${clip.id}: mixing the sound for wan2gp failed: ${stderr}`,
+        })
+    }
+    const settings = wan2gpClipSettings({...input, ...(soundtrack ? {soundtrack} : {})})
     return typeof settings === 'string' ? settings : {settings, meta: {seed}, engine: `wan2gp:${template}`}
+}
+
+/**
+ * A picture as wan2gp gets it: a person's single full-body picture (the anchor of their sequence sheet) instead of the 2x3 reference
+ * sheet - the sheet's backdrop and frontal poses came through on wan2gp (#1204, B and R3), and the clip that showed both people right
+ * (R6) had the anchors. A person without a sequence sheet, and every other picture, goes as it is.
+ */
+function wan2gpPicture(projectDir: string, picture: {kind: string; id: string; file: string}): string {
+    const anchor = picture.kind === 'character' ? join(projectDir, sheetAnchor(sequenceSheetDir('character', picture.id))) : undefined
+    return anchor && existsSync(anchor) ? anchor : join(projectDir, picture.file)
 }
 
 function clipInputs(r: Renderer, clip: ClipRequest, stemFiles: Record<string, string>, withFrames: boolean) {

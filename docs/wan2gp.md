@@ -51,11 +51,22 @@ A project sends its music-video clips to wan2gp servers too when its `config.jso
 {"videoWorkflowWan2gp": "gen_video_with_refs/MiniMax H3 Ref2VA Pruned PDD 8 Steps"}
 ```
 
-Then a clip goes to whichever server is free first, ComfyUI or wan2gp. On wan2gp it gets the same prompt and pictures; its stems are
-cut to the clip's span here and go in as audio references `<Audio 1>` to `<Audio 3>`. What stays on ComfyUI, with the reason in the
-log ("ComfyUI only"):
+Then a clip goes to whichever server is free first, ComfyUI or wan2gp. On wan2gp it gets its own form (#1214):
 
-- a clip with more than three audio references (most band clips) or more than nine pictures,
+- **a short prompt**, written in the plan (step `wan2gpPrompts`, "12b · SHORT PROMPTS FOR WAN2GP") by the LLM from the clip's prompt,
+  without thinking: at most 2500 characters, one continuous shot, no lyrics and no `<Audio N>`; whoever sings "sings with natural lip
+  movements synchronized". Code counts the answer (length, every `<Picture N>`, no `<d>`, one shot) and asks once more with what was
+  wrong; a clip whose answers do not pass renders from its full prompt and the next run asks again. Each answer is kept by the
+  fingerprint of the clip's prompt and pictures. Why: wan2gp's 8-step H3 renders our full ComfyUI prompt (7000-8000 characters) badly -
+  the empty place, reference poses pasted in, people missing; a short prompt in the Showrunner's form came out right (#1204);
+- **the people before the place**: the pictures go in people first, a start frame next, the place last, and the short prompt numbers
+  them so - a place as `<Picture 1>` made wan2gp open on the empty room;
+- **the clip's sound as the soundtrack** (`audio_prompt_type: "AS"`): its stems mixed over the clip's span into one track the video
+  follows and wan2gp keeps as its audio.
+
+What stays on ComfyUI, with the reason in the log ("ComfyUI only"):
+
+- a clip with more than nine pictures,
 - a clip that starts on context frames of the clip before (`contextFrames`),
 - pictures, reference sheets, songs, upscales and interpolation: they have no wan2gp form yet.
 
