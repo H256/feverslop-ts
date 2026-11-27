@@ -70,8 +70,13 @@ What has no wan2gp form yet, and fails in a wan2gp project with the reason in th
 
 - a clip with more than nine pictures,
 - a clip that starts on context frames of the clip before (`contextFrames`),
-- pictures, reference sheets, songs, upscales and interpolation (pictures: #1211) - make them in a ComfyUI project, or bring them in
-  from the library.
+- songs, previews, upscales and interpolation (#1211) - make them in a ComfyUI project, or bring them in by hand.
+
+Pictures (characters, places, props) render on wan2gp too (#1211): the `gen_image` template `imageWorkflowWan2gp` (default
+`gen_image/Krea 2 Turbo (8 Steps)`) with the same prompt and seed, 1920x1088 (standing for a character), wan2gp's prompt enhancer off.
+A wan2gp project gets **single pictures, no reference sheets**: a sheet is made from an H3 turnaround video, which has no wan2gp form -
+and the wan2gp clips take a person's single picture anyway. wan2gp saves pictures as .jpg; they are converted to .png on download.
+The picture's record names the engine; it is not part of its fingerprint, so switching engines does not make pictures stale.
 
 Differences to the ComfyUI clip:
 

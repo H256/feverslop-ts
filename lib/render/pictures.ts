@@ -1,7 +1,8 @@
 import {copyFileSync, existsSync, mkdirSync, readdirSync} from 'node:fs'
 import {dirname, join} from 'node:path'
 import {log, styles} from '../log.ts'
-import {type ImageWorkflow, resolveSeed, type SequenceWorkflow} from '../../comfy/helpers.ts'
+import {type ImageWorkflow, pixelSize, resolveSeed, type SequenceWorkflow} from '../../comfy/helpers.ts'
+import {WAN2GP_SEEDS} from '../wan2gp-clip.ts'
 import {extractFrame, probeVideo} from '../assemble.ts'
 import {freshness, incompleteClip, recordedFingerprint} from '../provenance.ts'
 import {pictureSpec, type RenderSpec, specId} from '../render-spec.ts'
@@ -67,12 +68,30 @@ export async function renderPicture(r: Renderer, picture: PictureJob) {
             })
             return {result, uploads: [], meta: {seed}}
         },
+        r.config.renderEngine === 'wan2gp' ? async () => wan2gpPicture(r, picture) : undefined,
     )
+    // the engine is recorded, not part of the fingerprint: a picture is a reference, who made it does not make it stale (#1213)
+    const workflow = r.config.renderEngine === 'wan2gp' ? `wan2gp:${r.config.imageWorkflowWan2gp}` : r.config.imageWorkflow
     await Bun.write(
         `${target}.json`,
-        JSON.stringify({workflow: r.config.imageWorkflow, seed, resolution: r.config.imageResolution, prompt: picture.prompt, fingerprint: current}, null, 2),
+        JSON.stringify({workflow, seed, resolution: r.config.imageResolution, prompt: picture.prompt, fingerprint: current}, null, 2),
     )
     log.step('Saved', `${picture.file} ${styles.muted(r.took(target))}`)
+}
+
+/**
+ * A picture in its wan2gp form (#1211): the gen_image template, the same prompt and seed (in wan2gp's range), the size of the ComfyUI
+ * picture - 1920x1088, standing for a character. wan2gp's prompt enhancer stays off: the prompt is ours as it is.
+ */
+async function wan2gpPicture(r: Renderer, picture: PictureJob) {
+    const seed = (picture.seed ?? resolveSeed(r.config.seed)) % WAN2GP_SEEDS
+    const size = pixelSize(r.config.imageResolution, picture.kind === 'character' ? 'portrait' : 'landscape', '1920x1088')
+    const template = r.config.imageWorkflowWan2gp!
+    return {
+        settings: {template, prompt: picture.prompt, seed, resolution: `${size.width}x${size.height}`, prompt_enhancer: '', batch_size: 1},
+        meta: {seed},
+        engine: `wan2gp:${template}`,
+    }
 }
 
 /**

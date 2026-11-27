@@ -1,7 +1,8 @@
 import {nameService} from '../service-error.ts'
 import {ComfyApi, type ImageInfo} from '@saintno/comfyui-sdk'
 import {existsSync, renameSync, rmSync} from 'node:fs'
-import {basename, posix} from 'node:path'
+import {basename, extname, posix} from 'node:path'
+import {runProcess} from '../process.ts'
 import {recordTiming} from '../timings.ts'
 import {accumulatePhases, describeGraph, describeMachine, type Graph} from '../graph.ts'
 import {formatDuration, log, startSpinner, styles} from '../log.ts'
@@ -151,7 +152,7 @@ export function acquire(r: Renderer, pin?: string, wan2gp = false) {
 /** Only wan2gp servers answer, and the job has no wan2gp form (a picture, a song, a clip it cannot take - #1204). */
 function noServerFor() {
     return new Error(
-        'the project renders on wan2gp (renderEngine), and this job has no wan2gp form yet (so far only music-video clips have one; pictures are #1211) - render it on ComfyUI with renderEngine "comfy", or put the picture in by hand',
+        'the project renders on wan2gp (renderEngine), and this job has no wan2gp form yet (clips and pictures have one; songs, previews, upscales and interpolation not yet - #1211) - render it with renderEngine "comfy", or bring the file in by hand',
     )
 }
 
@@ -394,11 +395,21 @@ async function onWan2gpServer<M>(
         id = queued.id
         const done = await waitForBridgeJob(server.bridge, queued.id)
         const extensions = [extension].flat()
-        const file = done.files.findLast(f => extensions.some(e => f.name.endsWith(e)))
+        // wan2gp saves its pictures as .jpg: a picture asked as .png is converted here
+        const picture = extensions.includes('.png')
+        const file = done.files.findLast(f => extensions.some(e => f.name.endsWith(e)) || (picture && /\.(jpe?g|webp)$/i.test(f.name)))
         if (!file) throw new Error(`${label}: wan2gp made no ${extensions.join(' or ')} file (got ${done.files.map(f => f.name).join(', ') || 'nothing'})`)
         // written next to the target first, so an interrupted download never looks like a finished file
-        await Bun.write(`${target}.download`, await server.bridge.download(done.id, file.index))
-        renameSync(`${target}.download`, target)
+        const got = extname(file.name)
+        await Bun.write(`${target}.download${got}`, await server.bridge.download(done.id, file.index))
+        if (extensions.some(e => file.name.endsWith(e))) renameSync(`${target}.download${got}`, target)
+        else {
+            await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', `${target}.download${got}`, '-f', 'image2', '-c:v', 'png', `${target}.download.png`], {
+                errorMessage: stderr => `${label}: converting wan2gp's ${got} to .png failed: ${stderr}`,
+            })
+            rmSync(`${target}.download${got}`)
+            renameSync(`${target}.download.png`, target)
+        }
         runEvent({type: 'job', state: 'done', kind: what.kind, id: what.spec.id, server: server.name})
         return {ok: true, meta: job.meta}
     } catch (e) {

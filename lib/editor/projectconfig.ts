@@ -87,7 +87,7 @@ const DEFINITIONS: Definition[] = [
             {value: 'comfy', label: 'ComfyUI'},
             {value: 'wan2gp', label: 'wan2gp (GPUs under 24 GB)'},
         ],
-        note: 'The one engine this project renders on: only servers of that engine get its jobs - clips of the two look too different to mix. wan2gp renders the clips in a short form of their prompts (docs/wan2gp.md); pictures still need ComfyUI. A change makes every rendered clip stale.',
+        note: 'The one engine this project renders on: only servers of that engine get its jobs - clips of the two look too different to mix. wan2gp renders the clips in a short form of their prompts and its pictures as single pictures (docs/wan2gp.md). A change makes every rendered clip stale.',
     },
     {
         key: 'videoWorkflowWan2gp',
@@ -96,6 +96,14 @@ const DEFINITIONS: Definition[] = [
         control: 'text',
         for: 'music',
         note: 'The wan2gp template a clip renders with when the render engine is wan2gp (docs/wan2gp.md).',
+    },
+    {
+        key: 'imageWorkflowWan2gp',
+        label: 'Picture template on wan2gp',
+        group: 'Workflows',
+        control: 'text',
+        for: 'music',
+        note: 'The wan2gp gen_image template the pictures render with when the render engine is wan2gp. A wan2gp project gets single pictures, no reference sheets.',
     },
     {
         key: 'sequenceWorkflow',

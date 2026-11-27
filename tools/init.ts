@@ -644,7 +644,7 @@ if (!(await onlyEngine()) && (await readSettingsFile()).comfy?.length) {
             message: 'Render on which engine? (only its servers get this project - clips of the two look too different to mix)',
             options: [
                 {value: 'comfy' as const, label: 'ComfyUI', hint: 'the full workflows'},
-                {value: 'wan2gp' as const, label: 'wan2gp', hint: 'for GPUs under 24 GB; pictures still need ComfyUI'},
+                {value: 'wan2gp' as const, label: 'wan2gp', hint: 'for GPUs under 24 GB'},
             ],
         }),
     )
