@@ -53,7 +53,8 @@ export async function renderPictures(renderer: Renderer, pictures: (PictureJob &
         )
     const todo = chosen.filter(p => !existsSync(join(dir, p.file)))
     log.step('Estimate', styles.muted(await pictureEstimate(todo.length, config, servers)))
-    const renderOne = (picture: PictureJob) => (config.sequenceSheets && picture.kind !== 'prop' ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
+    const renderOne = (picture: PictureJob) =>
+        config.sequenceSheets && picture.kind !== 'prop' ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture)
     await renderAll(
         chosen.filter(p => !p.baseId),
         renderOne,
