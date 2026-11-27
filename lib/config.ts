@@ -28,6 +28,8 @@ export type RenderConfig = {
     videoWorkflowWan2gp?: string
     // a picture's form on a wan2gp server (#1211): a gen_image template, prompt, seed and size as on ComfyUI
     imageWorkflowWan2gp?: string
+    // a reference sheet's turnaround video on a wan2gp server (#1211): a gen_video FL2VA template, the anchor as its first frame
+    sequenceWorkflowWan2gp?: string
     songAudio: boolean // final video: the original song replaces the clips' own audio
     songWorkflow: string // file name in comfy/workflows/, without .ts - used by --render=song
     songDuration: number // seconds - the maximum length of a generated song, it is cut off there; -1 = the workflow's own default
@@ -127,6 +129,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     renderEngine: 'comfy',
     videoWorkflowWan2gp: 'gen_video_with_refs/MiniMax H3 Ref2VA Pruned PDD 8 Steps',
     imageWorkflowWan2gp: 'gen_image/Krea 2 Turbo (8 Steps)',
+    sequenceWorkflowWan2gp: 'gen_video/MiniMax H3 FL2VA Pruned PDD 8 Steps',
     songAudio: true,
     songWorkflow: 'yue2-song',
     songDuration: -1,
@@ -312,7 +315,7 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     if (config.renderEngine !== 'comfy' && config.renderEngine !== 'wan2gp')
         fail(`renderEngine must be "comfy" or "wan2gp", got ${JSON.stringify(config.renderEngine)}`)
-    for (const key of ['videoWorkflowWan2gp', 'imageWorkflowWan2gp'] as const)
+    for (const key of ['videoWorkflowWan2gp', 'imageWorkflowWan2gp', 'sequenceWorkflowWan2gp'] as const)
         if (typeof config[key] !== 'string' || (config.renderEngine === 'wan2gp' && !/^[\w-]+\/\S/.test(config[key])))
             fail(`${key} must be a wan2gp template as "<task>/<name>" (e.g. "${defaults[key]}"), got ${JSON.stringify(config[key])}`)
     for (const key of ['imageWorkflow', 'videoWorkflow', 'songWorkflow', 'sequenceWorkflow'] as const) {

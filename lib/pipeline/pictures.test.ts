@@ -23,7 +23,7 @@ const fakeRenderer = () => {
 
 const run = (dir: string, more: Partial<PictureRun> = {}): PictureRun => ({
     dir,
-    config: {sequenceSheets: false, sequenceWorkflow: 'seq.json', imageWorkflow: 'image.json', imageResolution: '1024x1024', seed: -1, renderEngine: 'comfy'},
+    config: {sequenceSheets: false, sequenceWorkflow: 'seq.json', imageWorkflow: 'image.json', imageResolution: '1024x1024', seed: -1},
     servers: [],
     render: new Set(['images']),
     only: new Set(),

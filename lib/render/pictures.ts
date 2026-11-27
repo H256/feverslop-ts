@@ -95,6 +95,30 @@ async function wan2gpPicture(r: Renderer, picture: PictureJob) {
 }
 
 /**
+ * A sheet's turnaround video in its wan2gp form (#1211): the FL2VA template, the anchor as first frame (S), the frames and the
+ * 0.85-megapixel size the ComfyUI sheet workflow takes, wan2gp's prompt enhancer off. Silent: no audio is asked for.
+ */
+async function wan2gpSequence(r: Renderer, kind: PictureJob['kind'], prompt: string, startFrame: string, frames: number) {
+    const seed = resolveSeed(r.config.seed) % WAN2GP_SEEDS
+    const size = pixelSize(-1, kind === 'character' ? 'portrait' : 'landscape', 0.85)
+    const template = r.config.sequenceWorkflowWan2gp!
+    return {
+        settings: {
+            template,
+            prompt,
+            seed,
+            image_start: startFrame,
+            image_prompt_type: 'S',
+            video_length: frames,
+            resolution: `${size.width}x${size.height}`,
+            prompt_enhancer: '',
+        },
+        meta: {seed},
+        engine: `wan2gp:${template}`,
+    }
+}
+
+/**
  * Same result file as renderPicture (picture.file - what every clip references), but built from several
  * angles instead of one flat hero image: renders the hero image as usual (the "anchor"), turns it into a
  * short silent turnaround video (comfy/workflows/h3-sequence-to-sheet.ts), samples a few of its beats as
@@ -167,6 +191,7 @@ export async function renderSequenceSheet(r: Renderer, picture: PictureJob) {
                 })
                 return {result, uploads: [], meta: {seed}}
             },
+            r.config.renderEngine === 'wan2gp' ? async () => wan2gpPicture(r, picture) : undefined,
         )
         await Bun.write(
             `${anchorTarget}.json`,
@@ -203,6 +228,9 @@ export async function renderSequenceSheet(r: Renderer, picture: PictureJob) {
                 })
                 return {result, uploads: [{from: baseAnchorTarget ?? anchorTarget, to: `${r.remoteDir}/${baseAnchorFile ?? anchorFile}`}], meta: {seed}}
             },
+            r.config.renderEngine === 'wan2gp'
+                ? async () => wan2gpSequence(r, picture.kind, sequencePrompt, baseAnchorTarget ?? anchorTarget, sequenceFrames)
+                : undefined,
         )
         await Bun.write(
             `${videoTarget}.json`,

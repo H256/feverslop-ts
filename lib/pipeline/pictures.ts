@@ -21,7 +21,7 @@ export type PictureAsk = {
 
 export type PictureRun = {
     dir: string
-    config: Pick<RenderConfig, 'sequenceSheets' | 'sequenceWorkflow' | 'imageWorkflow' | 'imageResolution' | 'seed' | 'renderEngine'>
+    config: Pick<RenderConfig, 'sequenceSheets' | 'sequenceWorkflow' | 'imageWorkflow' | 'imageResolution' | 'seed'>
     servers: string[]
     render: Set<string>
     only: Set<string>
@@ -53,11 +53,7 @@ export async function renderPictures(renderer: Renderer, pictures: (PictureJob &
         )
     const todo = chosen.filter(p => !existsSync(join(dir, p.file)))
     log.step('Estimate', styles.muted(await pictureEstimate(todo.length, config, servers)))
-    // a reference sheet is made from an H3 turnaround video, which has no wan2gp form: a wan2gp project gets single pictures (#1211) -
-    // what its clips take anyway (a person's single picture, not the 2x3 sheet, #1214)
-    const sheets = config.sequenceSheets && config.renderEngine !== 'wan2gp'
-    if (config.sequenceSheets && !sheets) log.step('Sheets', styles.muted('single pictures - reference sheets have no wan2gp form yet'))
-    const renderOne = (picture: PictureJob) => (sheets && picture.kind !== 'prop' ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
+    const renderOne = (picture: PictureJob) => (config.sequenceSheets && picture.kind !== 'prop' ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
     await renderAll(
         chosen.filter(p => !p.baseId),
         renderOne,

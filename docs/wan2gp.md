@@ -74,8 +74,9 @@ What has no wan2gp form yet, and fails in a wan2gp project with the reason in th
 
 Pictures (characters, places, props) render on wan2gp too (#1211): the `gen_image` template `imageWorkflowWan2gp` (default
 `gen_image/Krea 2 Turbo (8 Steps)`) with the same prompt and seed, 1920x1088 (standing for a character), wan2gp's prompt enhancer off.
-A wan2gp project gets **single pictures, no reference sheets**: a sheet is made from an H3 turnaround video, which has no wan2gp form -
-and the wan2gp clips take a person's single picture anyway. wan2gp saves pictures as .jpg; they are converted to .png on download.
+Reference sheets (`sequenceSheets`) render on wan2gp as on ComfyUI: the anchor on the picture template, the silent turnaround video on
+the `gen_video` template `sequenceWorkflowWan2gp` (default `gen_video/MiniMax H3 FL2VA Pruned PDD 8 Steps` - the distilled model needs no
+LoRA; the Lightx2v template needs its LoRA in wan2gp's `loras/`, a bridge job does not download it) with the anchor as first frame. wan2gp saves pictures as .jpg; they are converted to .png on download.
 The picture's record names the engine; it is not part of its fingerprint, so switching engines does not make pictures stale.
 
 Differences to the ComfyUI clip:
