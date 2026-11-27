@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {afterAll, beforeAll, describe, expect, test} from 'bun:test'
-import {mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {mkdtempSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {doctor, firstFix, type Probes} from './doctor.ts'
@@ -20,7 +21,7 @@ beforeAll(() => {
 afterAll(() => {
     for (const name of Object.keys(process.env)) if (name.startsWith('FEVERSLOP_')) delete process.env[name]
     Object.assign(process.env, before)
-    rmSync(dir, {recursive: true, force: true})
+    removeHeld(dir)
 })
 
 // a server that has every node and model the default workflows name: its /object_info, as ComfyUI gives it

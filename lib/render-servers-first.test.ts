@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {expect, test} from 'bun:test'
-import {mkdtempSync, rmSync} from 'node:fs'
+import {mkdtempSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {loadProjectConfig} from './config.ts'
@@ -20,6 +21,6 @@ test('serversFirst fails when no ComfyUI server answers', async () => {
         expect((error as Error).message).toContain('No ComfyUI server reachable')
         expect((error as Error).message).toContain('bun run setup render')
     } finally {
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })

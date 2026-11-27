@@ -1,8 +1,9 @@
+import {renameHeld} from './previous-output.ts'
 // The user's own picture put in as the anchor of one reference picture (--picture-anchor), with the description the clips say of
 // it given by hand (--picture-description) or read from the picture by the vision model (--describe-picture). The same for a music
 // video and a film; tools/replace-character is the older, interactive way for characters.
 
-import {existsSync, mkdirSync, renameSync} from 'node:fs'
+import {existsSync, mkdirSync} from 'node:fs'
 import {basename, dirname, join} from 'node:path'
 import {describeOrFail, visionFailed} from './describe-picture.ts'
 import {log, styles} from './log.ts'
@@ -32,7 +33,7 @@ export async function installOwnPicture(picture: PictureJob, projectDir: string,
     await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', file, '-frames:v', '1', partial], {
         errorMessage: err => `ffmpeg could not read ${basename(file)} as a picture:\n${err}`,
     })
-    renameSync(partial, path)
+    renameHeld(partial, path)
     await Bun.write(`${path}.json`, JSON.stringify(pinnedSidecar(`your own picture, ${basename(file)}`), null, 2))
     return target
 }

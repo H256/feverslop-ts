@@ -1,5 +1,6 @@
+import {removeHeld} from '../previous-output.ts'
 import {expect, test} from 'bun:test'
-import {mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync} from 'node:fs'
+import {mkdirSync, mkdtempSync, symlinkSync, writeFileSync} from 'node:fs'
 import {join} from 'node:path'
 import {tmpdir} from 'node:os'
 import {clientStatic} from './static.ts'
@@ -17,7 +18,7 @@ async function fixture(check: (dir: string, root: string) => Promise<void>) {
     try {
         await check(dir, root)
     } finally {
-        rmSync(root, {recursive: true, force: true})
+        removeHeld(root)
     }
 }
 
@@ -63,7 +64,7 @@ test('the built page cannot swallow API errors or bypass host/origin checks', ()
         expect((await handler(new Request('http://localhost/workspace-assets/missing.js'))).status).toBe(404)
         expect((await handler(new Request('http://evil.example/workspace-assets/assets/app-12345678.js'))).status).toBe(403)
         expect((await handler(new Request('http://localhost/api/run', {method: 'POST', headers: {origin: 'http://evil.example'}}))).status).toBe(403)
-expect((await handler(new Request('http://localhost/api/run', {method: 'POST', headers: {origin: 'null'}}))).status).toBe(403)
+        expect((await handler(new Request('http://localhost/api/run', {method: 'POST', headers: {origin: 'null'}}))).status).toBe(403)
         expect((await handler(new Request('http://localhost/workspace-assets/assets/app-12345678.js', {method: 'POST'}))).status).toBe(404)
     }))
 

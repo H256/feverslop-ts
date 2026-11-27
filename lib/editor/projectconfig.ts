@@ -1,7 +1,8 @@
+import {renameHeld} from '../previous-output.ts'
 // The render settings of a project - config.json - as the workspace's Settings page and `bun run config` have them (#576): what can be
 // chosen and how, what the project has now, and what a change would do: whether the loader takes it, and which rendered clips and
 // pictures it makes stale. Nothing is rendered or planned by a change; the next run finds what is stale, as ever.
-import {existsSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {qaRetriesNote, workflowDir} from '../config.ts'
@@ -87,7 +88,7 @@ const DEFINITIONS: Definition[] = [
             {value: 'comfy', label: 'ComfyUI'},
             {value: 'wan2gp', label: 'wan2gp (GPUs under 24 GB)'},
         ],
-        note: 'The one engine this project renders on: only servers of that engine get its jobs - clips of the two look too different to mix. wan2gp renders the clips in a short form of their prompts (docs/wan2gp.md); pictures still need ComfyUI. A change makes every rendered clip stale.',
+        note: 'The one engine this project renders on: only servers of that engine get its jobs - clips of the two look too different to mix. wan2gp renders the clips in a short form of their prompts and its pictures and sheets on its own templates (docs/wan2gp.md). A change makes every rendered clip stale.',
     },
     {
         key: 'videoWorkflowWan2gp',
@@ -96,6 +97,22 @@ const DEFINITIONS: Definition[] = [
         control: 'text',
         for: 'music',
         note: 'The wan2gp template a clip renders with when the render engine is wan2gp (docs/wan2gp.md).',
+    },
+    {
+        key: 'imageWorkflowWan2gp',
+        label: 'Picture template on wan2gp',
+        group: 'Workflows',
+        control: 'text',
+        for: 'music',
+        note: 'The wan2gp gen_image template the pictures render with when the render engine is wan2gp. Also the anchor of a reference sheet.',
+    },
+    {
+        key: 'sequenceWorkflowWan2gp',
+        label: 'Sheet template on wan2gp',
+        group: 'Workflows',
+        control: 'text',
+        for: 'music',
+        note: 'The wan2gp gen_video template (FL2VA, first frame) the turnaround video of a reference sheet renders with when the render engine is wan2gp.',
     },
     {
         key: 'sequenceWorkflow',
@@ -566,7 +583,7 @@ export async function writeConfig(target: EditorTarget, change: ConfigChange): P
         // whole or not at all: a file a run is reading is never half written
         const temporary = `${configFile(target)}.tmp`
         writeFileSync(temporary, text)
-        renameSync(temporary, configFile(target))
+        renameHeld(temporary, configFile(target))
         return {...impact, written: true}
     })
 }

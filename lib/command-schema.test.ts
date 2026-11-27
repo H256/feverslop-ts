@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {describe, expect, test} from 'bun:test'
-import {mkdirSync, mkdtempSync, readdirSync, rmSync} from 'node:fs'
+import {mkdirSync, mkdtempSync, readdirSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {extraArgument, parseCommand, requestArgs, UsageError, usageArgs, usageOf} from './command-schema.ts'
@@ -145,7 +146,7 @@ describe('the commands refuse a word too many before any work (#938)', () => {
             // nothing was started on the project: no lock, nothing written into it
             expect(readdirSync(join(cwd, folder, 'demo'))).toEqual([])
         } finally {
-            rmSync(cwd, {recursive: true, force: true})
+            removeHeld(cwd)
         }
     })
 })

@@ -1,3 +1,4 @@
+import {removeHeld} from '../previous-output.ts'
 import {afterAll, beforeAll, describe, expect, test} from 'bun:test'
 import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
@@ -41,7 +42,7 @@ beforeAll(async () => {
     write(join(music().dir, 'videos/slot-001.mp4'), '0123456789')
     write(join(music().dir, 'videos/slot-001.mp4.json'), {fingerprint: clipFingerprint(request, music().dir, await loadProjectConfig(music().dir))})
 })
-afterAll(() => rmSync(root, {recursive: true, force: true}))
+afterAll(() => removeHeld(root))
 
 describe('what the project has', () => {
     test('every setting with its value, its default, and whether config.json has it; other keys are not offered', async () => {

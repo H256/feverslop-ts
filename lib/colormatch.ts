@@ -1,4 +1,4 @@
-import {renameSync} from 'node:fs'
+import {renameHeld} from './previous-output.ts'
 import {runProcess} from './process.ts'
 
 // A continuing clip is drawn on its own and comes out with its own exposure: on tides slot-013 -> 014 the new clip started
@@ -133,6 +133,6 @@ export async function matchColors(video: string, ref: string, refFrom: number, r
         ],
         {errorMessage: err => `ffmpeg could not match the colors of ${video}:\n${err}`},
     )
-    renameSync(partial, video)
+    renameHeld(partial, video)
     return filter
 }

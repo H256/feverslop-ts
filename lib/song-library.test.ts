@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {afterAll, beforeAll, expect, test} from 'bun:test'
-import {existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {loadProjectConfig} from './config.ts'
@@ -14,7 +15,7 @@ const library = join(root, 'library')
 beforeAll(() => process.chdir(root))
 afterAll(() => {
     process.chdir(cwd)
-    rmSync(root, {recursive: true, force: true})
+    removeHeld(root)
 })
 
 const LYRICS = '[Chorus]\nEPA streikt\nUnd ich dreh mich im Kreis\n'

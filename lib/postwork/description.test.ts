@@ -1,5 +1,6 @@
+import {removeHeld} from '../previous-output.ts'
 import {afterEach, describe, expect, test} from 'bun:test'
-import {mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {mkdtempSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import type {Timing} from '../timings.ts'
@@ -23,7 +24,7 @@ const folder = () => {
     return dir
 }
 afterEach(() => {
-    for (const dir of dirs) rmSync(dir, {recursive: true, force: true})
+    for (const dir of dirs) removeHeld(dir)
     dirs = []
 })
 

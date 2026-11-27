@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {afterAll, beforeAll, describe, expect, test} from 'bun:test'
-import {existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {describeEntry, listLibrary, removeEntry, renameEntry} from './library-admin.ts'
@@ -44,7 +45,7 @@ beforeAll(() => {
 })
 afterAll(() => {
     process.chdir(here)
-    rmSync(root, {recursive: true, force: true})
+    removeHeld(root)
 })
 
 describe('the library', () => {

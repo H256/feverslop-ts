@@ -1,3 +1,4 @@
+import {renameHeld} from './previous-output.ts'
 import {appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync} from 'node:fs'
 import {basename, dirname, join, resolve} from 'node:path'
 import type {PastRun, QueuedRun} from '../shared/workspace.ts'
@@ -25,7 +26,7 @@ function writeQueue(dir: string, queue: QueuedRun[]) {
     const file = join(dir, QUEUE)
     mkdirSync(join(dir, 'logs'), {recursive: true})
     writeFileSync(`${file}.tmp`, JSON.stringify(queue, null, 2))
-    renameSync(`${file}.tmp`, file)
+    renameHeld(`${file}.tmp`, file)
 }
 
 // a folder moved into the project: renamed where it can be, copied across drives (the temp folder on C:, the project on E:)

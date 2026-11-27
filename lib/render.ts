@@ -1,5 +1,6 @@
+import {renameHeld} from './previous-output.ts'
 import type {ComfyApi} from '@saintno/comfyui-sdk'
-import {copyFileSync, existsSync, readFileSync, renameSync, writeFileSync} from 'node:fs'
+import {copyFileSync, existsSync, readFileSync, writeFileSync} from 'node:fs'
 import {basename, join} from 'node:path'
 import {type Timing} from './timings.ts'
 import type {describeMachine, GraphSetup} from './graph.ts'
@@ -42,7 +43,7 @@ export const smallerPicture = (file: string) => {
     const partial = file.replace(/\.png$/, '.small.png')
     return runProcess(['ffmpeg', '-y', '-v', 'error', '-i', file, '-vf', GUIDE_SCALE, partial], {
         errorMessage: err => `ffmpeg could not make ${file} smaller:\n${err}`,
-    }).then(() => renameSync(partial, file))
+    }).then(() => renameHeld(partial, file))
 }
 // the shot a further view of a place comes from (renderExtraView): long enough for one slow move, in a length the model takes
 export const EXTRA_VIEW_FRAMES = 73

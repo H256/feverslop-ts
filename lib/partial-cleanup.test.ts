@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {expect, test} from 'bun:test'
-import {existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdirSync, mkdtempSync, utimesSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {sweepPartials} from './partial-cleanup.ts'
@@ -28,6 +29,6 @@ test('only stale partials of inactive writers are swept (#659)', () => {
         expect([...files.slice(0, 2), ...files.slice(6)].every(file => !existsSync(join(dir, file)))).toBe(true)
         expect(files.slice(2, 6).every(file => existsSync(join(dir, file)))).toBe(true)
     } finally {
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })

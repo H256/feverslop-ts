@@ -1,4 +1,5 @@
-import {existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync} from 'node:fs'
+import {renameHeld} from '../previous-output.ts'
+import {existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync} from 'node:fs'
 import {basename, dirname, extname, join, relative} from 'node:path'
 import {recordTiming} from '../timings.ts'
 import {log, styles} from '../log.ts'
@@ -375,7 +376,7 @@ export async function retryLeaks<M extends {seed: number}>(
             break
         }
         mkdirSync(dirname(put), {recursive: true})
-        renameSync(target, put)
+        renameHeld(target, put)
         recordTiming({kind: 'clip', name: r.config.videoWorkflow, seconds: 0, outcome: 'retry', reason: 'leak'})
         log.warn(
             `${file} has a grey studio backdrop (${where}) - rendered again with another seed (${tries + 1} of ${r.config.leakRetries}); the first one is in ${styles.muted(`old/leaks/${basename(put)}`)}`,

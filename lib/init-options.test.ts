@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {describe, expect, test} from 'bun:test'
-import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {initOptions} from './init-options.ts'
@@ -88,7 +89,7 @@ describe('init by options', () => {
             expect(asked.out).toContain('No terminal to ask in')
             expect(asked.out).toContain('--song=<file>')
         } finally {
-            rmSync(cwd, {recursive: true, force: true})
+            removeHeld(cwd)
         }
     }, 60_000)
 })

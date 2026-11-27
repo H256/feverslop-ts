@@ -12,7 +12,7 @@ export const PREVIOUS = '.previous'
 const LOCK_WAITS = [100, 200, 400, 800, 1500, 3000]
 
 /** Runs `action` again while the folder is held open (EPERM, EBUSY), then stops with what to do. */
-export function whileHeld(folder: string, action: () => void, waits = LOCK_WAITS, sleep = Bun.sleepSync) {
+export function whileHeld<T>(folder: string, action: () => T, waits = LOCK_WAITS, sleep = Bun.sleepSync): T {
     for (let i = 0; ; i++) {
         try {
             return action()
@@ -32,6 +32,12 @@ export function whileHeld(folder: string, action: () => void, waits = LOCK_WAITS
         }
     }
 }
+
+/** A freshly written file moved under its name - again while a virus scanner or indexer still holds it (EBUSY right after ffmpeg). */
+/** A file or folder removed - again while a virus scanner or indexer still holds something in it (Bun's rmSync has no maxRetries). */
+export const removeHeld = (target: string) => whileHeld(target, () => rmSync(target, {recursive: true, force: true}))
+
+export const renameHeld = (from: string, to: string) => whileHeld(to, () => renameSync(from, to))
 
 /** Moves the current output/ to output/.previous/ (dropping the generation before it) and creates an empty output/. */
 export function startOutput(outputDir: string) {

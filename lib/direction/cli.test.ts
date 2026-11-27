@@ -1,10 +1,11 @@
+import {removeHeld} from '../previous-output.ts'
 import {test, expect, afterEach} from 'bun:test'
-import {mkdtempSync, mkdirSync, writeFileSync, rmSync} from 'node:fs'
+import {mkdtempSync, mkdirSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join, resolve} from 'node:path'
 const folders: string[] = []
 afterEach(() => {
-    for (const folder of folders.splice(0)) rmSync(folder, {recursive: true, force: true})
+    for (const folder of folders.splice(0)) removeHeld(folder)
 })
 
 test('CLI JSON includes review state and round-trips rules; orphan flags fail', async () => {

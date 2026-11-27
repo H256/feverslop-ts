@@ -1,5 +1,6 @@
+import {removeHeld} from '../previous-output.ts'
 import {afterAll, beforeAll, describe, expect, test} from 'bun:test'
-import {existsSync, mkdtempSync, readFileSync, rmSync} from 'node:fs'
+import {existsSync, mkdtempSync, readFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {filmInitArgs, initArgs, saidWrong} from './new-project.ts'
@@ -64,7 +65,7 @@ describe('the routes of the start page', () => {
             if (before[name] === undefined) delete process.env[name]
             else process.env[name] = before[name]
         }
-        rmSync(root, {recursive: true, force: true})
+        removeHeld(root)
     })
     const post = (body: unknown) => editorHandler()(new Request('http://localhost/api/projects/new', {method: 'POST', body: JSON.stringify(body)}))
 

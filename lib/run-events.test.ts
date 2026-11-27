@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {afterAll, beforeAll, describe, expect, test} from 'bun:test'
-import {mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {mkdtempSync, readdirSync, readFileSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import type {RunEvent} from '../shared/workspace.ts'
@@ -11,7 +12,7 @@ let dir: string
 beforeAll(() => {
     dir = mkdtempSync(join(tmpdir(), 'run-events-'))
 })
-afterAll(() => rmSync(dir, {recursive: true, force: true}))
+afterAll(() => removeHeld(dir))
 
 const slashed = (path: string) => JSON.stringify(path.replaceAll('\\', '/'))
 

@@ -1,3 +1,4 @@
+import {removeHeld} from '../previous-output.ts'
 import {describe, expect, test} from 'bun:test'
 import {MAX_CLIP_SEC} from '../frames.ts'
 import {CoverageProblem, packClips, splitLongShot, speakingSeconds, toCoverage} from './coverage.ts'
@@ -1142,7 +1143,7 @@ describe('film config workflows', () => {
             writeFileSync(join(dir, 'config.json'), JSON.stringify(config))
             return await loadFilmConfig(dir)
         } finally {
-            rmSync(dir, {recursive: true, force: true})
+            removeHeld(dir)
         }
     }
     test('one image and one video workflow: the defaults, or the files named', async () => {

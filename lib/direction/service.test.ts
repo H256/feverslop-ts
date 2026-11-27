@@ -1,5 +1,6 @@
+import {removeHeld} from '../previous-output.ts'
 import {test, expect, afterEach} from 'bun:test'
-import {mkdtempSync, writeFileSync, rmSync, readFileSync} from 'node:fs'
+import {mkdtempSync, writeFileSync, readFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {
@@ -21,7 +22,7 @@ import {
 } from './service.ts'
 const dirs: string[] = []
 afterEach(() => {
-    for (const d of dirs.splice(0)) rmSync(d, {recursive: true, force: true})
+    for (const d of dirs.splice(0)) removeHeld(d)
 })
 function fixture(kind: 'music' | 'film' = 'music') {
     const dir = mkdtempSync(join(tmpdir(), 'direction-'))

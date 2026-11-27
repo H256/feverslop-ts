@@ -1,5 +1,6 @@
+import {removeHeld} from '../previous-output.ts'
 import {expect, test} from 'bun:test'
-import {mkdtempSync, writeFileSync, rmSync} from 'node:fs'
+import {mkdtempSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {RunControl} from './runs.ts'
@@ -20,6 +21,6 @@ test('Stop refuses a legacy lock whose PID cannot be authenticated (#647)', () =
         expect(signals.every(signal => signal === 0)).toBe(true)
     } finally {
         process.kill = original
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })

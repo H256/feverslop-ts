@@ -1,4 +1,5 @@
-import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, utimesSync, writeFileSync} from 'node:fs'
+import {renameHeld} from './previous-output.ts'
+import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, utimesSync, writeFileSync} from 'node:fs'
 import {basename, dirname, join, relative} from 'node:path'
 import {boundaryFrameAsset} from './compose.ts'
 import {SHEET_ANCHOR, SHEET_VIDEO, sheetAnchor, sheetFrames, sheetVideo} from './sequenceSheet.ts'
@@ -15,7 +16,7 @@ export function archiveFiles(projectDir: string, name: string, files: string[]) 
     mkdirSync(keep, {recursive: true})
     for (const file of files) {
         const from = join(projectDir, file)
-        if (existsSync(from)) renameSync(from, join(keep, basename(file)))
+        if (existsSync(from)) renameHeld(from, join(keep, basename(file)))
     }
     return keep
 }
@@ -38,7 +39,7 @@ export function archiveTrees(projectDir: string, name: string, roots: string[]):
         const from = join(projectDir, file)
         const to = join(keep, file)
         mkdirSync(dirname(to), {recursive: true})
-        renameSync(from, to)
+        renameHeld(from, to)
     }
     return keep
 }
@@ -123,7 +124,7 @@ export function clipVersions(projectDir: string, clipId: string): ClipVersion[] 
 /** A file that goes back now counts as made now: what compares times (is the final video older than its clips?) would not see it otherwise. */
 function putBack(from: string, to: string, now: Date) {
     mkdirSync(dirname(to), {recursive: true})
-    renameSync(from, to)
+    renameHeld(from, to)
     utimesSync(to, now, now)
 }
 

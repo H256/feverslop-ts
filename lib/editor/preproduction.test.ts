@@ -1,5 +1,6 @@
+import {removeHeld} from '../previous-output.ts'
 import {describe, expect, test} from 'bun:test'
-import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {mkdtempSync, readFileSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import type {Project} from '../project.ts'
@@ -185,7 +186,7 @@ describe('the cast by hand, saved', () => {
                 locations: {deck: 'project:deck'},
             })
         } finally {
-            rmSync(dir, {recursive: true, force: true})
+            removeHeld(dir)
         }
     })
 })
@@ -566,7 +567,7 @@ describe('the layer of the song for a band member the cast left without one (#10
             expect(saved.castLayersAsked).toEqual(['Lira', 'Kael'])
             expect(castView('music', saved)!.layerQuestion).toBeUndefined()
         } finally {
-            rmSync(dir, {recursive: true, force: true})
+            removeHeld(dir)
         }
     })
 
@@ -584,7 +585,7 @@ describe('the layer of the song for a band member the cast left without one (#10
             expect(asked).toBe(0)
             expect(result).toEqual({players: [], asked: [], given: [], dropped: []})
         } finally {
-            rmSync(dir, {recursive: true, force: true})
+            removeHeld(dir)
         }
     })
 })

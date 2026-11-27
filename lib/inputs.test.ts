@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {afterEach, beforeEach, describe, expect, test} from 'bun:test'
-import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {mkdirSync, mkdtempSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {songFileOf} from './inputs.ts'
@@ -12,7 +13,7 @@ describe('songFileOf', () => {
         dir = mkdtempSync(join(tmpdir(), 'inputs-test-'))
         mkdirSync(join(dir, 'input'))
     })
-    afterEach(() => rmSync(dir, {recursive: true, force: true}))
+    afterEach(() => removeHeld(dir))
 
     test('song.wav when there is no song yet', () => {
         expect(songFileOf(dir)).toBe(song('song.wav'))

@@ -1,3 +1,4 @@
+import {removeHeld} from '../previous-output.ts'
 import {describe, expect, test} from 'bun:test'
 import {mkdtempSync, mkdirSync, writeFileSync, rmSync} from 'node:fs'
 import {tmpdir} from 'node:os'
@@ -16,7 +17,7 @@ test('unusable extra-view sidecars do not hide valid views (#654)', () => {
         writeFileSync(join(folder, 'view-9.png.json'), JSON.stringify({name: 'rear', shows: 'door'}))
         expect(extraViews(dir, 'stage').map(({name, shows}) => ({name, shows}))).toEqual([{name: 'rear', shows: 'door'}])
     } finally {
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })
 test('new view numbers start after the sheet and preserve surviving views after deletion', () => {
@@ -29,7 +30,7 @@ test('new view numbers start after the sheet and preserve surviving views after 
         rmSync(join(folder, 'view-6.png'))
         expect(nextViewNumber(dir, 'stage')).toBe(8)
     } finally {
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })
 

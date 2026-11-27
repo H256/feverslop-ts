@@ -1,6 +1,7 @@
+import {removeHeld} from './previous-output.ts'
 import {testVideo} from './test-media.ts'
 import {describe, expect, test} from 'bun:test'
-import {mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {mkdtempSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import h3LatentUpscale from '../comfy/workflows/h3-latent-upscale.ts'
@@ -19,7 +20,7 @@ test('only explicitly completed derivatives are reusable (#664)', () => {
         writeFileSync(file, 'cut')
         expect(completeDerivative(file)).toBe(false)
     } finally {
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })
 
@@ -114,7 +115,7 @@ describe('the clip keeps its length and its sound', () => {
             expect(framesOf(target)).toBe(53)
             expect(hasSound(target)).toBe(true)
         } finally {
-            rmSync(dir, {recursive: true, force: true})
+            removeHeld(dir)
         }
     })
 })

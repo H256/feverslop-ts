@@ -1,3 +1,4 @@
+import {removeHeld} from '../previous-output.ts'
 import {expect, test} from 'bun:test'
 import {existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync} from 'node:fs'
 import {join} from 'node:path'
@@ -19,7 +20,7 @@ function fixture(check: (dist: string, target: string, root: string) => void) {
     try {
         check(dist, target, root)
     } finally {
-        rmSync(root, {recursive: true, force: true})
+        removeHeld(root)
     }
 }
 
@@ -113,7 +114,7 @@ test('the page is built again when its sources, the shared contracts or the rele
         rmSync(join(root, 'client'), {recursive: true})
         expect(clientBuildState(root, publicDir)).toBe('prebuilt')
     } finally {
-        rmSync(root, {recursive: true, force: true})
+        removeHeld(root)
     }
 })
 
@@ -133,6 +134,6 @@ test('the client packages are installed as the lockfile says before every build,
         expect(() => buildClient(root, join(root, 'public'), spawn('install'))).toThrow('bun run client:install')
         expect(calls).toEqual(['install --frozen-lockfile'])
     } finally {
-        rmSync(root, {recursive: true, force: true})
+        removeHeld(root)
     }
 })

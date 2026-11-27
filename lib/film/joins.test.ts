@@ -1,5 +1,6 @@
+import {removeHeld} from '../previous-output.ts'
 import {describe, expect, test} from 'bun:test'
-import {mkdtempSync, mkdirSync, rmSync, writeFileSync} from 'node:fs'
+import {mkdtempSync, mkdirSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {cutsOf, joinFingerprint, joinFrames, joinPrompt, plannedChanges, readVerdict} from './joins.ts'
@@ -38,7 +39,7 @@ describe('a join', () => {
             writeFileSync(join(dir, 'assets/clips/clip-002_ff.png'), 'c')
             expect(joinFingerprint(dir, cut, 'x')).not.toBe(first)
         } finally {
-            rmSync(dir, {recursive: true, force: true})
+            removeHeld(dir)
         }
     })
     test('the question has both pictures and the staging', () => {

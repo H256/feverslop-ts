@@ -1,3 +1,4 @@
+import {renameHeld} from './previous-output.ts'
 // The steps the two replace-character wizards share (tools/replace-character.ts for a music video, tools/film-replace-character.ts
 // for a film): the new picture put in place of the old one, what was built from the old one cleared, the description asked
 // for, and the clips rendered with the old picture named. What a project calls its character, where its words are and what a
@@ -39,7 +40,7 @@ export async function installPicture(dir: string, assetId: string, targetFile: s
     await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', imagePath, '-frames:v', '1', partial], {
         errorMessage: err => `ffmpeg could not read ${imagePath} as an image:\n${err}`,
     })
-    renameSync(partial, targetFile)
+    renameHeld(partial, targetFile)
     await Bun.write(`${targetFile}.json`, JSON.stringify(pinnedSidecar(`replaced with ${basename(imagePath)}`), null, 2))
     log.success(`Saved ${targetFile}`)
     changes.push(`the new image is saved as ${targetFile}`)

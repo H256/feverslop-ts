@@ -1,4 +1,5 @@
-import {mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {removeHeld} from './previous-output.ts'
+import {mkdtempSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {afterEach, describe, expect, test} from 'bun:test'
@@ -25,7 +26,7 @@ afterEach(() => {
         if (value === undefined) delete process.env[key]
         else process.env[key] = value
     }
-    for (const directory of directories.splice(0)) rmSync(directory, {recursive: true, force: true})
+    for (const directory of directories.splice(0)) removeHeld(directory)
 })
 
 function settingsFile(contents: string) {

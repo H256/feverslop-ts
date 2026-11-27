@@ -1,7 +1,8 @@
+import {removeHeld} from '../previous-output.ts'
 import {expect, test} from 'bun:test'
 import type {Project, TimedLine} from '../project.ts'
 import {buildRefinement, applyRefinement, refinementFingerprint, prepareTimingRefinement, applyTimingRefinement} from './timing-refinement.ts'
-import {mkdtempSync, writeFileSync, readFileSync, rmSync, readdirSync} from 'node:fs'
+import {mkdtempSync, writeFileSync, readFileSync, readdirSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {applyTiming} from './timing.ts'
@@ -148,7 +149,7 @@ test('service prepares without mutation, backs up before applying, and refuses c
         await expect(applyTimingRefinement(target, next.id)).rejects.toThrow('Vocals changed')
         expect(readFileSync(file, 'utf8')).toBe(original)
     } finally {
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })
 

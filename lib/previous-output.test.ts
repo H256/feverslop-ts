@@ -1,11 +1,11 @@
 import {afterEach, describe, expect, test} from 'bun:test'
-import {existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdirSync, mkdtempSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
-import {PREVIOUS, requestChanges, startOutput, whileHeld} from './previous-output.ts'
+import {PREVIOUS, requestChanges, startOutput, whileHeld, removeHeld} from './previous-output.ts'
 
 let dir: string
-afterEach(() => rmSync(dir, {recursive: true, force: true}))
+afterEach(() => removeHeld(dir))
 
 const write = (output: string, clips: Record<string, string>) => {
     mkdirSync(join(output, 'clips'), {recursive: true})

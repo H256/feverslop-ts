@@ -1,3 +1,4 @@
+import {removeHeld} from '../previous-output.ts'
 import {afterAll, beforeAll, describe, expect, test} from 'bun:test'
 import {mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
@@ -108,7 +109,7 @@ beforeAll(() => {
 })
 afterAll(() => {
     process.chdir(here)
-    rmSync(root, {recursive: true, force: true})
+    removeHeld(root)
 })
 
 describe('reading a project', () => {

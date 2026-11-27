@@ -1,6 +1,7 @@
+import {removeHeld} from './previous-output.ts'
 import {expect, test} from 'bun:test'
 import {join} from 'node:path'
-import {mkdtempSync, mkdirSync, rmSync, writeFileSync} from 'node:fs'
+import {mkdtempSync, mkdirSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {bannerLines, fitLine} from './log.ts'
 
@@ -66,7 +67,7 @@ test('inspect emits a single JSON document, including in quiet mode', () => {
         expect(result.exitCode).toBe(0)
         expect(JSON.parse(result.stdout.toString())).toMatchObject({project: 'demo', clip: {id: 'slot-001'}, render: {state: 'missing'}})
     } finally {
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })
 

@@ -1,7 +1,9 @@
+import {renameHeld, removeHeld} from '../previous-output.ts'
 import {nameService} from '../service-error.ts'
 import {ComfyApi, type ImageInfo} from '@saintno/comfyui-sdk'
-import {existsSync, renameSync, rmSync} from 'node:fs'
-import {basename, posix} from 'node:path'
+import {existsSync, rmSync} from 'node:fs'
+import {basename, extname, posix} from 'node:path'
+import {runProcess} from '../process.ts'
 import {recordTiming} from '../timings.ts'
 import {accumulatePhases, describeGraph, describeMachine, type Graph} from '../graph.ts'
 import {formatDuration, log, startSpinner, styles} from '../log.ts'
@@ -151,7 +153,7 @@ export function acquire(r: Renderer, pin?: string, wan2gp = false) {
 /** Only wan2gp servers answer, and the job has no wan2gp form (a picture, a song, a clip it cannot take - #1204). */
 function noServerFor() {
     return new Error(
-        'the project renders on wan2gp (renderEngine), and this job has no wan2gp form yet (so far only music-video clips have one; pictures are #1211) - render it on ComfyUI with renderEngine "comfy", or put the picture in by hand',
+        'the project renders on wan2gp (renderEngine), and this job has no wan2gp form yet (clips and pictures have one; songs, previews, upscales and interpolation not yet - #1211) - render it with renderEngine "comfy", or bring the file in by hand',
     )
 }
 
@@ -261,7 +263,7 @@ export async function render<M>(
     let initial = await readPending<M>(pendingFile)
     if (initial && initial.request !== undefined && initial.request !== request) {
         const kept = `${target}.pending-${initial.promptId}.json`
-        renameSync(pendingFile, kept)
+        renameHeld(pendingFile, kept)
         log.warn(
             `${label}: the job queued at ${formatClock(initial.queuedAt)} was made from another request than the plan has now - not used (${basename(kept)} keeps it), rendering again`,
         )
@@ -394,11 +396,21 @@ async function onWan2gpServer<M>(
         id = queued.id
         const done = await waitForBridgeJob(server.bridge, queued.id)
         const extensions = [extension].flat()
-        const file = done.files.findLast(f => extensions.some(e => f.name.endsWith(e)))
+        // wan2gp saves its pictures as .jpg: a picture asked as .png is converted here
+        const picture = extensions.includes('.png')
+        const file = done.files.findLast(f => extensions.some(e => f.name.endsWith(e)) || (picture && /\.(jpe?g|webp)$/i.test(f.name)))
         if (!file) throw new Error(`${label}: wan2gp made no ${extensions.join(' or ')} file (got ${done.files.map(f => f.name).join(', ') || 'nothing'})`)
         // written next to the target first, so an interrupted download never looks like a finished file
-        await Bun.write(`${target}.download`, await server.bridge.download(done.id, file.index))
-        renameSync(`${target}.download`, target)
+        const got = extname(file.name)
+        await Bun.write(`${target}.download${got}`, await server.bridge.download(done.id, file.index))
+        if (extensions.some(e => file.name.endsWith(e))) renameHeld(`${target}.download${got}`, target)
+        else {
+            await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', `${target}.download${got}`, '-f', 'image2', '-c:v', 'png', `${target}.download.png`], {
+                errorMessage: stderr => `${label}: converting wan2gp's ${got} to .png failed: ${stderr}`,
+            })
+            rmSync(`${target}.download${got}`)
+            renameHeld(`${target}.download.png`, target)
+        }
         runEvent({type: 'job', state: 'done', kind: what.kind, id: what.spec.id, server: server.name})
         return {ok: true, meta: job.meta}
     } catch (e) {
@@ -495,7 +507,7 @@ export async function resumeOrQueue<M>(
             // taken up by this run: a stop of this run from outside cancels it too (jobsQueuedSince)
             const attached = {...pending, attachedAt: Date.now()}
             await Bun.write(`${pendingFile}.partial`, JSON.stringify(attached, null, 2))
-            renameSync(`${pendingFile}.partial`, pendingFile)
+            renameHeld(`${pendingFile}.partial`, pendingFile)
             return attached
         }
         log.warn(
@@ -551,7 +563,7 @@ export async function resumeOrQueue<M>(
     }
     // written beside and renamed, so a stop in the middle of the write never leaves half a file behind
     await Bun.write(`${pendingFile}.partial`, JSON.stringify(queuedJob, null, 2))
-    renameSync(`${pendingFile}.partial`, pendingFile)
+    renameHeld(`${pendingFile}.partial`, pendingFile)
     return queuedJob
 }
 
@@ -579,8 +591,8 @@ export async function downloadResult<M>(
     const response = await server.api.fetchApi(`/view?${query.toString()}`)
     if (!response.ok) throw new Error(`${label}: output download failed with HTTP ${response.status}`)
     await Bun.write(`${target}.download`, await response.blob())
-    renameSync(`${target}.download`, target)
-    rmSync(`${target}.pending.json`, {force: true})
+    renameHeld(`${target}.download`, target)
+    removeHeld(`${target}.pending.json`)
 }
 
 export async function jobState(r: Renderer, {api}: Server, promptId: string): Promise<'queued' | 'running' | 'finished' | 'failed' | 'unknown'> {

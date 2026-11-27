@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {describe, expect, test} from 'bun:test'
-import {mkdtempSync, rmSync} from 'node:fs'
+import {mkdtempSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {backdropSeconds, hasBackdropRun, hasFlatBackdrop} from './leak.ts'
@@ -84,7 +85,7 @@ describe('backdropSeconds', () => {
             expect(Math.min(...seconds)).toBeGreaterThanOrEqual(1.75)
             expect(Math.max(...seconds)).toBeLessThanOrEqual(4)
         } finally {
-            rmSync(dir, {recursive: true, force: true})
+            removeHeld(dir)
         }
     })
 })

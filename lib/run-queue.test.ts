@@ -1,11 +1,12 @@
+import {removeHeld} from './previous-output.ts'
 import {afterAll, expect, test} from 'bun:test'
-import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {pastRuns, queueRun, readQueue, takeFirst, unqueue} from './run-queue.ts'
 
 const dir = mkdtempSync(join(tmpdir(), 'run-queue-'))
-afterAll(() => rmSync(dir, {recursive: true, force: true}))
+afterAll(() => removeHeld(dir))
 
 // #837: what waits is a file in logs/, in order; a queued run can be taken out by its id
 test('the queue of a project', () => {

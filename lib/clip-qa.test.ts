@@ -1,5 +1,6 @@
+import {removeHeld} from './previous-output.ts'
 import {describe, expect, test} from 'bun:test'
-import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {bestTake, findProblems, frameStats, type FrameStats, QA, scoreOf} from './clip-qa.ts'
@@ -81,7 +82,7 @@ describe('the best take of a clip (#405)', () => {
         expect(readFileSync(target, 'utf8')).toBe('take 2')
         expect(readFileSync(join(putAway(100), 'slot-001.mp4'), 'utf8')).toBe('take 1')
         expect(existsSync(join(putAway(100), 'slot-001.mp4.json'))).toBe(true)
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     })
     test('a new take that is worse goes away, and the first comes back', async () => {
         const {dir, target, putAway} = setup()
@@ -100,7 +101,7 @@ describe('the best take of a clip (#405)', () => {
         expect(best).toEqual({seed: 100, findings: black})
         expect(readFileSync(target, 'utf8')).toBe('take 1')
         expect(readFileSync(join(putAway(8019), 'slot-001.mp4'), 'utf8')).toBe('take 2')
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     })
     test('without qaRetries, or with only a jump, nothing is rendered again', async () => {
         const {dir, target, putAway} = setup()
@@ -128,6 +129,6 @@ describe('the best take of a clip (#405)', () => {
             },
         })
         expect(again).toBe(0)
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     })
 })

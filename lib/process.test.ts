@@ -1,6 +1,7 @@
+import {removeHeld} from './previous-output.ts'
 import {expect, test} from 'bun:test'
 import {captureProcess, runProcess} from './process.ts'
-import {mkdtempSync, readFileSync, rmSync} from 'node:fs'
+import {mkdtempSync, readFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 
@@ -16,7 +17,7 @@ test('child progress goes to its log file without leaking into the parent termin
         expect(readFileSync(file, 'utf8')).toContain('Phoneme alignment 1/2')
         expect(result.stdout).toContain('model failed')
     } finally {
-        rmSync(dir, {recursive: true, force: true})
+        removeHeld(dir)
     }
 })
 
