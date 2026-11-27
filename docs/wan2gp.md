@@ -45,13 +45,15 @@ A render server says its engine in the settings file (`bun run setup render` ask
 {"comfy": ["http://127.0.0.1:8188", {"url": "http://radeon-box:7860", "name": "radeon", "engine": "wan2gp"}]}
 ```
 
-A project sends its music-video clips to wan2gp servers too when its `config.json` names the template:
+A project renders on one engine (#1213): clips of ComfyUI and wan2gp look too different to mix in one video. Its `config.json` says which:
 
 ```json
-{"videoWorkflowWan2gp": "gen_video_with_refs/MiniMax H3 Ref2VA Pruned PDD 8 Steps"}
+{"renderEngine": "wan2gp", "videoWorkflowWan2gp": "gen_video_with_refs/MiniMax H3 Ref2VA Pruned PDD 8 Steps"}
 ```
 
-Then a clip goes to whichever server is free first, ComfyUI or wan2gp. On wan2gp it gets its own form (#1214):
+`renderEngine` is `comfy` by default; `videoWorkflowWan2gp` defaults to the template above. `bun run init` sets `wan2gp` by itself when
+only wan2gp servers are set up, asks when both kinds are, and takes `--engine=comfy|wan2gp` with its options. Only the servers of the
+project's engine get its jobs; changing the engine makes every rendered clip stale. On wan2gp a clip gets its own form (#1214):
 
 - **a short prompt**, written in the plan (step `wan2gpPrompts`, "12b · SHORT PROMPTS FOR WAN2GP") by the LLM from the clip's prompt,
   without thinking: at most 2500 characters, one continuous shot, no lyrics and no `<Audio N>`; whoever sings "sings with natural lip
@@ -64,17 +66,18 @@ Then a clip goes to whichever server is free first, ComfyUI or wan2gp. On wan2gp
 - **the clip's sound as the soundtrack** (`audio_prompt_type: "AS"`): its stems mixed over the clip's span into one track the video
   follows and wan2gp keeps as its audio.
 
-What stays on ComfyUI, with the reason in the log ("ComfyUI only"):
+What has no wan2gp form yet, and fails in a wan2gp project with the reason in the log:
 
 - a clip with more than nine pictures,
 - a clip that starts on context frames of the clip before (`contextFrames`),
-- pictures, reference sheets, songs, upscales and interpolation: they have no wan2gp form yet.
+- pictures, reference sheets, songs, upscales and interpolation (pictures: #1211) - make them in a ComfyUI project, or bring them in
+  from the library.
 
-With only wan2gp servers, such a job fails at once and says so. Differences to the ComfyUI clip:
+Differences to the ComfyUI clip:
 
 - the whole song is not locked into the latent as a guide (`MiniMaxH3AddGuide`): wan2gp has no counterpart;
 - wan2gp may round the size to its own grid, so its takes are not checked against the size the ComfyUI workflow would render;
-- a wan2gp job is not resumed by the next run (the bridge forgets its jobs when wan2gp restarts), and a take does not yet record
-  which engine made it: switching `videoWorkflowWan2gp` does not make clips stale.
+- a wan2gp job is not resumed by the next run (the bridge forgets its jobs when wan2gp restarts);
+- the composition varies more from seed to seed: a clip may open on the empty place or leave a person out - render it again.
 
 Compare the two before relying on it: render the same clips on both and look at them (A/B, #1204).

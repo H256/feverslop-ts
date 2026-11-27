@@ -38,16 +38,23 @@ import {
 
 export function connect(r: Renderer) {
     r.ready ??= (async () => {
+        // only the servers of the project's engine (#1213): clips of the two engines look too different to mix in one video
+        const wan2gpProject = r.config.renderEngine === 'wan2gp'
+        const own = r.servers.filter(server => isWan2gp(server) === wan2gpProject)
+        if (!own.length)
+            throw new Error(
+                `the project renders on ${wan2gpProject ? 'wan2gp' : 'ComfyUI'} (renderEngine in config.json), and no such server is set up${r.servers.length ? ` - only ${r.servers.map(s => s.name).join(', ')}` : ''}. Add one with: bun run setup render${wan2gpProject ? ' --engine=wan2gp' : ''}, or change renderEngine`,
+            )
         // the SDK would wait forever for a server that isn't there - so every server is asked first
         const problems = await Promise.all(
-            r.servers.map(server =>
+            own.map(server =>
                 probeComfy(server).then(
                     stats => void r.machines.set(server.name, describeMachine(stats)),
                     (e: Error) => e.message,
                 ),
             ),
         )
-        const reachable = r.servers.filter((server, i) => {
+        const reachable = own.filter((server, i) => {
             if (problems[i]) log.warn(`${isWan2gp(server) ? 'wan2gp' : 'ComfyUI'} ${server.name} (${server.url}) is unreachable - ${problems[i]}`)
             return !problems[i]
         })
@@ -60,7 +67,7 @@ export function connect(r: Renderer) {
         }
         if (!r.connected.length && !r.bridges.length) {
             throw new Error(
-                `No ComfyUI server reachable (${r.servers.map(s => s.url).join(', ')}) - start ComfyUI, or check the servers with: bun run setup render`,
+                `No ${wan2gpProject ? 'wan2gp' : 'ComfyUI'} server reachable (${own.map(s => s.url).join(', ')}) - start it, or check the servers with: bun run setup render`,
             )
         }
         r.stopQueueNote = startSpinner(() => (r.waiting.length ? `${r.waiting.length} queued` : ''), {note: true})
@@ -144,7 +151,7 @@ export function acquire(r: Renderer, pin?: string, wan2gp = false) {
 /** Only wan2gp servers answer, and the job has no wan2gp form (a picture, a song, a clip it cannot take - #1204). */
 function noServerFor() {
     return new Error(
-        'no ComfyUI server answers, and this job has no wan2gp form (so far only music-video clips with videoWorkflowWan2gp in config.json have one) - add a ComfyUI server, or check the wan2gp ones with: bun run setup render',
+        'the project renders on wan2gp (renderEngine), and this job has no wan2gp form yet (so far only music-video clips have one; pictures are #1211) - render it on ComfyUI with renderEngine "comfy", or put the picture in by hand',
     )
 }
 

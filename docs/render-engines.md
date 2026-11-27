@@ -63,7 +63,8 @@ The key stays `comfy` for now. Renaming it to `render` is a later clean-up with 
 
 The project config gets, per job kind, the wan2gp template to use besides the ComfyUI workflow, for example
 `"videoWorkflowWan2gp": "gen_video_with_refs/MiniMax H3 Ref2VA Pruned PDD 8 Steps"`. Like `videoWorkflow`, it is a literal name, not
-something resolved (see the ComfyUI model path convention). A project without it does not send that job kind to wan2gp servers.
+something resolved (see the ComfyUI model path convention). Which engine a project renders on is `renderEngine` (#1213): one per project,
+only that engine's servers get its jobs - the two engines' clips look too different to mix.
 
 ## Mapping table
 

@@ -45,6 +45,10 @@ describe('init by options', () => {
             librarySong: 'rain',
         })
     })
+    test('the render engine: --engine, comfy or wan2gp (#1213)', async () => {
+        expect((await initOptions(['p', '--idea=rain', '--engine=wan2gp']))?.seed.config).toEqual({renderEngine: 'wan2gp'})
+        expect(initOptions(['p', '--idea=rain', '--engine=vulkan'])).rejects.toThrow('--engine: comfy or wan2gp')
+    })
     test('who sings and how long a song to be made runs: --voice and --song-length (#1089)', async () => {
         const wrong = (argv: string[]) =>
             initOptions(argv).then(

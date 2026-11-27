@@ -26,6 +26,8 @@ type VideoConfig = {
     videoRefineSteps?: number
     pinStartFrame?: boolean
     contextFrames?: number
+    renderEngine?: string
+    videoWorkflowWan2gp?: string
 }
 const aspectPart = (config: VideoConfig) => (config.videoAspect && config.videoAspect !== '16:9' ? [config.videoAspect] : [])
 const stepsPart = (config: VideoConfig) =>
@@ -77,6 +79,7 @@ export function clipSpec(
     clip: {
         id: string
         prompt: string
+        wan2gpPrompt?: string
         frames: number
         startsFrom?: string
         assets: {pictures: {kind: string; file: string}[]; audio: {stem?: string; songStart: number; songEnd: number}[]}
@@ -98,6 +101,8 @@ export function clipSpec(
             clip.assets.audio.map(a => [a.stem, a.songStart, a.songEnd]),
             predecessorId(projectDir, clip.startsFrom),
             ...(clip.startsFrom ? [['continuation', config.pinStartFrame === true, config.contextFrames ?? 0]] : []),
+            // a wan2gp project's clip is another clip (#1213): its engine, template and short prompt - a ComfyUI project's keeps its id
+            ...(config.renderEngine === 'wan2gp' ? [['wan2gp', config.videoWorkflowWan2gp, clip.wan2gpPrompt ?? '']] : []),
         ],
     }
 }

@@ -12,7 +12,8 @@ import {type Finish, MILD_FINISH} from '../lib/finish.ts'
 import {FPS} from '../lib/frames.ts'
 import {defaults, languageName, type ProjectConfig, type SingerVoice, workflowDir} from '../lib/config.ts'
 import {styles} from '../lib/log.ts'
-import {projectExists, validProjectId, writeProject} from '../lib/project-setup.ts'
+import {onlyEngine, projectExists, validProjectId, writeProject} from '../lib/project-setup.ts'
+import {readSettingsFile} from '../lib/settings.ts'
 import {INIT_USAGE, initOptions} from '../lib/init-options.ts'
 import {answer, askResolution, askStyle, askText, projectWorkflows} from '../lib/wizard.ts'
 import {libraryDir} from '../lib/library.ts'
@@ -636,6 +637,18 @@ if (a.songSource === 'file' && a.lyrics) {
 }
 // the timing of a library song is what it is taken for: also used when nobody is seen singing
 if (a.librarySong) config.alignLyrics = true
+// servers of both engines set up: the project renders on one of them (#1213); with one kind writeProject takes that one
+if (!(await onlyEngine()) && (await readSettingsFile()).comfy?.length) {
+    config.renderEngine = answer(
+        await p.select({
+            message: 'Render on which engine? (only its servers get this project - clips of the two look too different to mix)',
+            options: [
+                {value: 'comfy' as const, label: 'ComfyUI', hint: 'the full workflows'},
+                {value: 'wan2gp' as const, label: 'wan2gp', hint: 'for GPUs under 24 GB; pictures still need ComfyUI'},
+            ],
+        }),
+    )
+}
 
 const id = a.id
 log.info(`Writing ${styles.muted(`projects/${id}/`)}`)

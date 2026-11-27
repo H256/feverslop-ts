@@ -58,6 +58,17 @@ describe('clip specs', () => {
         expect(specId(clipSpec(request, dir, {...config, pinStartFrame: true}))).not.toBe(base)
         expect(specId(clipSpec(request, dir, {...config, contextFrames: 22}))).not.toBe(base)
     })
+    test("a wan2gp project's clip is another clip - its template and short prompt count; a ComfyUI project's keeps its id (#1213)", () => {
+        const dir = project()
+        const request = {id: 'slot-002', prompt: 'p', wan2gpPrompt: 'short', frames: 100, assets: {pictures: [], audio: []}}
+        const comfy = specId(clipSpec(request, dir, video))
+        expect(specId(clipSpec({...request, wan2gpPrompt: 'other'}, dir, {...video, renderEngine: 'comfy'}))).toBe(comfy)
+        const wan2gp = {...video, renderEngine: 'wan2gp', videoWorkflowWan2gp: 'gen_video_with_refs/T'}
+        const onWan2gp = specId(clipSpec(request, dir, wan2gp))
+        expect(onWan2gp).not.toBe(comfy)
+        expect(specId(clipSpec({...request, wan2gpPrompt: 'other'}, dir, wan2gp))).not.toBe(onWan2gp)
+        expect(specId(clipSpec(request, dir, {...wan2gp, videoWorkflowWan2gp: 'gen_video_with_refs/U'}))).not.toBe(onWan2gp)
+    })
     const clip = (extra: Record<string, unknown> = {}) => ({
         id: 'slot-002',
         prompt: 'p',
